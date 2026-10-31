@@ -54,6 +54,9 @@ export function CategorySection() {
             <br />
             looking for?
           </h2>
+          <p className="category-subtitle">
+            A few favorites from the brands we carry. Ask us about the rest.
+          </p>
         </div>
       </div>
 
@@ -156,9 +159,9 @@ export function CategorySection() {
             <Link
               className="glass-action-content"
               href={`/shop/${category.slug}`}
-              aria-label={`Shop ${category.name}`}
+              aria-label={`See ${category.name} products`}
             >
-              <span>Shop</span>
+              <span>See Products</span>
               <span className="glass-action-icon" aria-hidden="true">
                 <ArrowUpRight size={21} strokeWidth={1.4} />
               </span>

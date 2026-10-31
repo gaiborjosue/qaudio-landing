@@ -1,0 +1,66 @@
+[
+  {
+    "slug": "u-turn-audio-orbit-theory",
+    "name": "U-Turn Audio Orbit Theory",
+    "category_slug": "turntables",
+    "brand_slug": "u-turn-audio",
+    "short_description": "Top Of the Line turntable from Woburn MA.",
+    "description_intro": "Manual Turntable.",
+    "features": [
+      "OA3 Pro Tonearm with one-piece magnesium armtube, dial counterweight, and adjustable anti-skate.",
+      "Choice of Ortofon 2M Blue or Bronze cartridge.",
+      "Ultra-quiet motor with electronic speed control (33/45 RPM).",
+      "Grooved acrylic platter with precision aluminum spindle and seamless silicone belt.",
+      "Adjustable-height aluminum feet with Sorbothane for vibration isolation.",
+      "Natural hardwood plinth in walnut, ebonized oak, or white oak.",
+      "CNET's Best Turntable Under $1000, TIME's Best Inventions 2023",
+      "Also available with phono preamp. (Pluto 2)"
+    ],
+    "description_closing": "Hand assembled in the USA",
+    "price_cents": 99900,
+    "msrp_cents": 99900,
+    "currency": "USD",
+    "price_unit": "each",
+    "condition": "New",
+    "ready_for_audition": true,
+    "manufacturer_url": "https://uturnaudio.com/products/orbit-theory-turntable",
+    "status": "published",
+    "images": [
+      {
+        "path": "products/orbit-theory-white-oak-front-v1.webp",
+        "alt": "Orbit Theory in white oak, front three-quarter view",
+        "width": 955,
+        "height": 700,
+        "sort_order": 0
+      },
+      {
+        "path": "products/orbit-theory-ebonized-oak-v1.webp",
+        "alt": "Orbit Theory in ebonized oak",
+        "width": 955,
+        "height": 700,
+        "sort_order": 1
+      },
+      {
+        "path": "products/orbit-theory-walnut-v1.webp",
+        "alt": "Orbit Theory in walnut",
+        "width": 955,
+        "height": 700,
+        "sort_order": 2
+      },
+      {
+        "path": "products/orbit-theory-white-oak-v1.webp",
+        "alt": "Orbit Theory in white oak, rear three-quarter view",
+        "width": 955,
+        "height": 700,
+        "sort_order": 3
+      },
+      {
+        "path": "products/orbit-theory-dust-cover-v1.webp",
+        "alt": "Orbit Theory in ebonized oak with the dust cover open",
+        "width": 955,
+        "height": 700,
+        "sort_order": 4
+      }
+    ]
+  }
+]

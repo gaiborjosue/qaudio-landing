@@ -1,8 +1,13 @@
+import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ContactButton } from "@/components/contact-button"
-import { BRANDS } from "@/lib/brands"
+import { ProductCatalog } from "@/components/product-catalog"
+import { getCatalogTaxonomy, getProducts } from "@/lib/catalog-data"
+import styles from "@/components/product-catalog.module.css"
+
+export const revalidate = 300
+export const metadata: Metadata = { title: "Shop — Q Audio" }
 
 export default async function ShopPage({
   searchParams,
@@ -11,51 +16,36 @@ export default async function ShopPage({
 }) {
   const { brand: value } = await searchParams
   const slug = Array.isArray(value) ? value[0] : value
-  const brand = BRANDS.find((item) => item.slug === slug)
+  const { brands } = await getCatalogTaxonomy()
+  const brand = brands.find((item) => item.slug === slug)
   if (slug && !brand) notFound()
-
+  const products = await getProducts(undefined, brand?.slug)
   return (
-    <main className="category-destination">
-      <header className="category-destination-header">
-        <Link className="brand" href="/" aria-label="Q Audio home">
-          <Image src="/qaudio-logo.svg" alt="Q Audio" width={47} height={57} />
-        </Link>
-        <Link className="category-back" href="/#product-lines">
-          ← All product lines
-        </Link>
-      </header>
-      <div className="category-destination-content brand-destination-content">
-        {brand && (
-          <div className="brand-destination-logo">
-            <Image
-              src={brand.logo}
-              alt={brand.name}
-              width={300}
-              height={180}
-              loading="eager"
-            />
-          </div>
-        )}
-        <p className="category-kicker">The collection</p>
-        <h1 className={brand ? "sr-only" : undefined}>
-          {brand ? brand.name : "Find your sound."}
-        </h1>
-        {brand && (
-          <Link
-            className="brand-filter"
-            href="/shop"
-            aria-label={`Clear ${brand.name} brand filter`}
-          >
-            <span>Brand: {brand.name}</span>
-            <span aria-hidden="true">×</span>
-          </Link>
-        )}
-        <p>
-          Our online collection is coming soon. Get in touch to explore what’s
-          available in store.
-        </p>
-        <ContactButton />
+    <main id="shop-content" className={styles.page}>
+      <div className={styles.heading}>
+        {brand ? (
+          <Image
+            className={styles.headingLogo}
+            src={brand.logo_path}
+            alt=""
+            width={200}
+            height={100}
+            loading="eager"
+          />
+        ) : null}
+        <h1>{brand ? brand.name : "The collection"}</h1>
       </div>
+      {brand ? (
+        <Link
+          className={styles.filter}
+          href="/shop"
+          aria-label={`Clear ${brand.name} brand filter`}
+        >
+          Brand: {brand.name}
+          <span aria-hidden="true">×</span>
+        </Link>
+      ) : null}
+      <ProductCatalog products={products} />
     </main>
   )
 }

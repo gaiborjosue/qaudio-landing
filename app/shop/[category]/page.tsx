@@ -1,11 +1,26 @@
+import type { Metadata } from "next"
 import Image from "next/image"
-import Link from "next/link"
 import { notFound } from "next/navigation"
-import { ContactButton } from "@/components/contact-button"
-import { CATEGORIES } from "@/lib/categories"
+import { ProductCatalog } from "@/components/product-catalog"
+import { getCatalogTaxonomy, getProducts } from "@/lib/catalog-data"
+import styles from "@/components/product-catalog.module.css"
 
-export function generateStaticParams() {
-  return CATEGORIES.map(({ slug }) => ({ category: slug }))
+export const revalidate = 300
+
+export async function generateStaticParams() {
+  const { categories } = await getCatalogTaxonomy()
+  return categories.map(({ slug }) => ({ category: slug }))
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ category: string }>
+}): Promise<Metadata> {
+  const { category: slug } = await params
+  const { categories } = await getCatalogTaxonomy()
+  const category = categories.find((item) => item.slug === slug)
+  return { title: `${category?.name ?? "Not found"} — Q Audio` }
 }
 
 export default async function CategoryPage({
@@ -14,35 +29,24 @@ export default async function CategoryPage({
   params: Promise<{ category: string }>
 }) {
   const { category: slug } = await params
-  const category = CATEGORIES.find((item) => item.slug === slug)
+  const { categories } = await getCatalogTaxonomy()
+  const category = categories.find((item) => item.slug === slug)
   if (!category) notFound()
-
+  const products = await getProducts(category.slug)
   return (
-    <main className="category-destination">
-      <header className="category-destination-header">
-        <Link className="brand" href="/" aria-label="Q Audio home">
-          <Image src="/qaudio-logo.svg" alt="Q Audio" width={47} height={57} />
-        </Link>
-        <Link className="category-back" href="/#categories">
-          ← All categories
-        </Link>
-      </header>
-      <div className="category-destination-content">
+    <main id="shop-content" className={styles.page}>
+      <div className={styles.heading}>
         <Image
-          src={`/categories/${category.icon}`}
+          className={styles.categoryArt}
+          src={category.artwork_path}
           alt=""
-          width={300}
-          height={300}
+          width={160}
+          height={160}
           loading="eager"
         />
-        <p className="category-kicker">The collection</p>
         <h1>{category.name}</h1>
-        <p>
-          Our online collection is coming soon. Get in touch to explore what’s
-          available in store.
-        </p>
-        <ContactButton />
       </div>
+      <ProductCatalog products={products} />
     </main>
   )
 }

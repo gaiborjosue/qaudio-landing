@@ -5,6 +5,7 @@ import Image from "next/image"
 import { ArrowUpRight, Bus, SquareParking, TrainFront } from "lucide-react"
 import { LiquidGlass } from "@/components/ui/liquid-glass"
 import { StoreHours } from "@/components/store-hours"
+import type { StoreSchedule } from "@/lib/store-hours"
 import styles from "./visit-section.module.css"
 
 const DIRECTIONS_URL =
@@ -26,7 +27,7 @@ function trackGlassPointer(event: PointerEvent<HTMLDivElement>) {
   )
 }
 
-export function VisitSection() {
+export function VisitSection({ schedule }: { schedule: StoreSchedule }) {
   return (
     <section
       id="visit"
@@ -101,7 +102,7 @@ export function VisitSection() {
               loading="eager"
             />
           </div>
-          <StoreHours />
+          <StoreHours schedule={schedule} />
         </div>
       </div>
     </section>

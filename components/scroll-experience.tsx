@@ -1,10 +1,12 @@
 "use client"
 
-import { useRef, type ReactNode } from "react"
+import { useRef, type MouseEvent, type ReactNode } from "react"
 import { useGSAP } from "@gsap/react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { RecordPlayer } from "@/components/record-player"
+import { HISTORY, StoryHistory } from "@/components/story-history"
+import { StorySkip } from "@/components/story-skip"
 import { readScrollPosition, rememberScrollPosition } from "@/lib/scroll-memory"
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
@@ -35,8 +37,16 @@ const LAND_START = Math.max(
 )
 const LAND_DURATION = 0.7
 const ARM_START = LAND_START + LAND_DURATION
-const TEXT_EXIT_START = ARM_START + 0.2
-const SEQUENCE_END = TEXT_EXIT_START + 0.65 + 0.06 * (LINES.length - 1)
+// Once the needle is down, the finished quote holds briefly, then slides away
+// left as Q Audio's history plays in from the right, one slide per step,
+// while the tonearm tracks inward. The arm lifts back to rest at the end.
+const HISTORY_START = ARM_START + 0.85
+const SLIDE_DURATION = 1
+const HISTORY_END = HISTORY_START + SLIDE_DURATION * HISTORY.length
+const ARM_RETURN_START = HISTORY_END + 0.45
+const SEQUENCE_END = ARM_RETURN_START + 0.6
+// How far the needle travels inward across the record, in SVG units.
+const NEEDLE_TRAVEL = 90
 const MOTION = {
   closeRowsAt: [2.4, 3.15, 3.85, ALIGN_START + 0.6],
   closeDuration: 0.5,
@@ -45,6 +55,30 @@ const MOTION = {
 export function ScrollExperience({ children }: { children: ReactNode }) {
   const rootRef = useRef<HTMLDivElement>(null)
   const anchorRestoredRef = useRef(false)
+
+  function skipStory(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    const target = document.getElementById("categories")
+    if (!target) return
+    event.preventDefault()
+
+    // Finish pending snap/scrub work before jumping beyond the pinned stage.
+    const story = ScrollTrigger.getById("vinyl-story")
+    const snap = story?.getTween(true)
+    if (snap) snap.kill()
+    const scrub = story?.getTween()
+    if (scrub) scrub.progress(1)
+    story?.animation?.progress(1)
+    window.scrollTo({
+      top: target.getBoundingClientRect().top + window.scrollY,
+      behavior: "instant",
+    })
+    ScrollTrigger.update()
+
+    const heading = document.getElementById("categories-title")
+    heading?.setAttribute("tabindex", "-1")
+    heading?.focus({ preventScroll: true })
+  }
 
   useGSAP(
     () => {
@@ -75,16 +109,30 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
           )!
           const arm = armLayer.querySelector<SVGGElement>(".turntable-arm")!
           const copy = root.querySelector<HTMLElement>(".story-copy")!
+          const skip = root.querySelector<HTMLElement>(".story-skip")!
           const rows = Array.from(
             root.querySelectorAll<HTMLElement>(".story-row")
           )
-          const footer = root.querySelector<HTMLElement>(".story-footer")!
           const left = rows.map((row) =>
             row.querySelector<HTMLElement>(".story-left")!
           )
           const right = rows.map((row) =>
             row.querySelector<HTMLElement>(".story-right")!
           )
+          const track = root.querySelector<HTMLElement>(".history-track")!
+          const slides = Array.from(
+            track.querySelectorAll<HTMLElement>(".history-slide")
+          )
+          const tubes = Array.from(
+            armLayer.querySelectorAll<SVGPathElement>(".turntable-tube")
+          )
+          const tubePaths = tubes.map((tube) => tube.getAttribute("d")!)
+          // Stretch each tube's straight run so it still meets the headshell.
+          const sweptTube = (d: string) =>
+            d.replace(/L623 (\d+)$/, (_, y) => `L${623 - NEEDLE_TRAVEL} ${y}`)
+          const headshell = armLayer.querySelector<SVGGElement>(
+            ".turntable-headshell"
+          )!
 
           root.classList.add("is-scroll-active")
 
@@ -144,6 +192,26 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
                     22 -
                     right[index].offsetLeft
                 )
+          // History slides line up with the first one's resting position.
+          const slideX = (index: number) =>
+            slides[0].offsetLeft - slides[index].offsetLeft
+          // Slide i is in place at HISTORY_START + SLIDE_DURATION * (i + 1),
+          // and counts as active once it's more than halfway in.
+          const activeSlide = (time: number) =>
+            Math.min(
+              slides.length - 1,
+              Math.floor((time - HISTORY_START) / SLIDE_DURATION - 0.5)
+            )
+          let active = -1
+          const markActive = (time: number) => {
+            const next = activeSlide(time)
+            skip.toggleAttribute("data-visible", next >= 0)
+            if (next === active) return
+            active = next
+            slides.forEach((slide, index) =>
+              slide.toggleAttribute("data-active", index === next)
+            )
+          }
 
           gsap.set(vinyl, {
             autoAlpha: 1,
@@ -160,7 +228,6 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             xPercent: 0,
             y: 28,
           })
-          gsap.set(footer, { autoAlpha: 0 })
           // Perspective lives on the parent in CSS; WebKit renders a
           // transform-level perspective() less foreshortened than Chromium.
           gsap.set(tilt, {
@@ -170,9 +237,11 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
           gsap.set([player, armLayer], { autoAlpha: 0, y: 24 })
           // Keep the hinge fixed in SVG space, including across responsive resizes.
           gsap.set(arm, { attr: { transform: "rotate(9 820 69)" } })
+          gsap.set(headshell, { attr: { transform: "translate(0 0)" } })
 
           const timeline = gsap.timeline({
             defaults: { ease: "none" },
+            onUpdate: () => markActive(timeline.time()),
             scrollTrigger: {
               id: "vinyl-story",
               trigger: root,
@@ -182,6 +251,28 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               scrub: 0.35,
               anticipatePin: 1,
               invalidateOnRefresh: true,
+              // Inside the history, settle on whole slides; elsewhere scroll freely.
+              snap: {
+                snapTo: (progress) => {
+                  const time = progress * SEQUENCE_END
+                  if (
+                    time < HISTORY_START - SLIDE_DURATION / 2 ||
+                    time > HISTORY_END + SLIDE_DURATION / 4
+                  )
+                    return progress
+                  const step = Math.round(
+                    (time - HISTORY_START) / SLIDE_DURATION
+                  )
+                  const slide = Math.max(0, Math.min(HISTORY.length, step))
+                  return (HISTORY_START + slide * SLIDE_DURATION) / SEQUENCE_END
+                },
+                duration: { min: 0.2, max: 0.6 },
+                delay: 0.08,
+                ease: "power1.inOut",
+                // Snap from where the scroll stopped, not a velocity-projected
+                // point, so a quick flick can't skip the whole history.
+                inertia: false,
+              },
             },
           })
 
@@ -237,7 +328,6 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               { autoAlpha: 1, y: 0, duration: 0.75, ease: "power1.out" },
               REVEAL_START - 0.1
             )
-            .to(footer, { autoAlpha: 1, duration: 0.5 }, REVEAL_END - 0.5)
             .to(left[0], { x: () => openLeft(0), duration: 0.65 }, 1.35)
             .to(right[0], { x: () => openRight(0), duration: 0.65 }, 1.35)
             .to(left[1], { x: () => openLeft(1), duration: 0.65 }, 1.6)
@@ -329,18 +419,90 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               },
               ARM_START
             )
-            .addLabel("after-placement", TEXT_EXIT_START)
-            .to(
-              rows,
+            // The quote leaves left as the history track arrives from the right.
+            .addLabel("history", HISTORY_START)
+            .fromTo(
+              copy,
+              { x: 0 },
               {
-                autoAlpha: 0,
-                filter: "blur(14px)",
-                duration: 0.65,
-                stagger: { each: 0.06, from: "end" },
+                x: () => -stage.clientWidth,
+                duration: SLIDE_DURATION,
+                ease: "sine.inOut",
               },
-              "after-placement"
+              "history"
             )
-            .to(footer, { autoAlpha: 0, duration: 0.5 }, "after-placement")
+            .fromTo(
+              track,
+              { x: () => stage.clientWidth },
+              {
+                x: () => slideX(0),
+                duration: SLIDE_DURATION,
+                ease: "sine.inOut",
+              },
+              "history"
+            )
+            // The needle tracks inward across the record as the story plays.
+            .to(
+              headshell,
+              {
+                attr: { transform: `translate(${-NEEDLE_TRAVEL} 0)` },
+                duration: HISTORY_END - HISTORY_START,
+              },
+              "history"
+            )
+
+          slides.slice(1).forEach((_, index) => {
+            timeline.to(
+              track,
+              {
+                x: () => slideX(index + 1),
+                duration: SLIDE_DURATION,
+                ease: "sine.inOut",
+              },
+              HISTORY_START + SLIDE_DURATION * (index + 1)
+            )
+          })
+          tubes.forEach((tube, index) => {
+            timeline
+              .to(
+                tube,
+                {
+                  attr: { d: sweptTube(tubePaths[index]) },
+                  duration: HISTORY_END - HISTORY_START,
+                },
+                "history"
+              )
+              .to(
+                tube,
+                {
+                  attr: { d: tubePaths[index] },
+                  duration: 0.45,
+                  ease: "power2.inOut",
+                },
+                ARM_RETURN_START + 0.15
+              )
+          })
+          // The record ends: the arm lifts and swings back to its rest.
+          timeline
+            .addLabel("arm-return", ARM_RETURN_START)
+            .to(
+              arm,
+              {
+                attr: { transform: "rotate(9 820 69)" },
+                duration: 0.3,
+                ease: "power2.inOut",
+              },
+              "arm-return"
+            )
+            .to(
+              headshell,
+              {
+                attr: { transform: "translate(0 0)" },
+                duration: 0.45,
+                ease: "power2.inOut",
+              },
+              ARM_RETURN_START + 0.15
+            )
 
           rows.forEach((_, index) => {
             timeline.to(
@@ -392,6 +554,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             stopRemembering()
             window.removeEventListener("load", restoreAnchor)
             root.classList.remove("is-scroll-active")
+            skip.removeAttribute("data-visible")
           }
         },
         root
@@ -419,17 +582,9 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             ))}
           </h2>
           <RecordPlayer variant="static" />
-          <div className="story-footer" aria-hidden="true">
-            <span>
-              <i className="square" />
-              Cambridge, Massachusetts
-            </span>
-            <span>
-              Since 1973
-              <i className="square" />
-            </span>
-          </div>
         </section>
+        <StorySkip onSkip={skipStory} />
+        <StoryHistory />
       </div>
     </div>
   )

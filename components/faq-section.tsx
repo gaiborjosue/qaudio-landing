@@ -4,6 +4,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type CSSProperties,
   type KeyboardEvent,
   type ReactNode,
 } from "react"
@@ -45,15 +46,53 @@ const REPAIR_PHOTOS = [
   },
 ]
 
+// Carousel card sizing: the base size, its largest size, and the width the
+// carousel needs beyond a card (2 × spread 48 + gutter 24).
+const BASE_CARD_WIDTH = 320
+const MAX_CARD_WIDTH = 360
+const CARD_SPACE = 120
+
 function RepairPhotos() {
   const [active, setActive] = useState(0)
+  const [width, setWidth] = useState(0)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) =>
+      setWidth(Math.round(entry.contentRect.width))
+    )
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+
+  // Cards grow with the answer's width (never shrinking below the base size,
+  // which the carousel scales down on its own), keeping the 4:3 ratio.
+  const cardWidth = Math.min(
+    Math.max(width - CARD_SPACE, BASE_CARD_WIDTH),
+    MAX_CARD_WIDTH
+  )
+  const cardHeight = Math.round((cardWidth * 3) / 4)
+
   return (
-    <div className={styles.photos}>
+    <div
+      className={styles.photos}
+      ref={ref}
+      style={
+        {
+          "--photos-h":
+            width >= BASE_CARD_WIDTH + CARD_SPACE
+              ? `${cardHeight + 68}px`
+              : undefined,
+        } as CSSProperties
+      }
+    >
       <DepthCarousel
         items={REPAIR_PHOTOS}
         label="Repair photos"
-        cardWidth={320}
-        cardHeight={240}
+        cardWidth={cardWidth}
+        cardHeight={cardHeight}
         radius={12}
         tint="#111"
         depth={150}
@@ -221,9 +260,10 @@ type OpenCard = {
   maxHeight?: number
 }
 
-// Viewport margin kept around tall cards, and the smallest they may get.
+// Viewport margin kept around tall cards, and the smallest and largest they may get.
 const EDGE = 16
 const MIN_TALL = 320
+const MAX_TALL = 480
 
 export function FaqSection() {
   const [open, setOpen] = useState<OpenCard | null>(null)
@@ -252,7 +292,10 @@ export function FaqSection() {
         index,
         direction: above > below ? "up" : "down",
         height: cell.offsetHeight,
-        maxHeight: Math.max(Math.max(above, below), MIN_TALL),
+        maxHeight: Math.min(
+          Math.max(Math.max(above, below), MIN_TALL),
+          MAX_TALL
+        ),
       })
     }
     // Like a popover: upper rows open downward, lower rows open upward.

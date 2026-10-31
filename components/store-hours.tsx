@@ -7,7 +7,6 @@ import { LiquidGlass } from "@/components/ui/liquid-glass"
 import {
   PHONE_HOURS,
   WEEKDAYS,
-  WEEKLY_HOURS,
   formatChangeDates,
   formatHours,
   formatMonthDay,
@@ -19,6 +18,7 @@ import {
   weekdayIndex,
   type DayHours,
   type StoreClock,
+  type StoreSchedule,
 } from "@/lib/store-hours"
 import { cn } from "@/lib/utils"
 import styles from "./visit-section.module.css"
@@ -37,13 +37,16 @@ export function useStoreClock() {
   return minute === null ? null : storeClock(new Date(minute * 60_000))
 }
 
-const REGULAR_WEEK = WEEKDAYS.map((name, index) => ({
-  name,
-  date: "",
-  isToday: false,
-  hours: WEEKLY_HOURS[index],
-  change: undefined,
-}))
+// Before hydration there's no date yet, so the list shows the regular week.
+function regularWeek(schedule: StoreSchedule) {
+  return WEEKDAYS.map((name, index) => ({
+    name,
+    date: "",
+    isToday: false,
+    hours: schedule.weekly[index] ?? ("closed" as const),
+    change: undefined,
+  }))
+}
 
 function Hours({ hours }: { hours: DayHours }) {
   return (
@@ -91,14 +94,16 @@ const CLOSED_GLASS = {
 
 /** Today's hours and live status, shared by the hours list and the hero. */
 export function TodayPill({
+  schedule,
   clock,
   compact = false,
 }: {
+  schedule: StoreSchedule
   clock: StoreClock
   compact?: boolean
 }) {
-  const { hours, change } = hoursOn(clock.date)
-  const status = storeStatus(clock)
+  const { hours, change } = hoursOn(schedule, clock.date)
+  const status = storeStatus(schedule, clock)
   return (
     <LiquidGlass
       className={cn(styles.today, compact && styles.todayCompact)}
@@ -132,10 +137,12 @@ export function TodayPill({
   )
 }
 
-export function StoreHours() {
+export function StoreHours({ schedule }: { schedule: StoreSchedule }) {
   const clock = useStoreClock()
-  const rows = clock ? weekSchedule(clock.date) : REGULAR_WEEK
-  const changes = clock ? upcomingChanges(clock.date) : []
+  const rows = clock
+    ? weekSchedule(schedule, clock.date)
+    : regularWeek(schedule)
+  const changes = clock ? upcomingChanges(schedule, clock.date) : []
 
   return (
     <div className={styles.hours}>
@@ -186,7 +193,7 @@ export function StoreHours() {
         {rows.map((row) =>
           row.isToday && clock ? (
             <li key={row.name} className={styles.todayItem} aria-current="date">
-              <TodayPill clock={clock} />
+              <TodayPill schedule={schedule} clock={clock} />
             </li>
           ) : (
             <li key={row.name} className={styles.row}>

@@ -99,6 +99,13 @@ const DepthCarousel = ({
       gutter,
       autoplayDelay,
     }
+    // Card size can change with the container, so refit the scale.
+    const root = rootRef.current
+    if (root && root.clientWidth) {
+      const needed = cardWidth + Math.abs(spread) * 2 + gutter
+      scaleRef.current = clamp(root.clientWidth / needed, 0.4, 1)
+      layout(posRef.current)
+    }
   })
 
   const layout = useCallback((pos) => {

@@ -10,7 +10,8 @@
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
-    "import:news": "node --env-file=.env.local scripts/import-news.mjs"
+    "import:news": "node --env-file=.env.local scripts/import-news.mjs",
+    "import:catalog": "node --env-file=.env.local scripts/import-catalog.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -33,6 +34,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "dotted-map": "^3.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",
     "prettier": "^3.9.10",

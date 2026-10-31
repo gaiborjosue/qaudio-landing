@@ -10,8 +10,13 @@ import { HeroContact } from "@/components/hero-contact"
 import { VisitSection } from "@/components/visit-section"
 import { ContactFooter } from "@/components/contact-footer"
 import { SiteNav } from "@/components/site-nav"
+import { getStoreSchedule } from "@/lib/store-hours-data"
 
-export default function Page() {
+// Regenerate at most every 5 minutes, matching the store hours cache.
+export const revalidate = 300
+
+export default async function Page() {
+  const schedule = await getStoreSchedule()
   return (
     <main id="top" className="landing">
       <a className="skip-link" href="#hero-title">
@@ -42,7 +47,7 @@ export default function Page() {
               </h1>
             </div>
             <div className="hero-captions">
-              <HeroToday />
+              <HeroToday schedule={schedule} />
               <HeroContact />
             </div>
             <span className="edition-note">Q AUDIO — EST. 1973</span>
@@ -55,7 +60,7 @@ export default function Page() {
       </ScrollExperience>
       <CategorySection />
       <ProductLinesSection />
-      <VisitSection />
+      <VisitSection schedule={schedule} />
       <ContactFooter />
     </main>
   )

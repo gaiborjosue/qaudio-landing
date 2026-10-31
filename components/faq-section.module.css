@@ -211,6 +211,7 @@ button.question > span:first-child {
 
 /* The scrollbar takes the right padding's place in tall cards. */
 .surface[data-tall="true"] .answer {
+  max-width: none;
   padding-right: 14px;
 }
 
@@ -280,7 +281,7 @@ button.question > span:first-child {
 .photos :global(.depth-carousel) {
   /* Front card height at the carousel's scale (320×240 cards, 440px needed),
      plus room for its shadow and the controls row. */
-  height: calc(min(240px, 54.5cqw) + 68px);
+  height: var(--photos-h, calc(min(240px, 54.5cqw) + 68px));
   min-height: 0;
 }
 

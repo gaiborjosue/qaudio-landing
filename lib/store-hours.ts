@@ -13,6 +13,15 @@ export type HoursChange = {
   note?: string
 }
 
+/**
+ * The store's hours, read from Supabase by lib/store-hours-data.ts: the
+ * regular week (Monday first) and dated changes that override it.
+ */
+export type StoreSchedule = {
+  weekly: readonly DayHours[]
+  changes: readonly HoursChange[]
+}
+
 export const WEEKDAYS = [
   "Monday",
   "Tuesday",
@@ -22,26 +31,6 @@ export const WEEKDAYS = [
   "Saturday",
   "Sunday",
 ] as const
-
-/** Regular week, Monday first. */
-export const WEEKLY_HOURS: readonly DayHours[] = [
-  "appointment",
-  { open: "13:00", close: "19:00" },
-  { open: "13:00", close: "19:00" },
-  { open: "13:00", close: "19:00" },
-  { open: "13:00", close: "19:00" },
-  { open: "09:00", close: "13:00" },
-  "appointment",
-]
-
-/**
- * Special hours and closures. Add entries here; each shows as a notice
- * until its last date passes and overrides that day in the weekly list.
- */
-export const HOURS_CHANGES: readonly HoursChange[] = [
-  { start: "2026-11-06", hours: { open: "13:00", close: "15:00" } },
-  { start: "2026-11-07", end: "2026-11-15", hours: "closed" },
-]
 
 export const PHONE_HOURS = "10\u00a0am\u00a0–\u00a07\u00a0pm"
 
@@ -117,27 +106,32 @@ export function formatHours(hours: DayHours) {
   return `${formatTime(hours.open, !samePeriod)} – ${formatTime(hours.close, true)}`
 }
 
-export function hoursOn(date: string) {
-  const change = HOURS_CHANGES.find(
+export function hoursOn(schedule: StoreSchedule, date: string) {
+  const change = schedule.changes.find(
     (entry) => date >= entry.start && date <= (entry.end ?? entry.start)
   )
-  return { hours: change?.hours ?? WEEKLY_HOURS[weekdayIndex(date)], change }
+  return {
+    hours: change?.hours ?? schedule.weekly[weekdayIndex(date)] ?? "closed",
+    change,
+  }
 }
 
 /** Monday–Sunday rows, each resolved to its next date from today. */
-export function weekSchedule(today: string) {
+export function weekSchedule(schedule: StoreSchedule, today: string) {
   return WEEKDAYS.map((name, index) => {
     const offset = (index - weekdayIndex(today) + 7) % 7
     const date = addDays(today, offset)
-    return { name, date, isToday: offset === 0, ...hoursOn(date) }
+    return { name, date, isToday: offset === 0, ...hoursOn(schedule, date) }
   })
 }
 
-export function upcomingChanges(today: string) {
+export function upcomingChanges(schedule: StoreSchedule, today: string) {
   const horizon = addDays(today, NOTICE_HORIZON_DAYS)
-  return HOURS_CHANGES.filter(
-    (entry) => (entry.end ?? entry.start) >= today && entry.start <= horizon
-  ).sort((a, b) => a.start.localeCompare(b.start))
+  return schedule.changes
+    .filter(
+      (entry) => (entry.end ?? entry.start) >= today && entry.start <= horizon
+    )
+    .sort((a, b) => a.start.localeCompare(b.start))
 }
 
 export function formatMonthDay(date: string) {
@@ -153,10 +147,10 @@ export function formatChangeDates({ start, end = start }: HoursChange) {
 }
 
 /** e.g. "tomorrow at 1:00 pm" */
-function nextOpening(today: string) {
+function nextOpening(schedule: StoreSchedule, today: string) {
   for (let offset = 1; offset <= 21; offset++) {
     const date = addDays(today, offset)
-    const { hours } = hoursOn(date)
+    const { hours } = hoursOn(schedule, date)
     if (typeof hours !== "object") continue
     const day =
       offset === 1
@@ -168,9 +162,12 @@ function nextOpening(today: string) {
   }
 }
 
-export function storeStatus({ date, minutes }: StoreClock) {
-  const { hours } = hoursOn(date)
-  const next = nextOpening(date)
+export function storeStatus(
+  schedule: StoreSchedule,
+  { date, minutes }: StoreClock
+) {
+  const { hours } = hoursOn(schedule, date)
+  const next = nextOpening(schedule, date)
   // The row already says "Closed" or "By appointment", so only add what's next.
   if (typeof hours !== "object") {
     const text = next ? `Opens ${next}` : formatHours(hours)

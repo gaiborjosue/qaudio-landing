@@ -250,28 +250,35 @@ export function RecordPlayer({
 function Tonearm() {
   return (
     <g className="turntable-arm">
+      {/* The scroll story slides the headshell inward and stretches the tube
+          to follow it while Q Audio's history plays. */}
       <path
+        className="turntable-tube"
         d="M820 69L767 56Q752 52 740 59L623 99"
         stroke="#191919"
         strokeWidth="11"
         strokeLinecap="round"
       />
       <path
+        className="turntable-tube"
         d="M820 66L767 53Q752 49 740 56L623 96"
         stroke="#aaa"
         strokeWidth="6"
         strokeLinecap="round"
       />
       <path
+        className="turntable-tube"
         d="M820 64L767 51Q752 47 740 54L623 94"
         stroke="#f0f0f0"
         strokeWidth="1.5"
         strokeLinecap="round"
       />
-      <path d="M603 88L631 79L646 90L614 102Z" fill="#181818" stroke="#666" />
-      <path d="M608 88L632 82" stroke="#d4d4d4" />
-      <path d="M615 100V106" stroke="#999" strokeWidth="2" />
-      <path d="M612 107H618" stroke="#080808" />
+      <g className="turntable-headshell">
+        <path d="M603 88L631 79L646 90L614 102Z" fill="#181818" stroke="#666" />
+        <path d="M608 88L632 82" stroke="#d4d4d4" />
+        <path d="M615 100V106" stroke="#999" strokeWidth="2" />
+        <path d="M612 107H618" stroke="#080808" />
+      </g>
     </g>
   )
 }
