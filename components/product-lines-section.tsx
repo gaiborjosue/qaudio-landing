@@ -11,11 +11,13 @@ export function ProductLinesSection() {
     tileWidth: 180,
     tileHeight: 132,
     gap: 18,
+    turn: -14,
   })
 
   useEffect(() => {
     const wall = wallRef.current
     if (!wall) return
+    const mobile = window.matchMedia("(max-width: 600px)")
     const observer = new ResizeObserver(([entry]) => {
       const width = entry.contentRect.width
       const columns = width < 500 ? 3 : width < 850 ? 4 : 5
@@ -28,6 +30,8 @@ export function ProductLinesSection() {
         ),
         tileHeight: width < 500 ? 100 : 132,
         gap,
+        // A side-on turn shifts the wall off-center on narrow screens.
+        turn: mobile.matches ? 0 : -14,
       })
     })
     observer.observe(wall)

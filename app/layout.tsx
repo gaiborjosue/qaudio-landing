@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Bodoni_Moda, Epilogue } from "next/font/google"
 import "./globals.css"
+import { SiteLoader } from "@/components/site-loader"
 const epilogue = Epilogue({ subsets: ["latin"], variable: "--font-ui" })
 const bodoni = Bodoni_Moda({
   subsets: ["latin"],
@@ -22,8 +23,15 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`${epilogue.variable} ${bodoni.variable}`}>
-      <body>{children}</body>
+    <html
+      lang="en"
+      className={`${epilogue.variable} ${bodoni.variable}`}
+      data-scroll-behavior="smooth"
+    >
+      <body>
+        <SiteLoader />
+        {children}
+      </body>
     </html>
   )
 }

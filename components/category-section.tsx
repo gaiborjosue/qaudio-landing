@@ -49,18 +49,12 @@ export function CategorySection() {
     >
       <div className="category-heading">
         <div>
-          <p className="category-kicker">
-            <span className="square" aria-hidden="true" /> Find your sound
-          </p>
           <h2 id="categories-title">
             What are you
             <br />
             looking for?
           </h2>
         </div>
-        <span className="category-section-number" aria-hidden="true">
-          01 — THE COLLECTION
-        </span>
       </div>
 
       <div className="category-explorer">
@@ -139,7 +133,7 @@ export function CategorySection() {
             <h3>{category.name}</h3>
           </div>
           <LiquidGlass
-            className="category-shop-glass"
+            className="glass-action category-shop-glass"
             radius={31}
             scale={120}
             aberration={56}
@@ -160,12 +154,12 @@ export function CategorySection() {
             }}
           >
             <Link
-              className="category-shop"
+              className="glass-action-content"
               href={`/shop/${category.slug}`}
               aria-label={`Shop ${category.name}`}
             >
               <span>Shop</span>
-              <span className="category-shop-arrow" aria-hidden="true">
+              <span className="glass-action-icon" aria-hidden="true">
                 <ArrowUpRight size={21} strokeWidth={1.4} />
               </span>
             </Link>

@@ -1,11 +1,15 @@
 import Image from "next/image"
-import { ContactButton } from "@/components/contact-button"
 import { DitherBackground } from "@/components/dither-background"
 import { VinylRecord } from "@/components/vinyl-record"
 import { ScrollExperience } from "@/components/scroll-experience"
 import { RecordPlayer, RecordPlayerArm } from "@/components/record-player"
 import { CategorySection } from "@/components/category-section"
 import { ProductLinesSection } from "@/components/product-lines-section"
+import { HeroToday } from "@/components/hero-today"
+import { HeroContact } from "@/components/hero-contact"
+import { VisitSection } from "@/components/visit-section"
+import { ContactFooter } from "@/components/contact-footer"
+import { SiteNav } from "@/components/site-nav"
 
 export default function Page() {
   return (
@@ -13,6 +17,7 @@ export default function Page() {
       <a className="skip-link" href="#hero-title">
         Skip to content
       </a>
+      <SiteNav />
       <ScrollExperience>
         <header className="site-header">
           <a className="brand" href="#top" aria-label="Q Audio home">
@@ -24,17 +29,6 @@ export default function Page() {
               priority
             />
           </a>
-          <p className="header-note">
-            <span className="mini-equalizer" aria-hidden="true">
-              <i />
-              <i />
-              <i />
-              <i />
-              <i />
-            </span>
-            Independent hi-fi. Since 1973.
-          </p>
-          <ContactButton />
         </header>
         <section className="hero" aria-labelledby="hero-title">
           <div className="hero-panel">
@@ -48,14 +42,8 @@ export default function Page() {
               </h1>
             </div>
             <div className="hero-captions">
-              <p>
-                <span className="square" aria-hidden="true" />
-                Analog soul. Extraordinary sound.
-              </p>
-              <p>
-                Cambridge, Massachusetts
-                <span className="square" aria-hidden="true" />
-              </p>
+              <HeroToday />
+              <HeroContact />
             </div>
             <span className="edition-note">Q AUDIO — EST. 1973</span>
             <div className="vinyl-anchor" aria-hidden="true" />
@@ -67,6 +55,8 @@ export default function Page() {
       </ScrollExperience>
       <CategorySection />
       <ProductLinesSection />
+      <VisitSection />
+      <ContactFooter />
     </main>
   )
 }

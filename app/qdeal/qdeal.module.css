@@ -1,0 +1,160 @@
+/* /qdeal (app/qdeal/page.tsx): the news pages' shell (site header, centered
+   column, dark footer bar), live deals, then the advice text. */
+.page {
+  /* Footer bar inset, matching the landing page at each breakpoint. */
+  --section-title-inset: 144px;
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.main {
+  flex: 1;
+  width: min(100% - 44px, 680px);
+  margin: 0 auto;
+  padding-top: 148px;
+}
+
+.titleRow {
+  margin-bottom: 40px;
+}
+
+.heading {
+  margin: 0;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(48px, 5.2vw, 82px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1;
+}
+
+.deals {
+  display: grid;
+  gap: 28px;
+}
+
+.advice {
+  color: #333;
+  font-size: 16px;
+  line-height: 1.75;
+}
+
+.deals + .advice {
+  margin-top: 112px;
+}
+
+.adviceTitle {
+  margin: 0;
+  color: #111;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(36px, 4.4vw, 60px);
+  font-weight: 500;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+  text-wrap: balance;
+}
+
+.point {
+  margin-top: 48px;
+}
+
+.point h3 {
+  margin: 0 0 0.7em;
+  color: #111;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(22px, 2.2vw, 28px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.point p {
+  margin: 0 0 1.1em;
+}
+
+.point > :last-child {
+  margin-bottom: 0;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.point a {
+  color: #111;
+  text-decoration: underline;
+  text-decoration-color: rgb(0 0 0 / 0.35);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 200ms ease;
+}
+
+.point a:hover {
+  text-decoration-color: currentColor;
+}
+
+.point a:focus-visible {
+  outline-offset: 3px;
+}
+
+/* The closing line, set like the news articles' pull quotes. */
+.point .signoff {
+  margin-top: 1.4em;
+  padding-left: 22px;
+  border-left: 1px solid #111;
+  color: #111;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(28px, 3.2vw, 40px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.15;
+}
+
+@media (max-width: 1100px) {
+  .page {
+    --section-title-inset: 106px;
+  }
+}
+
+@media (max-width: 700px) {
+  .page {
+    --section-title-inset: 84px;
+  }
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding-top: 104px;
+  }
+
+  .titleRow {
+    margin-bottom: 28px;
+  }
+
+  .heading {
+    font-size: clamp(40px, 12vw, 52px);
+  }
+
+  .deals {
+    gap: 20px;
+  }
+
+  .advice {
+    font-size: 15px;
+  }
+
+  .deals + .advice {
+    margin-top: 80px;
+  }
+
+  .adviceTitle {
+    font-size: clamp(32px, 9vw, 40px);
+  }
+
+  .point {
+    margin-top: 40px;
+  }
+}

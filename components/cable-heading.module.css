@@ -1,0 +1,35 @@
+/* Heading row with a cable (components/cable-heading.tsx): the title, then the
+   cable filling the rest of the row, fading in beside the title. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.row > :first-child {
+  flex: none;
+}
+
+.cable {
+  --fade: 56px;
+  flex: 1;
+  min-width: 0;
+  height: 84px;
+  /* The loop's headroom shouldn't make the row taller than the title. */
+  margin-block: -12px;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+  mask-image: linear-gradient(to right, transparent, #000 var(--fade));
+}
+
+/* Phones: the drawing scales to 70%, the contact cable's mobile scale. */
+@media (max-width: 640px) {
+  .row {
+    gap: 12px;
+  }
+
+  .cable {
+    --fade: 36px;
+    height: 58.8px;
+    margin-block: -8.4px;
+  }
+}

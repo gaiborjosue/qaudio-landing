@@ -1,0 +1,408 @@
+/* News feed (components/news-feed.tsx) and cards (components/news-card.tsx),
+   after Cult UI's CutoutCard: white notches cut into a grayscale photo. */
+.feed {
+  display: grid;
+  gap: 28px;
+}
+
+.card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.08),
+    0 8px 24px rgb(0 0 0 / 0.06);
+  transition: box-shadow 500ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Year divider: a small label and a hairline across the column, sitting closer
+   to its own cards than to the year above. */
+.year {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin: 20px 0 -12px;
+  color: #656565;
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1.6px;
+  line-height: 1;
+}
+
+.year::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: rgb(0 0 0 / 0.12);
+}
+
+.year:first-child {
+  margin-top: 0;
+}
+
+.card[data-appended],
+.year[data-appended] {
+  animation: card-in 640ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  animation-delay: calc(var(--stagger, 0) * 80ms);
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+}
+
+.card:has(.title a:focus-visible) {
+  outline: 2px solid #111;
+  outline-offset: 4px;
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #f4f4f4;
+}
+
+.media img {
+  object-fit: cover;
+  filter: grayscale(1);
+  transition:
+    filter 500ms ease,
+    transform 700ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Posters and wide product shots are letterboxed on the gray, their white
+   backgrounds multiplied away. */
+.media[data-fit="contain"] img {
+  padding: 24px;
+  object-fit: contain;
+  mix-blend-mode: multiply;
+}
+
+/* The active card shows its photo in color: hovered, keyboard-focused, or
+   (on touch screens) crossing the middle of the screen. */
+.card:has(.title a:focus-visible) .media img,
+.card[data-active] .media img {
+  filter: none;
+}
+
+/* Notches: white tabs with concave fillets where they meet the photo. */
+.date,
+.pin {
+  position: absolute;
+  z-index: 1;
+  background: #fff;
+}
+
+.date {
+  bottom: 0;
+  left: 0;
+  padding: 14px 20px 7px 26px;
+  border-top-right-radius: 18px;
+  color: #656565;
+  font-size: 10px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 1.6px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.pin {
+  top: 0;
+  right: 0;
+  padding: 0 0 8px 8px;
+  border-bottom-left-radius: 22px;
+}
+
+.corner {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  color: #fff;
+}
+
+.dateCornerEnd {
+  right: -21px;
+  bottom: -1px;
+  transform: rotate(90deg);
+}
+
+.dateCornerTop {
+  top: -21px;
+  left: -1px;
+  transform: rotate(90deg);
+}
+
+.pinCornerStart {
+  top: -1px;
+  left: -21px;
+  transform: rotate(-90deg);
+}
+
+.pinCornerBottom {
+  right: -1px;
+  bottom: -21px;
+  transform: rotate(-90deg);
+}
+
+/* Same circular icon well as the site's glass buttons and FAQ pills, kept
+   inside the card's rounded corner. */
+.icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  margin: 10px 10px 0 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.065);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6);
+  color: #111;
+  transition: background 300ms ease;
+}
+
+.icon svg {
+  position: relative;
+  transition: transform 300ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* The well becomes a small record on card hover: grooves, a sheen and a light
+   center label that holds the arrow. The arrow stays upright above the disc,
+   while the disc turns at 33⅓ rpm (the sheen and the mark on the label show
+   it). Paused between hovers, so it resumes where it stopped. */
+.vinyl {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-radial-gradient(
+    circle at center,
+    #262626 0 0.5px,
+    #0a0a0a 0.9px 1.6px
+  );
+  box-shadow: inset 0 0 0 1px #2e2e2e;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  animation: vinyl-spin 1.8s linear infinite paused;
+}
+
+.vinyl::before,
+.vinyl::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+}
+
+.vinyl::before {
+  inset: 0;
+  background: conic-gradient(
+    from 20deg,
+    transparent 0 12%,
+    rgb(255 255 255 / 0.42) 25%,
+    transparent 38% 62%,
+    rgb(255 255 255 / 0.3) 75%,
+    transparent 88%
+  );
+}
+
+.vinyl::after {
+  inset: 22%;
+  background:
+    radial-gradient(circle at 50% 13%, #8a8a8a 0 1px, transparent 1.5px),
+    #ececec;
+  box-shadow:
+    0 0 0 1px #000,
+    0 0 0 2px #333;
+}
+
+@keyframes vinyl-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.body {
+  padding: 14px 26px 26px;
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(21px, 2vw, 26px);
+  font-weight: 500;
+  letter-spacing: -0.035em;
+  line-height: 1.18;
+  text-wrap: balance;
+}
+
+/* The title link covers the whole card. */
+.title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+.title a:focus-visible {
+  outline: none;
+}
+
+.excerpt {
+  display: -webkit-box;
+  margin: 10px 0 0;
+  overflow: hidden;
+  color: #666;
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    box-shadow:
+      0 0 0 1px rgb(0 0 0 / 0.14),
+      0 18px 48px rgb(0 0 0 / 0.1);
+  }
+
+  .card:hover .media img {
+    filter: none;
+    transform: scale(1.035);
+  }
+
+  .card:hover .icon {
+    background: #111;
+  }
+
+  .card:hover .vinyl {
+    opacity: 1;
+    animation-play-state: running;
+  }
+
+  .card:hover .icon svg {
+    transform: translate(1px, -1px);
+  }
+}
+
+/* Loading placeholder for the next page. */
+.skeleton {
+  margin-top: 28px;
+  overflow: hidden;
+  border-radius: 28px;
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.06);
+  animation: pulse 1.2s ease-in-out infinite alternate;
+}
+
+.skeletonMedia {
+  aspect-ratio: 16 / 10;
+  background: #f4f4f4;
+}
+
+.skeletonLine {
+  width: 62%;
+  height: 16px;
+  margin: 22px 26px 0;
+  border-radius: 8px;
+  background: #f1f1f1;
+}
+
+.skeletonLine:last-child {
+  width: 88%;
+  height: 12px;
+  margin: 14px 26px 30px;
+}
+
+@keyframes pulse {
+  to {
+    opacity: 0.5;
+  }
+}
+
+.more {
+  display: block;
+  margin: 28px auto 0;
+  padding: 15px 24px;
+  border: 1px solid #111;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 1.3px;
+  text-transform: uppercase;
+  transition:
+    background 200ms,
+    color 200ms;
+}
+
+.more:hover {
+  background: #111;
+  color: #fff;
+}
+
+.sentinel {
+  height: 1px;
+}
+
+@media (max-width: 640px) {
+  .feed {
+    gap: 20px;
+  }
+
+  .year {
+    margin: 16px 0 -8px;
+  }
+
+  .year:first-child {
+    margin-top: 0;
+  }
+
+  .card,
+  .skeleton {
+    border-radius: 22px;
+  }
+
+  .skeleton {
+    margin-top: 20px;
+  }
+
+  .date {
+    padding: 13px 16px 6px 20px;
+    font-size: 9px;
+  }
+
+  .body {
+    padding: 12px 20px 22px;
+  }
+
+  .title {
+    font-size: 20px;
+  }
+
+  .excerpt {
+    font-size: 13px;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .icon {
+    width: 34px;
+    height: 34px;
+    margin: 8px 8px 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .media img {
+    transform: none;
+  }
+
+  .vinyl {
+    animation: none;
+  }
+}

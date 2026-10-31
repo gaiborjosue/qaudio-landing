@@ -13,8 +13,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 Read `AGENTS.md` and `README.md` before starting work. Keep product details in the README rather than duplicating them here.
 
 - Inspect and safeguard existing uncommitted work; never reset or overwrite unrelated changes. Avoid concurrent writers to the same files.
-- Maintain monochrome design, minimal user-facing copy, accessible semantics, keyboard interaction, and reduced-motion support. Preserve established animation and component behavior unless the task asks otherwise. Do not add motion/sound control buttons, a category selection arrow, or gratuitous copy.
+- Maintain monochrome design (the only color is the faint green sent tint on the footer Send Message button; the visit section’s tinted glass is an intentional status cue: soft yellow for schedule changes, green for open, red for closed; photos are grayscale except the active item in a gallery, such as the brand wall or repair carousel; the loader’s liquid glass keeps its chromatic edge streaks), minimal user-facing copy, accessible semantics, keyboard interaction, and reduced-motion support. Preserve established animation and component behavior unless the task asks otherwise. Do not add motion/sound control buttons, a category selection arrow, or gratuitous copy.
 - Follow the installed Next.js documentation rule above and use proportionate validation.
+- Database changes go through SQL migrations in `supabase/migrations`, saved as `<applied version>_<name>.sql` with exactly the SQL that was applied. Give every table, view, or function the Data API can reach an explicit grant and RLS; check access as each role and run the Supabase advisors after schema changes. Keep secret keys out of `NEXT_PUBLIC_` variables, commits, and chat.
 
 ## Documentation is part of completion
 

@@ -33,6 +33,7 @@ export default async function CategoryPage({
           alt=""
           width={300}
           height={300}
+          loading="eager"
         />
         <p className="category-kicker">The collection</p>
         <h1>{category.name}</h1>

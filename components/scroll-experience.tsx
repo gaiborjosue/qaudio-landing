@@ -5,6 +5,7 @@ import { useGSAP } from "@gsap/react"
 import gsap from "gsap"
 import { ScrollTrigger } from "gsap/ScrollTrigger"
 import { RecordPlayer } from "@/components/record-player"
+import { readScrollPosition, rememberScrollPosition } from "@/lib/scroll-memory"
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
@@ -92,7 +93,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             anchor.offsetTop + anchor.offsetHeight / 2
           const diameter = () =>
             mobile
-              ? Math.max(72, Math.min(stage.clientWidth * 0.22, 140))
+              ? Math.max(60, Math.min(stage.clientWidth * 0.17, 140))
               : Math.min(
                   stage.clientWidth * 0.17,
                   stage.clientHeight * 0.22,
@@ -108,22 +109,41 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             player.offsetTop + player.offsetHeight * (97 / 300)
           const platterScale = () =>
             (player.offsetWidth * 0.53) / disc.offsetWidth
+          // Phones part each row at its own word break, and the record moves
+          // to that break, so long halves can use the full width.
+          const gapEdges = (index: number) => [
+            left[index].offsetLeft + left[index].offsetWidth,
+            right[index].offsetLeft,
+          ]
+          const splitX = (index: number) => {
+            if (!mobile) return 0
+            const [start, end] = gapEdges(index)
+            return (start + end) / 2 - stage.clientWidth / 2
+          }
+          const parting = (index: number) => {
+            const [start, end] = gapEdges(index)
+            return (diameter() + 12 - (end - start)) / 2
+          }
           const openLeft = (index: number) =>
-            Math.min(
-              0,
-              stage.clientWidth / 2 -
-                diameter() / 2 -
-                (mobile ? 6 : 22) -
-                (left[index].offsetLeft + left[index].offsetWidth)
-            )
+            mobile
+              ? -parting(index)
+              : Math.min(
+                  0,
+                  stage.clientWidth / 2 -
+                    diameter() / 2 -
+                    22 -
+                    (left[index].offsetLeft + left[index].offsetWidth)
+                )
           const openRight = (index: number) =>
-            Math.max(
-              0,
-              stage.clientWidth / 2 +
-                diameter() / 2 +
-                (mobile ? 6 : 22) -
-                right[index].offsetLeft
-            )
+            mobile
+              ? parting(index)
+              : Math.max(
+                  0,
+                  stage.clientWidth / 2 +
+                    diameter() / 2 +
+                    22 -
+                    right[index].offsetLeft
+                )
 
           gsap.set(vinyl, {
             autoAlpha: 1,
@@ -141,9 +161,10 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             y: 28,
           })
           gsap.set(footer, { autoAlpha: 0 })
+          // Perspective lives on the parent in CSS; WebKit renders a
+          // transform-level perspective() less foreshortened than Chromium.
           gsap.set(tilt, {
             rotationX: 0,
-            transformPerspective: 1200,
             transformOrigin: "50% 50%",
           })
           gsap.set([player, armLayer], { autoAlpha: 0, y: 24 })
@@ -175,6 +196,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             .to(
               vinyl,
               {
+                x: () => (splitX(0) + splitX(1)) / 2,
                 y: () => travelTo((rowCenter(0) + rowCenter(1)) / 2),
                 scale: smallScale,
                 duration: 2,
@@ -223,6 +245,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             .to(
               vinyl,
               {
+                x: () => splitX(1),
                 y: () => travelTo(rowCenter(1)),
                 duration: 0.55,
                 ease: "power1.inOut",
@@ -234,6 +257,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             .to(
               vinyl,
               {
+                x: () => splitX(2),
                 y: () => travelTo(rowCenter(2)),
                 duration: REVEAL_END - 2.55,
                 ease: "power1.inOut",
@@ -253,6 +277,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             .to(
               vinyl,
               {
+                x: () => splitX(3),
                 y: () => travelTo(rowCenter(3)),
                 duration: LAST_ROW_DURATION,
                 ease: "power1.inOut",
@@ -327,22 +352,31 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
 
           let disposed = false
           let anchorFrame = 0
+          let stopRemembering = () => {}
           const restoreAnchor = () => {
-            if (disposed || anchorRestoredRef.current) return
+            if (disposed) return
             // Let browser hash scrolling and the pinned layout finish first.
             anchorFrame = requestAnimationFrame(() => {
               anchorFrame = requestAnimationFrame(() => {
-                if (disposed || anchorRestoredRef.current) return
-                anchorRestoredRef.current = true
-                const target = document.getElementById(
-                  window.location.hash.slice(1)
-                )
-                if (target && !stage.contains(target)) {
-                  window.scrollTo({
-                    top: target.getBoundingClientRect().top + window.scrollY,
-                    behavior: "instant",
-                  })
+                if (disposed) return
+                if (!anchorRestoredRef.current) {
+                  anchorRestoredRef.current = true
+                  // Back/forward/reload: the browser restored its offset before
+                  // the pin spacer existed, so re-apply the remembered one.
+                  const saved = readScrollPosition()
+                  const target = document.getElementById(
+                    window.location.hash.slice(1)
+                  )
+                  if (saved !== null) {
+                    window.scrollTo({ top: saved, behavior: "instant" })
+                  } else if (target && !stage.contains(target)) {
+                    window.scrollTo({
+                      top: target.getBoundingClientRect().top + window.scrollY,
+                      behavior: "instant",
+                    })
+                  }
                 }
+                stopRemembering = rememberScrollPosition()
               })
             })
           }
@@ -355,6 +389,7 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
           return () => {
             disposed = true
             cancelAnimationFrame(anchorFrame)
+            stopRemembering()
             window.removeEventListener("load", restoreAnchor)
             root.classList.remove("is-scroll-active")
           }

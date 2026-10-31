@@ -27,7 +27,13 @@ export default async function ShopPage({
       <div className="category-destination-content brand-destination-content">
         {brand && (
           <div className="brand-destination-logo">
-            <Image src={brand.logo} alt={brand.name} width={300} height={180} />
+            <Image
+              src={brand.logo}
+              alt={brand.name}
+              width={300}
+              height={180}
+              loading="eager"
+            />
           </div>
         )}
         <p className="category-kicker">The collection</p>

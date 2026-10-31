@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Image from "next/image"
 
 // Dependency-free halftone waves inspired by React Bits' Dither.
 function hash(value: number) {
@@ -248,6 +249,15 @@ export function DitherBackground() {
     <>
       <div className="dither-shadow" aria-hidden="true">
         <div className="dither-surface" ref={surfaceRef}>
+          <div className="dither-photo">
+            <Image
+              src="/footer-showroom.webp"
+              alt=""
+              fill
+              loading="eager"
+              sizes="100vw"
+            />
+          </div>
           <div className="dither-field">
             <canvas ref={canvasRef} />
           </div>

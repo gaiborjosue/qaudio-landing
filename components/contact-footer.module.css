@@ -1,0 +1,257 @@
+.footer {
+  background: #fff;
+  /* Keep the departing paper plane from widening the page. */
+  overflow-x: clip;
+}
+.divider {
+  width: 100%;
+  overflow: clip;
+  padding: 8px 0 48px;
+}
+.cableDesktop,
+.cableMobile {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.cableMobile {
+  display: none;
+}
+.content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: clamp(48px, 8vw, 140px);
+  padding: 0 48px 0 var(--section-title-inset);
+}
+.details h2 {
+  margin: 0 0 64px;
+  font-size: clamp(48px, 5vw, 82px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.04;
+}
+.details address {
+  display: grid;
+  gap: 32px;
+  font-style: normal;
+}
+.details address div {
+  display: grid;
+  gap: 10px;
+}
+.details address span {
+  font-size: 13px;
+  color: #595959;
+}
+.details a {
+  width: fit-content;
+  font-size: clamp(21px, 2.2vw, 32px);
+  letter-spacing: -0.04em;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 6px;
+}
+.form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 26px;
+  min-width: 0;
+  width: 100%;
+  max-width: 520px;
+}
+.formIntro {
+  margin-bottom: 8px;
+}
+.formIntro h3 {
+  margin: 0 0 12px;
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 500;
+  letter-spacing: -0.045em;
+  line-height: 1.2;
+}
+.formIntro p {
+  margin: 0;
+  color: #595959;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.field {
+  display: grid;
+  gap: 10px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+.brandName {
+  white-space: nowrap;
+}
+.brandName img {
+  display: inline-block;
+  width: auto;
+  height: 1.4em;
+  vertical-align: top;
+}
+.field input,
+.field textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid #aaa;
+  border-radius: 0;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  line-height: 1.5;
+}
+.field textarea {
+  resize: vertical;
+  min-height: 140px;
+}
+.field input:focus-visible,
+.field textarea:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 4px;
+}
+.actions {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+}
+.actions .sendGlass {
+  width: 240px;
+  max-width: 100%;
+  margin: 0;
+  /* Let the paper plane fly beyond the pill. */
+  overflow: visible;
+}
+.sendGlass button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+}
+.sentTint {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(rgb(187 247 208 / 0.36), rgb(134 239 172 / 0.22));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 600ms ease;
+}
+.sendGlass[data-send-state="sent"] .sentTint {
+  opacity: 1;
+  transition-delay: 260ms;
+}
+.plane {
+  display: grid;
+  place-items: center;
+}
+.sendGlass[data-send-state="sent"] .plane {
+  animation: planeFly 950ms forwards;
+}
+.sendGlass[data-send-state="returning"] .plane {
+  animation: planeReturn 450ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+@keyframes planeFly {
+  0% {
+    transform: none;
+    animation-timing-function: ease-out;
+  }
+  16% {
+    transform: translate(-3px, 3px) rotate(-4deg) scale(0.9);
+    animation-timing-function: ease-in-out;
+  }
+  34% {
+    transform: translate(-2px, -5px) rotate(-14deg) scale(1.14);
+    animation-timing-function: cubic-bezier(0.55, 0, 0.8, 0.45);
+  }
+  62% {
+    transform: translate(48px, -62px) rotate(-4deg) scale(1);
+    opacity: 1;
+    animation-timing-function: linear;
+  }
+  100% {
+    transform: translate(170px, -118px) rotate(16deg) scale(0.6);
+    opacity: 0;
+  }
+}
+@keyframes planeReturn {
+  from {
+    transform: translate(-22px, 16px) rotate(8deg) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.actions p {
+  margin: 0;
+  color: #595959;
+  font-size: 12px;
+}
+.mailIcon {
+  display: inline-block;
+  width: 1.5em;
+  height: 1.5em;
+  vertical-align: -0.4em;
+  filter: grayscale(1);
+}
+@media (max-width: 900px) {
+  .content {
+    padding: 0 30px 0 var(--section-title-inset);
+    gap: 48px;
+  }
+}
+@media (max-width: 640px) {
+  .divider {
+    padding: 4px 0 32px;
+  }
+  .cableDesktop {
+    display: none;
+  }
+  .cableMobile {
+    display: block;
+  }
+  .content {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0 22px;
+    gap: 56px;
+  }
+  .details {
+    text-align: center;
+  }
+  .details h2 {
+    margin-bottom: 36px;
+    font-size: clamp(34px, 10vw, 48px);
+  }
+  .details address {
+    gap: 24px;
+  }
+  .details address div {
+    justify-items: center;
+  }
+  .details a {
+    font-size: clamp(20px, 6vw, 25px);
+  }
+  .form {
+    justify-self: center;
+  }
+  .formIntro {
+    text-align: center;
+  }
+  .actions {
+    flex-direction: column;
+    align-items: center;
+    justify-self: center;
+    gap: 12px;
+  }
+  .sendGlass button {
+    font-size: 13px;
+    letter-spacing: 0.8px;
+  }
+}

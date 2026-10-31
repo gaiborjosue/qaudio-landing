@@ -62,7 +62,48 @@ a:focus-visible {
   color: #fff;
 }
 
+/* Initial-load loader (components/site-loader.tsx): the ReactDrops liquid
+   glass logo in its original black on white. Its FADE_MS matches the opacity
+   transition here. */
+.site-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  transition:
+    opacity 600ms ease,
+    visibility 0s linear 600ms;
+  /* Failsafe if the loader script never runs; exempt from reduced motion. */
+  animation: site-loader-failsafe 0.4s ease 12s forwards !important;
+}
+.site-loader[data-state="leaving"] {
+  opacity: 0;
+  visibility: hidden;
+}
+.site-loader[data-state="done"] {
+  display: none;
+}
+html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
+  overflow: hidden;
+}
+.site-loader .liquid-glass-logo {
+  transition: transform 600ms ease;
+}
+.site-loader[data-state="leaving"] .liquid-glass-logo {
+  transform: scale(1.04);
+}
+@keyframes site-loader-failsafe {
+  to {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
 .landing {
+  /* Match the category gutter + active OptionWheel label inset at each breakpoint. */
+  --section-title-inset: 144px;
   position: relative;
   isolation: isolate;
 }
@@ -98,38 +139,26 @@ a:focus-visible {
   width: 47px;
   height: 57px;
 }
-.header-note {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+/* Main menu (components/site-nav.tsx): React Bits PillNav, fixed so it stays
+   in reach while scrolling, vertically centered on the logo. The wrapper
+   spans the header beside the logo so PillNav can measure when to collapse
+   into its menu button; only the pill, button and panel take pointer events. */
+.site-nav {
+  position: fixed;
+  top: 32px;
+  right: 48px;
+  left: 127px;
+  z-index: 50;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0;
-  color: #525252;
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 1.65px;
-  text-transform: uppercase;
-  white-space: nowrap;
+  justify-content: flex-end;
+  pointer-events: none;
 }
-.mini-equalizer {
-  display: flex;
-  gap: 2px;
-  height: 13px;
-  align-items: center;
+.site-nav .pill-nav > :not(.pill-nav__measure) {
+  pointer-events: auto;
 }
-.mini-equalizer i {
-  width: 1px;
-  background: #222;
-  height: 5px;
-}
-.mini-equalizer i:nth-child(2),
-.mini-equalizer i:nth-child(4) {
-  height: 9px;
-}
-.mini-equalizer i:nth-child(3) {
-  height: 13px;
+/* Without a logo, keep the collapsed menu button at the right. */
+.site-nav .pill-nav[data-collapsed] {
+  justify-content: flex-end;
 }
 .contact-button {
   display: flex;
@@ -182,6 +211,8 @@ a:focus-visible {
   position: absolute;
   inset: 0;
   pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
   filter: drop-shadow(0 10px 12px #00000014) drop-shadow(0 2px 3px #0000000a);
 }
 .dither-surface {
@@ -205,6 +236,31 @@ a:focus-visible {
   position: absolute;
   inset: 112px 0 0;
   mask-image: linear-gradient(transparent, #000 32px);
+}
+/* Showroom photo under the dither: grayscale, faint, eased in from the top
+   and out toward the vinyl arch so the headline and dots stay crisp. */
+.dither-photo {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(
+    transparent 6%,
+    rgb(0 0 0 / 0.104) 12%,
+    rgb(0 0 0 / 0.352) 18%,
+    rgb(0 0 0 / 0.648) 24%,
+    rgb(0 0 0 / 0.896) 30%,
+    #000 36%,
+    #000 74%,
+    rgb(0 0 0 / 0.648) 86%,
+    rgb(0 0 0 / 0.104) 96%,
+    transparent
+  );
+}
+.dither-photo img {
+  object-fit: cover;
+  object-position: center 58%;
+  filter: grayscale(1) contrast(0.92);
+  opacity: 0.2;
 }
 .dither-field canvas {
   display: block;
@@ -247,16 +303,60 @@ a:focus-visible {
   justify-content: space-between;
   pointer-events: none;
 }
-.hero-captions p {
-  margin: 0;
+/* Holds the client-rendered today pill's height so the contact bubble stays put. */
+.hero-today {
   display: flex;
   align-items: center;
-  gap: 21px;
-  font-size: 8px;
+  min-height: 58px;
+}
+/* Frosted glass bubble matching the today pill's height. */
+.hero-contact {
+  pointer-events: auto;
+  box-shadow:
+    0 8px 24px rgb(0 0 0 / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.75),
+    inset 0 -1px 0 rgb(0 0 0 / 0.06);
+  transition:
+    transform 480ms cubic-bezier(0.2, 1.65, 0.35, 1),
+    box-shadow 300ms ease;
+}
+.hero-contact a {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 58px;
+  padding: 0 9px 0 22px;
+  border-radius: inherit;
+  color: #111;
+  font-size: 13px;
   font-weight: 500;
-  letter-spacing: 1.25px;
-  line-height: 1.5;
-  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hero-contact a:focus-visible {
+  outline: none;
+}
+.hero-contact:has(:focus-visible) {
+  outline: 2px solid #111;
+  outline-offset: 4px;
+}
+.hero-contact-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.065);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6);
+}
+@media (hover: hover) and (pointer: fine) {
+  .hero-contact:hover {
+    transform: scale(1.04);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-contact:hover {
+    transform: none;
+  }
 }
 .square {
   display: block;
@@ -284,7 +384,9 @@ a:focus-visible {
   left: 50%;
   transform: translateX(-50%);
   width: var(--vinyl-size);
-  aspect-ratio: 1;
+  /* Explicit height: WebKit stretches aspect-ratio boxes with padding when
+     children use percentage heights, turning the disc into an ellipse. */
+  height: var(--vinyl-size);
   padding: clamp(18px, 1.9vw, 32px);
   border-radius: 50%;
 }
@@ -514,6 +616,11 @@ a:focus-visible {
   .site-header {
     padding: 27px 30px;
   }
+  .site-nav {
+    top: 30px;
+    right: 30px;
+    left: 101px;
+  }
   .hero-copy {
     top: 37%;
   }
@@ -524,14 +631,6 @@ a:focus-visible {
     left: 30px;
     right: 30px;
   }
-  .hero-captions p {
-    max-width: 180px;
-    gap: 12px;
-    font-size: 7px;
-  }
-  .hero-captions p:last-child {
-    text-align: right;
-  }
   .edition-note {
     right: 30px;
   }
@@ -541,12 +640,14 @@ a:focus-visible {
     padding: 23px 22px;
     align-items: flex-start;
   }
+  .site-nav {
+    top: 20px;
+    right: 22px;
+    left: 77px;
+  }
   .brand img {
     width: 39px;
     height: 47px;
-  }
-  .header-note {
-    display: none;
   }
   .contact-button {
     margin-top: 3px;
@@ -597,17 +698,19 @@ a:focus-visible {
     left: 22px;
     right: 22px;
     bottom: 39%;
-    align-items: flex-start;
   }
-  .hero-captions p {
-    max-width: 83px;
+  .hero-today {
+    min-height: 51px;
+  }
+  .hero-contact a {
     gap: 8px;
-    font-size: 6px;
-    line-height: 1.8;
-    letter-spacing: 0.65px;
+    height: 48px;
+    padding: 0 7px 0 14px;
+    font-size: 11px;
   }
-  .hero-captions p:last-child {
-    flex-direction: row;
+  .hero-contact-icon {
+    width: 34px;
+    height: 34px;
   }
   .square {
     width: 3px;
@@ -755,12 +858,15 @@ a:focus-visible {
     min-height: 680px;
   }
   .story-copy {
-    font-size: clamp(18px, 5.8vw, 34px);
-    line-height: 1.5;
-    letter-spacing: -0.045em;
+    font-size: clamp(20px, 7.1vw, 42px);
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.03em;
   }
   .story-row {
-    padding: 12px 0;
+    /* Matches a word space, so each row reads as one line. */
+    gap: 0.235em;
+    padding: 6px 0;
   }
   .is-scroll-active .story-copy {
     top: 19%;
@@ -819,6 +925,9 @@ a:focus-visible {
 .is-scroll-active .vinyl-tilt {
   will-change: transform;
 }
+.is-scroll-active .vinyl-surround {
+  perspective: 1200px;
+}
 .record-player--static {
   display: none;
 }
@@ -850,13 +959,13 @@ a:focus-visible {
   padding: 72px 48px 28px;
   overflow: clip;
   background: #fff;
-  border-top: 1px solid #ececec;
   scroll-margin-top: 0;
 }
 .category-heading {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  padding-left: calc(var(--section-title-inset) - 48px);
 }
 .category-kicker {
   display: flex;
@@ -876,12 +985,6 @@ a:focus-visible {
   line-height: 1;
   font-weight: 500;
   letter-spacing: -0.055em;
-}
-.category-section-number {
-  padding-top: 3px;
-  color: #777;
-  font-size: 8px;
-  letter-spacing: 1.5px;
 }
 .category-explorer {
   display: grid;
@@ -1000,7 +1103,7 @@ a:focus-visible {
   letter-spacing: -0.3px;
   line-height: 1.4;
 }
-.category-shop-glass {
+.glass-action {
   --glass-x: 50%;
   --glass-y: 20%;
   flex-shrink: 0;
@@ -1017,8 +1120,8 @@ a:focus-visible {
     transform 480ms cubic-bezier(0.2, 1.65, 0.35, 1),
     box-shadow 300ms ease;
 }
-.category-shop-glass::before,
-.category-shop-glass::after {
+.glass-action::before,
+.glass-action::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -1027,7 +1130,7 @@ a:focus-visible {
   opacity: 0;
   transition: opacity 260ms ease;
 }
-.category-shop-glass::before {
+.glass-action::before {
   background: radial-gradient(
     ellipse 110px 45px at var(--glass-x) var(--glass-y),
     #fff5,
@@ -1035,7 +1138,7 @@ a:focus-visible {
     transparent 75%
   );
 }
-.category-shop-glass::after {
+.glass-action::after {
   padding: 1px;
   background: radial-gradient(
     ellipse 150px 75px at var(--glass-x) var(--glass-y),
@@ -1048,27 +1151,27 @@ a:focus-visible {
     linear-gradient(#000 0 0);
 }
 @media (hover: hover) and (pointer: fine) {
-  .category-shop-glass:hover {
+  .glass-action:hover {
     transform: scale(1.045, 1.065);
     box-shadow:
       0 9px 26px rgb(0 0 0 / 0.11),
       inset 0 1px 0 rgb(255 255 255 / 0.95),
       inset 0 -1px 0 rgb(0 0 0 / 0.08);
   }
-  .category-shop-glass:hover::before,
-  .category-shop-glass:hover::after {
+  .glass-action:hover::before,
+  .glass-action:hover::after {
     opacity: 1;
   }
 }
-.category-shop-glass:active {
+.glass-action:active {
   transform: scale(0.985, 0.95);
   transition-duration: 120ms;
 }
-.category-shop-glass:focus-within {
+.glass-action:has(:focus-visible) {
   outline: 2px solid #111;
   outline-offset: 5px;
 }
-.category-shop {
+.glass-action-content {
   position: relative;
   z-index: 1;
   display: flex;
@@ -1083,7 +1186,7 @@ a:focus-visible {
   letter-spacing: 1.1px;
   text-transform: uppercase;
 }
-.category-shop-arrow {
+.glass-action-icon {
   display: grid;
   place-items: center;
   width: 38px;
@@ -1093,12 +1196,12 @@ a:focus-visible {
   background: rgb(0 0 0 / 0.065);
   box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6);
 }
-.category-shop:focus-visible {
+.glass-action-content:focus-visible {
   outline: none;
 }
 @media (prefers-reduced-motion: reduce) {
-  .category-shop-glass:hover,
-  .category-shop-glass:active {
+  .glass-action:hover,
+  .glass-action:active {
     transform: none;
   }
 }
@@ -1147,8 +1250,14 @@ a:focus-visible {
   line-height: 1.8;
 }
 @media (max-width: 1100px) {
+  .landing {
+    --section-title-inset: 106px;
+  }
   .category-section {
     padding: 60px 30px 24px;
+  }
+  .category-heading {
+    padding-left: calc(var(--section-title-inset) - 30px);
   }
   .category-explorer {
     grid-template-columns: minmax(408px, 50%) minmax(0, 1fr);
@@ -1161,18 +1270,23 @@ a:focus-visible {
   }
 }
 @media (max-width: 700px) {
+  .landing {
+    --section-title-inset: 84px;
+  }
   .category-section {
     padding: 44px 22px 18px;
   }
+  .category-heading {
+    justify-content: center;
+    padding-left: 0;
+    text-align: center;
+  }
   .category-heading h2 {
-    font-size: 49px;
+    font-size: clamp(34px, 10vw, 49px);
   }
   .category-kicker {
     margin-bottom: 20px;
     font-size: 8px;
-  }
-  .category-section-number {
-    display: none;
   }
   .category-explorer {
     grid-template-columns: 1fr;
@@ -1223,18 +1337,17 @@ a:focus-visible {
 .product-lines-section {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(0, 1.7fr);
+  grid-template-columns: minmax(356px, 1fr) minmax(0, 1.5fr);
   align-items: center;
   min-height: 100svh;
   padding: 60px 48px;
   overflow: clip;
-  border-top: 1px solid #ededed;
-  background: #fafafa;
+  background: #fff;
 }
 .product-lines-intro {
   position: relative;
   z-index: 1;
-  padding: 32px 0;
+  padding: 32px 0 32px calc(var(--section-title-inset) - 48px);
 }
 .product-lines-intro h2 {
   margin: 0;
@@ -1306,7 +1419,7 @@ a:focus-visible {
     padding: 50px 30px 20px;
   }
   .product-lines-intro {
-    padding: 0;
+    padding: 0 0 0 calc(var(--section-title-inset) - 30px);
   }
   .product-lines-intro h2 {
     font-size: 58px;
@@ -1319,14 +1432,49 @@ a:focus-visible {
 }
 @media (max-width: 600px) {
   .product-lines-section {
+    align-content: center;
     padding: 44px 22px 12px;
   }
   .product-lines-intro h2 {
     font-size: 49px;
   }
+  .product-lines-intro {
+    padding-left: 0;
+    text-align: center;
+  }
   .product-lines-wall {
     height: 470px;
-    margin: -20px -20px 0;
+    margin: 20px -20px 0;
+  }
+  /* Eased stops replace the oval mask so no fade edge is visible. */
+  .product-lines-wall .drift-wall {
+    --wall-fade: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgb(0 0 0 / 0.028) 2.2%,
+      rgb(0 0 0 / 0.104) 4.4%,
+      rgb(0 0 0 / 0.216) 6.6%,
+      rgb(0 0 0 / 0.352) 8.8%,
+      rgb(0 0 0 / 0.5) 11%,
+      rgb(0 0 0 / 0.648) 13.2%,
+      rgb(0 0 0 / 0.784) 15.4%,
+      rgb(0 0 0 / 0.896) 17.6%,
+      rgb(0 0 0 / 0.972) 19.8%,
+      #000 22%,
+      #000 78%,
+      rgb(0 0 0 / 0.972) 80.2%,
+      rgb(0 0 0 / 0.896) 82.4%,
+      rgb(0 0 0 / 0.784) 84.6%,
+      rgb(0 0 0 / 0.648) 86.8%,
+      rgb(0 0 0 / 0.5) 89%,
+      rgb(0 0 0 / 0.352) 91.2%,
+      rgb(0 0 0 / 0.216) 93.4%,
+      rgb(0 0 0 / 0.104) 95.6%,
+      rgb(0 0 0 / 0.028) 97.8%,
+      transparent 100%
+    );
+    -webkit-mask-image: var(--wall-fade);
+    mask-image: var(--wall-fade);
   }
   .product-lines-wall .drift-wall__tile img {
     padding: 8px;

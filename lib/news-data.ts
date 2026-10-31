@@ -1,0 +1,269 @@
+import "server-only"
+import { unstable_cache } from "next/cache"
+import {
+  NEWS_PAGE_SIZE,
+  type NewsBlock,
+  type NewsCover,
+  type NewsImage,
+  type NewsInline,
+  type NewsPage,
+  type NewsPost,
+  type NewsSummary,
+} from "@/lib/news"
+import { STORE_TIME_ZONE } from "@/lib/store-hours"
+import { mediaUrl, publicSupabase } from "@/lib/supabase/public"
+
+// Published news from Supabase, read as an anonymous visitor. Results are
+// cached under NEWS_CACHE_TAG for REVALIDATE_SECONDS; admin saves will call
+// revalidateTag(NEWS_CACHE_TAG) so edits show up right away.
+export const NEWS_CACHE_TAG = "news"
+const REVALIDATE_SECONDS = 300
+const CACHE = { tags: [NEWS_CACHE_TAG], revalidate: REVALIDATE_SECONDS }
+
+const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
+const TIMESTAMP =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$/
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+type CardRow = {
+  id: string
+  slug: string
+  title: string
+  excerpt: string
+  cover_path: string | null
+  cover_width: number | null
+  cover_height: number | null
+  cover_alt: string
+  cover_fit: string
+  published_at: string | null
+}
+
+const storeDateFormat = new Intl.DateTimeFormat("en-US", {
+  timeZone: STORE_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+})
+
+/** "YYYY-MM-DD" of a timestamp in store time. */
+function storeDate(timestamp: string) {
+  const parts = Object.fromEntries(
+    storeDateFormat
+      .formatToParts(new Date(timestamp))
+      .map(({ type, value }) => [type, value])
+  )
+  return `${parts.year}-${parts.month}-${parts.day}`
+}
+
+// The cursor is the last card's (published_at, id), kept opaque for clients.
+function encodeCursor(row: CardRow) {
+  return Buffer.from(`${row.published_at}_${row.id}`).toString("base64url")
+}
+
+function decodeCursor(cursor: string) {
+  const [publishedAt, id, ...rest] = Buffer.from(cursor, "base64url")
+    .toString()
+    .split("_")
+  if (rest.length || !TIMESTAMP.test(publishedAt) || !UUID.test(id ?? "")) {
+    return null
+  }
+  return { publishedAt, id }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value)
+}
+
+// Media paths are relative to the bucket: no leading slash or "..".
+function isMediaPath(value: unknown): value is string {
+  return (
+    typeof value === "string" &&
+    /^[\w.-]+(\/[\w.-]+)*$/.test(value) &&
+    !value.split("/").includes("..")
+  )
+}
+
+function isSafeHref(href: string) {
+  return /^(https?:|mailto:|tel:|\/(?!\/))/i.test(href)
+}
+
+function toImage(value: unknown): NewsImage | null {
+  if (!isRecord(value) || !isMediaPath(value.src)) return null
+  const { width, height, alt } = value
+  if (typeof width !== "number" || typeof height !== "number") return null
+  return {
+    src: mediaUrl(value.src),
+    width,
+    height,
+    alt: typeof alt === "string" ? alt : "",
+  }
+}
+
+function toInline(value: unknown): NewsInline | null {
+  if (typeof value === "string") return value
+  if (!isRecord(value) || typeof value.text !== "string") return null
+  const inline: Exclude<NewsInline, string> = { text: value.text }
+  if (value.strong === true) inline.strong = true
+  if (typeof value.href === "string" && isSafeHref(value.href)) {
+    inline.href = value.href
+  }
+  return inline
+}
+
+function toInlines(value: unknown) {
+  if (!Array.isArray(value)) return null
+  const parts = value.map(toInline)
+  return parts.every((part) => part !== null) ? parts : null
+}
+
+// Bodies are JSON written by the app; anything malformed is skipped rather
+// than breaking the page, and links are limited to safe schemes.
+function toBlock(value: unknown): NewsBlock | null {
+  if (!isRecord(value)) return null
+  switch (value.type) {
+    case "paragraph": {
+      const content = toInlines(value.content)
+      return content ? { type: "paragraph", content } : null
+    }
+    case "heading":
+    case "quote":
+      return typeof value.text === "string"
+        ? { type: value.type, text: value.text }
+        : null
+    case "list": {
+      if (!Array.isArray(value.items)) return null
+      const items = value.items.map(toInlines)
+      return items.every((item) => item !== null)
+        ? { type: "list", items }
+        : null
+    }
+    case "image": {
+      const image = toImage(value.image)
+      if (!image) return null
+      return typeof value.caption === "string"
+        ? { type: "image", image, caption: value.caption }
+        : { type: "image", image }
+    }
+    default:
+      return null
+  }
+}
+
+function toCover(row: CardRow): NewsCover | null {
+  const { cover_path: path, cover_width: width, cover_height: height } = row
+  if (!isMediaPath(path) || !width || !height) return null
+  return {
+    src: mediaUrl(path),
+    width,
+    height,
+    alt: row.cover_alt,
+    ...(row.cover_fit === "contain" && { fit: "contain" as const }),
+  }
+}
+
+function toSummary(row: CardRow): NewsSummary | null {
+  const cover = toCover(row)
+  if (!cover || !row.published_at) return null
+  return {
+    slug: row.slug,
+    title: row.title,
+    date: storeDate(row.published_at),
+    excerpt: row.excerpt,
+    cover,
+  }
+}
+
+const fetchFeedRows = unstable_cache(
+  async (
+    afterPublishedAt: string | null,
+    afterId: string | null,
+    maxRows: number
+  ) => {
+    const { data, error } = await publicSupabase().rpc("news_feed", {
+      after_published_at: afterPublishedAt ?? undefined,
+      after_id: afterId ?? undefined,
+      max_rows: maxRows,
+    })
+    if (error) throw new Error(`News feed: ${error.message}`)
+    return data
+  },
+  ["news-feed"],
+  CACHE
+)
+
+/**
+ * Feed cards after `cursor` (null for the newest), newest first. Returns null
+ * for a malformed cursor.
+ */
+export async function getNewsPage(
+  cursor: string | null,
+  limit = NEWS_PAGE_SIZE
+): Promise<NewsPage | null> {
+  const after = cursor === null ? null : decodeCursor(cursor)
+  if (cursor !== null && !after) return null
+  const rows = await fetchFeedRows(
+    after?.publishedAt ?? null,
+    after?.id ?? null,
+    limit + 1
+  )
+  const pageRows = rows.slice(0, limit)
+  const last = pageRows[pageRows.length - 1]
+  return {
+    items: pageRows.map(toSummary).filter((item) => item !== null),
+    nextCursor: rows.length > limit && last ? encodeCursor(last) : null,
+  }
+}
+
+/** Number of published posts, for the feed's aria-setsize. */
+export const getNewsCount = unstable_cache(
+  async () => {
+    const { count, error } = await publicSupabase()
+      .from("news_posts")
+      .select("id", { count: "exact", head: true })
+    if (error) throw new Error(`News count: ${error.message}`)
+    return count ?? 0
+  },
+  ["news-count"],
+  CACHE
+)
+
+/** Slugs of published posts, for prerendering article pages. */
+export const getNewsSlugs = unstable_cache(
+  async () => {
+    const { data, error } = await publicSupabase()
+      .from("news_posts")
+      .select("slug")
+    if (error) throw new Error(`News slugs: ${error.message}`)
+    return data.map(({ slug }) => slug)
+  },
+  ["news-slugs"],
+  CACHE
+)
+
+const fetchPostRow = unstable_cache(
+  async (slug: string) => {
+    const { data, error } = await publicSupabase()
+      .from("news_posts")
+      .select(
+        "id, slug, title, excerpt, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at"
+      )
+      .eq("slug", slug)
+      .maybeSingle()
+    if (error) throw new Error(`News post ${slug}: ${error.message}`)
+    return data
+  },
+  ["news-post"],
+  CACHE
+)
+
+/** A published post by slug, or null. */
+export async function getNewsPost(slug: string): Promise<NewsPost | null> {
+  if (!SLUG.test(slug)) return null
+  const row = await fetchPostRow(slug)
+  const summary = row && toSummary(row)
+  if (!row || !summary) return null
+  const body = Array.isArray(row.body)
+    ? row.body.map(toBlock).filter((block) => block !== null)
+    : []
+  return { ...summary, body }
+}

@@ -20,6 +20,10 @@ export type LiquidGlassProps = HTMLAttributes<HTMLDivElement> & {
   scale?: number
   /** Chromatic aberration spread in px. */
   aberration?: number
+  /** Extra displacement for the red channel only, in px. */
+  redOffset?: number
+  /** Extra displacement for the green channel only, in px. */
+  greenOffset?: number
   /** Extra blur after refraction, in px. */
   frost?: number
   /** White body tint 0–1. */
@@ -40,6 +44,8 @@ export function LiquidGlass({
   bevelDepth = 14,
   scale = 48,
   aberration = 4,
+  redOffset = 0,
+  greenOffset = 0,
   frost = 0.4,
   tint = 0.12,
   style,
@@ -111,6 +117,8 @@ export function LiquidGlass({
           height: size.h,
           scale,
           aberration,
+          redOffset,
+          greenOffset,
           frost,
         }),
       })
@@ -127,6 +135,8 @@ export function LiquidGlass({
     bevelDepth,
     scale,
     aberration,
+    redOffset,
+    greenOffset,
     frost,
     reactId,
   ])
@@ -363,6 +373,8 @@ type FilterOptions = {
   height: number
   scale: number
   aberration: number
+  redOffset: number
+  greenOffset: number
   frost: number
 }
 
@@ -373,9 +385,13 @@ function buildFilterSvg({
   height,
   scale,
   aberration,
+  redOffset,
+  greenOffset,
   frost,
 }: FilterOptions) {
-  const pad = Math.ceil(scale + aberration + 4)
+  const pad = Math.ceil(
+    scale + aberration + Math.max(redOffset, greenOffset) + 4
+  )
   const px = (pad / Math.max(1, width)) * 100
   const py = (pad / Math.max(1, height)) * 100
   const region = `x="-${px.toFixed(3)}%" y="-${py.toFixed(3)}%" width="${(100 + 2 * px).toFixed(3)}%" height="${(100 + 2 * py).toFixed(3)}%"`
@@ -385,13 +401,13 @@ function buildFilterSvg({
   const displace = (s: number, result: string) =>
     `<feDisplacementMap in="SourceGraphic" in2="map" scale="${s}" xChannelSelector="R" yChannelSelector="G" result="${result}"/>`
 
-  // One pass without aberration, so no screen-blend seams.
+  // One pass without channel offsets, so no screen-blend seams.
   const body =
-    aberration <= 0
+    aberration <= 0 && redOffset <= 0 && greenOffset <= 0
       ? `${displace(scale, "rgb")}`
-      : `${displace(scale + aberration, "dispR")}
+      : `${displace(scale + aberration + redOffset, "dispR")}
   <feColorMatrix in="dispR" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red"/>
-  ${displace(scale, "dispG")}
+  ${displace(scale + greenOffset, "dispG")}
   <feColorMatrix in="dispG" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green"/>
   ${displace(Math.max(0, scale - aberration), "dispB")}
   <feColorMatrix in="dispB" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue"/>
