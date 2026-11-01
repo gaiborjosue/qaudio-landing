@@ -83,6 +83,9 @@
 .primary,
 .secondary,
 .quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   padding: 9px 16px;
   border: 1px solid #111;
   border-radius: 999px;
@@ -442,4 +445,150 @@
   .hoursPreview {
     padding: 20px 14px;
   }
+}
+
+/* Assistant replies, as Markdown (Streamdown): the chat's own type, and
+   headings kept to reply size. */
+.markdown {
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.markdown > * {
+  margin: 0 0 10px;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 14px 0 6px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.markdown :is(ul, ol) {
+  padding-left: 22px;
+}
+.markdown li + li {
+  margin-top: 4px;
+}
+.markdown a {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.markdown code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #f0f0f0;
+  font-size: 13px;
+}
+
+/* Approval actions, with the news schedule picker beside them. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+/* A button that morphs into a panel and back (Motion shared layout): the
+   news schedule picker. */
+.morphPanel {
+  overflow: hidden;
+  border: 1px solid #dcdcdc;
+  background: #fff;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.08);
+}
+.actions .morphPanel {
+  flex-basis: 100%;
+  max-width: 360px;
+}
+.morphBody {
+  display: grid;
+  gap: 12px;
+  padding: 10px 14px 16px;
+}
+.morphHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.morphHeader h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+/* The photo button and its popover. The popover grows out of the button's
+   bubble (its scale origin is the button's center) and keeps a notch that
+   points back down at it, so the two read as one thing. Open, the button
+   shows the bubble it came from. */
+.photoAnchor {
+  position: relative;
+  flex-shrink: 0;
+}
+.photoAnchor > .iconButton[aria-expanded="true"] {
+  background: #f0f0f0;
+}
+.photoPopover {
+  --notch: 12px;
+  position: absolute;
+  z-index: 20;
+  /* The row's padding and border sit between the button and the row's
+     edge; -7px lines the popover up with that edge. */
+  bottom: calc(100% + 16px);
+  left: -7px;
+  display: grid;
+  gap: 12px;
+  width: min(340px, calc(100vw - 32px));
+  padding: 10px 14px 16px;
+  border: 1px solid #dcdcdc;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.12);
+  /* the button's center: 7px to its edge plus half its 40px width */
+  transform-origin: 27px calc(100% + 16px);
+}
+.photoPopover::after {
+  content: "";
+  position: absolute;
+  bottom: calc(var(--notch) / -2 - 1px);
+  left: calc(27px - var(--notch) / 2);
+  width: var(--notch);
+  height: var(--notch);
+  border-right: 1px solid #dcdcdc;
+  border-bottom: 1px solid #dcdcdc;
+  border-bottom-right-radius: 3px;
+  background: #fff;
+  transform: rotate(45deg);
+}
+
+/* shadcn's Calendar, sized for the card */
+.calendar {
+  --cell-size: 36px;
+  justify-self: center;
+  padding: 0;
+}
+.timeField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.timeField span {
+  color: #6b6b6b;
+  font-size: 13px;
+}
+.timeField input {
+  margin-left: auto;
+  padding: 7px 10px;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  background: #fff;
+  font: inherit;
+  font-size: 14px;
+}
+.timeField input:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 1px;
 }

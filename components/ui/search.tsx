@@ -10,6 +10,7 @@
      the server render and the first client render agree
    · useSpring returns its target directly when motion is reduced,
      instead of setting state from an effect
+   · opening clears the magnet's last pull, which was left on the field
    · the touch-screen `inputMode="none"` is gone, so phones get a
      keyboard */
 
@@ -444,6 +445,11 @@ export function Search({
       () => {
         setPress(false)
         setOpen(true)
+        /* Added here. The magnet is switched off once open, but its last
+           pull was left on the field, so a pill that had been leaning
+           toward the pointer stayed that few pixels off true. It matters
+           when the field's left edge is meant to sit on a line. */
+        setLean({ x: 0, y: 0 })
         field.current?.focus()
       },
       still ? 0 : 90

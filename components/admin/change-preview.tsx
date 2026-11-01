@@ -31,8 +31,7 @@ import {
   reorderProductsInputSchema,
   weeklyHoursInputSchema,
 } from "@/lib/admin/schemas"
-import { toStoreDateTime } from "@/lib/admin/store-time"
-import { formatNewsDate } from "@/lib/news"
+import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
 import {
   addDays,
   formatChangeDates,
@@ -78,14 +77,6 @@ function HoursPreview({ schedule }: { schedule: StoreSchedule }) {
 
 function Note({ children }: { children: React.ReactNode }) {
   return <p className={styles.previewNote}>{children}</p>
-}
-
-/** "Nov 3, 2026, 9:00 am" from a store-time "YYYY-MM-DDTHH:MM". */
-function formatStoreDateTime(local: string) {
-  const [date, time] = local.split("T")
-  const [hours, minutes] = time.split(":").map(Number)
-  const clock = `${hours % 12 || 12}:${String(minutes).padStart(2, "0")}`
-  return `${formatNewsDate(date, "short")}, ${clock}\u00a0${hours < 12 ? "am" : "pm"}`
 }
 
 function dealTiming(

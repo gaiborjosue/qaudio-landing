@@ -20,6 +20,6 @@ Steps:
 
 1. For an edit, find the post with `list_news`, then `get_news_post` for its full record. For a new post, check with `list_news` that the slug is free.
 2. Write the post from the owner's words. Keep their wording and facts; fix only typos and obvious formatting. Link products the shop carries to `/products/<slug>` when they exist (check `list_catalog`).
-3. Ask whether to publish now, schedule it, or keep a draft, unless the owner said.
+3. Ask whether to publish now, schedule it, or keep a draft, unless the owner said. The approval card has a Schedule button with a calendar: when the owner picks a time there, their message says "Schedule this post to go live … published_at "YYYY-MM-DDTHH:MM"". Call `save_news_post` again at once with the same post, `status` `published`, and that `published_at`, without asking anything.
 4. Call `save_news_post` with the complete post (with `id` when editing). The owner previews the card and the article and approves.
 5. To delete, call `delete_news_post` with the id and title. Saving as a draft hides a post without deleting it.

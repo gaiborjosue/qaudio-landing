@@ -31,3 +31,27 @@ export function fromStoreDateTime(local: string) {
   instant = wall - storeOffset(instant)
   return new Date(instant).toISOString()
 }
+
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+]
+
+/** "Nov 3, 2026, 9:00 am" from a store-time "YYYY-MM-DDTHH:MM". */
+export function formatStoreDateTime(local: string) {
+  const [date, time] = local.split("T")
+  const [year, month, day] = date.split("-").map(Number)
+  const [hours, minutes] = time.split(":").map(Number)
+  const clock = `${hours % 12 || 12}:${String(minutes).padStart(2, "0")}`
+  return `${MONTHS[month - 1]} ${day}, ${year}, ${clock}\u00a0${hours < 12 ? "am" : "pm"}`
+}
