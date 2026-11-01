@@ -39,20 +39,26 @@ export type Database = {
         Row: {
           artwork_path: string
           name: string
+          scene_path: string
           slug: string
           sort_order: number
+          wheel_label: string
         }
         Insert: {
           artwork_path: string
           name: string
+          scene_path: string
           slug: string
           sort_order?: number
+          wheel_label: string
         }
         Update: {
           artwork_path?: string
           name?: string
+          scene_path?: string
           slug?: string
           sort_order?: number
+          wheel_label?: string
         }
         Relationships: []
       }
@@ -377,6 +383,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      is_admin: { Args: never; Returns: boolean }
       news_feed: {
         Args: {
           after_id?: string

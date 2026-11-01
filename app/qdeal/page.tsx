@@ -8,11 +8,8 @@ import { SiteNav } from "@/components/site-nav"
 import { getDeals } from "@/lib/deals-data"
 import styles from "./qdeal.module.css"
 
-// Regenerate at most every 5 minutes, matching the deals data cache.
-export const revalidate = 300
-
 export const metadata: Metadata = {
-  title: "QDeal — Q Audio",
+  title: "QDeal",
   description:
     "Closeouts, price matching and honest advice from Q Audio in Cambridge, Massachusetts.",
 }

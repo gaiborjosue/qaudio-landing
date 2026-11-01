@@ -318,6 +318,9 @@ export function AlbumGrid({ avoid }: { avoid: RefObject<HTMLElement | null> }) {
     const seed = (Math.random() * 2 ** 32) >>> 0
     const observer = new ResizeObserver(() => {
       const box = root.getBoundingClientRect()
+      // A hidden page (display: none, e.g. a preserved route) measures 0×0;
+      // keep the last layout until it's visible again.
+      if (!box.width || !box.height) return
       const rect = content.getBoundingClientRect()
       const next = arrange(
         box.width,

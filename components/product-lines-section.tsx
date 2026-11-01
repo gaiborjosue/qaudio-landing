@@ -1,11 +1,38 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import DriftWall from "@/components/DriftWall"
-import { BRAND_TILES } from "@/lib/brands"
+import { Search } from "@/components/ui/search"
+import type { CatalogBrand } from "@/lib/catalog"
 
-export function ProductLinesSection() {
+// "Pro Ject", "pro-ject" and "PRO–JECT" all find Pro-Ject, and "kl" finds
+// Klipsch and KLH. Accents and punctuation don't count.
+const fold = (text: string) =>
+  text
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+
+export function ProductLinesSection({ brands }: { brands: CatalogBrand[] }) {
   const wallRef = useRef<HTMLDivElement>(null)
+  const tiles = useMemo(
+    () =>
+      brands.map((brand) => ({
+        image: brand.logo_path,
+        title: brand.name,
+        href: `/shop?brand=${brand.slug}`,
+      })),
+    [brands]
+  )
+  const [query, setQuery] = useState("")
+  // Set once the visitor has searched, so the wall fades between its two
+  // arrangements without fading in on a plain page load.
+  const [searched, setSearched] = useState(false)
+  // Reduced motion shows an auto-height grid, which shrinks with the results
+  // and would move the search field while the visitor types into it. Its
+  // height is held at what it was before the first keystroke.
+  const [held, setHeld] = useState<number | null>(null)
   const [layout, setLayout] = useState({
     columns: 4,
     tileWidth: 180,
@@ -13,6 +40,29 @@ export function ProductLinesSection() {
     gap: 18,
     turn: -14,
   })
+
+  const needle = fold(query)
+  const searching = needle !== ""
+  const found = useMemo(
+    () =>
+      searching
+        ? tiles.filter((tile) => fold(tile.title).includes(needle))
+        : tiles,
+    [tiles, needle, searching]
+  )
+
+  const search = (next: string) => {
+    const wall = wallRef.current
+    setQuery(next)
+    if (fold(next) === "") {
+      setHeld(null)
+      return
+    }
+    setSearched(true)
+    if (!searching && wall?.querySelector(".drift-wall--reduced")) {
+      setHeld(wall.offsetHeight)
+    }
+  }
 
   useEffect(() => {
     const wall = wallRef.current
@@ -46,16 +96,40 @@ export function ProductLinesSection() {
     >
       <div className="product-lines-intro">
         <h2 id="product-lines-title">What Brand Are You Looking For?</h2>
+        <div className="product-lines-search" role="search">
+          <Search label="Search brands" onQueryChange={search} />
+        </div>
+        <p className="sr-only" role="status">
+          {searching
+            ? found.length
+              ? `${found.length} ${found.length === 1 ? "brand" : "brands"} shown`
+              : "No brands found"
+            : ""}
+        </p>
       </div>
-      <div className="product-lines-wall" ref={wallRef}>
-        <DriftWall
-          items={BRAND_TILES}
-          {...layout}
-          grayscale
-          pauseOnHover
-          overlayColor="#000000"
-          dim={0.8}
-        />
+      <div
+        className="product-lines-wall"
+        ref={wallRef}
+        data-searched={searched || undefined}
+        data-held={held !== null || undefined}
+        style={held ? { minHeight: held } : undefined}
+      >
+        {found.length ? (
+          <DriftWall
+            key={searching ? "found" : "drifting"}
+            items={found}
+            {...layout}
+            still={searching}
+            grayscale
+            pauseOnHover
+            overlayColor="#000000"
+            dim={0.8}
+          />
+        ) : (
+          <p className="product-lines-empty" aria-hidden="true">
+            No brands found
+          </p>
+        )}
       </div>
     </section>
   )

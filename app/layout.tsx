@@ -9,10 +9,16 @@ const bodoni = Bodoni_Moda({
   style: ["normal", "italic"],
   variable: "--font-editorial",
   display: "swap",
+  // Kept for the editorial comparison in globals.css but unused, so don't
+  // preload its files on every page.
+  preload: false,
 })
 
 export const metadata: Metadata = {
-  title: "Q Audio — For the love of listening",
+  title: {
+    default: "Q Audio — For the love of listening",
+    template: "%s — Q Audio",
+  },
   description:
     "Independent hi-fi in Cambridge, Massachusetts, since 1973. Exceptional sound. A lifetime of listening.",
 }

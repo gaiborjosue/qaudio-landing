@@ -80,34 +80,6 @@ const DepthCarousel = ({
 
   const [active, setActive] = useState(0)
 
-  // Latest props for handlers and effects, synced before any of them run.
-  useLayoutEffect(() => {
-    onChangeRef.current = onChange
-    cfgRef.current = {
-      count,
-      depth,
-      spread,
-      tilt,
-      tiltDirection,
-      visibleCards,
-      falloff,
-      blur,
-      duration,
-      ease,
-      loop,
-      cardWidth,
-      gutter,
-      autoplayDelay,
-    }
-    // Card size can change with the container, so refit the scale.
-    const root = rootRef.current
-    if (root && root.clientWidth) {
-      const needed = cardWidth + Math.abs(spread) * 2 + gutter
-      scaleRef.current = clamp(root.clientWidth / needed, 0.4, 1)
-      layout(posRef.current)
-    }
-  })
-
   const layout = useCallback((pos) => {
     const cfg = cfgRef.current
     const n = cfg.count
@@ -157,6 +129,34 @@ const DepthCarousel = ({
         ov.style.opacity = clamp(back * cfg.falloff * 1.25, 0, 0.86).toFixed(3)
     }
   }, [])
+
+  // Latest props for handlers and effects, synced before any of them run.
+  useLayoutEffect(() => {
+    onChangeRef.current = onChange
+    cfgRef.current = {
+      count,
+      depth,
+      spread,
+      tilt,
+      tiltDirection,
+      visibleCards,
+      falloff,
+      blur,
+      duration,
+      ease,
+      loop,
+      cardWidth,
+      gutter,
+      autoplayDelay,
+    }
+    // Card size can change with the container, so refit the scale.
+    const root = rootRef.current
+    if (root && root.clientWidth) {
+      const needed = cardWidth + Math.abs(spread) * 2 + gutter
+      scaleRef.current = clamp(root.clientWidth / needed, 0.4, 1)
+      layout(posRef.current)
+    }
+  })
 
   const notify = useCallback(
     (idx) => {

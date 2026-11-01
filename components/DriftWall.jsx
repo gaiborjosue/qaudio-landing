@@ -1,6 +1,17 @@
 "use client"
 
 // Installed from @react-bits/DriftWall-JS-CSS. See react-bits.LICENSE.md.
+//
+// Local change: a `still` prop. The wall stops drifting and lays the items
+// out once, each column centered on the plane, with at most one column per
+// item. The drifting wall pads an empty column by repeating the first item,
+// which is right for a long list and wrong for a short one: a search that
+// leaves one brand would show that brand in every column.
+//
+// `still` is a request. It holds only while every row fits the wall (one
+// row short of its height, which the edge fades eat); a longer list keeps
+// drifting, because rows past the edge of a wall that doesn't move would be
+// out of reach.
 
 import {
   useCallback,
@@ -55,6 +66,7 @@ const DriftWall = ({
   fade = 0.6,
   dim = 0.55,
   grayscale = false,
+  still: stillRequested = false,
   overlayColor = "#060010",
   className = "",
   style = {},
@@ -86,23 +98,29 @@ const DriftWall = ({
     return () => mq.removeEventListener("change", onChange)
   }, [])
 
+  const stillColumns = Math.max(1, Math.min(columns, items.length))
+  const still =
+    stillRequested &&
+    Math.ceil(items.length / stillColumns) <=
+      Math.max(1, Math.floor(containerHeight / (tileHeight + gap)) - 1)
+
   const columnItems = useMemo(() => {
-    const cols = Array.from({ length: columns }, () => [])
-    items.forEach((item, i) => cols[i % columns].push(item))
+    const count = still ? stillColumns : columns
+    const cols = Array.from({ length: count }, () => [])
+    items.forEach((item, i) => cols[i % count].push(item))
     return cols.map((col) => (col.length ? col : items.slice(0, 1)))
-  }, [items, columns])
+  }, [items, columns, still, stillColumns])
 
   const columnMeta = useMemo(() => {
     const unit = tileHeight + gap
     return columnItems.map((col) => {
       const copyHeight = Math.max(unit, col.length * unit)
-      const copies = Math.max(
-        2,
-        Math.ceil((containerHeight * 1.6) / copyHeight) + 1
-      )
+      const copies = still
+        ? 1
+        : Math.max(2, Math.ceil((containerHeight * 1.6) / copyHeight) + 1)
       return { copyHeight, copies }
     })
-  }, [columnItems, tileHeight, gap, containerHeight])
+  }, [columnItems, tileHeight, gap, containerHeight, still])
 
   useLayoutEffect(() => {
     if (!containerRef.current) return
@@ -122,11 +140,15 @@ const DriftWall = ({
   }, [columnItems, speed, direction, variance])
 
   useEffect(() => {
-    offsetsRef.current = columnMeta.map(
-      (meta, c) => meta.copyHeight * ((c * 0.37) % 1)
+    // Still: a negative offset, which moves the column down, to the middle
+    // of the plane (the plane is 1.6 container heights tall).
+    offsetsRef.current = columnMeta.map((meta, c) =>
+      still
+        ? -(containerHeight * 1.6 - meta.copyHeight) / 2
+        : meta.copyHeight * ((c * 0.37) % 1)
     )
     velocitiesRef.current = columnItems.map(() => 0)
-  }, [columnMeta, columnItems])
+  }, [columnMeta, columnItems, containerHeight, still])
 
   const applyPlaneTransform = useCallback(
     (px, py) => {
@@ -162,7 +184,7 @@ const DriftWall = ({
         pointerDampedRef.current.y
       )
 
-      if (!reduced) {
+      if (!reduced && !still) {
         for (let c = 0; c < trackRefs.current.length; c++) {
           const meta = columnMeta[c]
           if (!meta) continue
@@ -229,6 +251,7 @@ const DriftWall = ({
     pauseOnHover,
     parallax,
     reduced,
+    still,
     applyPlaneTransform,
   ])
 
@@ -346,6 +369,7 @@ const DriftWall = ({
   const rootClass = [
     "drift-wall",
     reduced ? "drift-wall--reduced" : "",
+    still ? "drift-wall--still" : "",
     className,
   ]
     .filter(Boolean)
@@ -391,7 +415,9 @@ const DriftWall = ({
                   col.map((item, itemIndex) =>
                     renderTile(
                       item,
-                      `${c}-${copyIndex}-${itemIndex}`,
+                      still
+                        ? `still-${item.href ?? item.title ?? item.image}`
+                        : `${c}-${copyIndex}-${itemIndex}`,
                       c,
                       copyIndex
                     )

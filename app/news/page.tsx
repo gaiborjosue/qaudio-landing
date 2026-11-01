@@ -4,11 +4,8 @@ import { NewsFeed } from "@/components/news-feed"
 import { getNewsCount, getNewsPage } from "@/lib/news-data"
 import styles from "./news.module.css"
 
-// Regenerate at most every 5 minutes, matching the news data cache.
-export const revalidate = 300
-
 export const metadata: Metadata = {
-  title: "News — Q Audio",
+  title: "News",
   description:
     "Arrivals, promotions and listening notes from Q Audio in Cambridge, Massachusetts.",
 }

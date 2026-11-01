@@ -1,5 +1,5 @@
 import "server-only"
-import { unstable_cache } from "next/cache"
+import { cacheLife, cacheTag } from "next/cache"
 import {
   NEWS_PAGE_SIZE,
   type NewsBlock,
@@ -14,11 +14,16 @@ import { STORE_TIME_ZONE } from "@/lib/store-hours"
 import { mediaUrl, publicSupabase } from "@/lib/supabase/public"
 
 // Published news from Supabase, read as an anonymous visitor. Results are
-// cached under NEWS_CACHE_TAG for REVALIDATE_SECONDS; admin saves will call
-// revalidateTag(NEWS_CACHE_TAG) so edits show up right away.
+// cached under NEWS_CACHE_TAG with the "content" profile (5 minutes). Admin
+// Server Actions will call updateTag(NEWS_CACHE_TAG) after a save so edits
+// show up right away (from a Route Handler, revalidateTag(NEWS_CACHE_TAG,
+// "max")).
 export const NEWS_CACHE_TAG = "news"
-const REVALIDATE_SECONDS = 300
-const CACHE = { tags: [NEWS_CACHE_TAG], revalidate: REVALIDATE_SECONDS }
+
+function cacheNews() {
+  cacheLife("content")
+  cacheTag(NEWS_CACHE_TAG)
+}
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
 const TIMESTAMP =
@@ -173,23 +178,21 @@ function toSummary(row: CardRow): NewsSummary | null {
   }
 }
 
-const fetchFeedRows = unstable_cache(
-  async (
-    afterPublishedAt: string | null,
-    afterId: string | null,
-    maxRows: number
-  ) => {
-    const { data, error } = await publicSupabase().rpc("news_feed", {
-      after_published_at: afterPublishedAt ?? undefined,
-      after_id: afterId ?? undefined,
-      max_rows: maxRows,
-    })
-    if (error) throw new Error(`News feed: ${error.message}`)
-    return data
-  },
-  ["news-feed"],
-  CACHE
-)
+async function fetchFeedRows(
+  afterPublishedAt: string | null,
+  afterId: string | null,
+  maxRows: number
+) {
+  "use cache"
+  cacheNews()
+  const { data, error } = await publicSupabase().rpc("news_feed", {
+    after_published_at: afterPublishedAt ?? undefined,
+    after_id: afterId ?? undefined,
+    max_rows: maxRows,
+  })
+  if (error) throw new Error(`News feed: ${error.message}`)
+  return data
+}
 
 /**
  * Feed cards after `cursor` (null for the newest), newest first. Returns null
@@ -215,46 +218,40 @@ export async function getNewsPage(
 }
 
 /** Number of published posts, for the feed's aria-setsize. */
-export const getNewsCount = unstable_cache(
-  async () => {
-    const { count, error } = await publicSupabase()
-      .from("news_posts")
-      .select("id", { count: "exact", head: true })
-    if (error) throw new Error(`News count: ${error.message}`)
-    return count ?? 0
-  },
-  ["news-count"],
-  CACHE
-)
+export async function getNewsCount() {
+  "use cache"
+  cacheNews()
+  const { count, error } = await publicSupabase()
+    .from("news_posts")
+    .select("id", { count: "exact", head: true })
+  if (error) throw new Error(`News count: ${error.message}`)
+  return count ?? 0
+}
 
 /** Slugs of published posts, for prerendering article pages. */
-export const getNewsSlugs = unstable_cache(
-  async () => {
-    const { data, error } = await publicSupabase()
-      .from("news_posts")
-      .select("slug")
-    if (error) throw new Error(`News slugs: ${error.message}`)
-    return data.map(({ slug }) => slug)
-  },
-  ["news-slugs"],
-  CACHE
-)
+export async function getNewsSlugs() {
+  "use cache"
+  cacheNews()
+  const { data, error } = await publicSupabase()
+    .from("news_posts")
+    .select("slug")
+  if (error) throw new Error(`News slugs: ${error.message}`)
+  return data.map(({ slug }) => slug)
+}
 
-const fetchPostRow = unstable_cache(
-  async (slug: string) => {
-    const { data, error } = await publicSupabase()
-      .from("news_posts")
-      .select(
-        "id, slug, title, excerpt, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at"
-      )
-      .eq("slug", slug)
-      .maybeSingle()
-    if (error) throw new Error(`News post ${slug}: ${error.message}`)
-    return data
-  },
-  ["news-post"],
-  CACHE
-)
+async function fetchPostRow(slug: string) {
+  "use cache"
+  cacheNews()
+  const { data, error } = await publicSupabase()
+    .from("news_posts")
+    .select(
+      "id, slug, title, excerpt, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at"
+    )
+    .eq("slug", slug)
+    .maybeSingle()
+  if (error) throw new Error(`News post ${slug}: ${error.message}`)
+  return data
+}
 
 /** A published post by slug, or null. */
 export async function getNewsPost(slug: string): Promise<NewsPost | null> {

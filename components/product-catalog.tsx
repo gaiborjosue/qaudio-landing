@@ -4,8 +4,19 @@
 // https://ui.aceternity.com/components/expandable-card
 // Retains shared card/image/title/description layout IDs and AnimatePresence.
 // Adds native modal semantics, nested gallery, focus return, and reduced motion.
-import { useEffect, useId, useRef, useState } from "react"
+import {
+  useEffect,
+  useEffectEvent,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent,
+  type PointerEvent,
+} from "react"
 import Image from "next/image"
+import Link from "next/link"
+import { usePathname, useRouter } from "next/navigation"
 import {
   AnimatePresence,
   LayoutGroup,
@@ -13,9 +24,80 @@ import {
   MotionConfig,
   useReducedMotion,
 } from "motion/react"
-import { ArrowLeft, ArrowRight, ArrowUpRight, Check, X } from "lucide-react"
-import { formatPrice, type Product, type ProductImage } from "@/lib/catalog"
+import {
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpRight,
+  Headphones,
+  X,
+} from "lucide-react"
+import {
+  formatPrice,
+  isProductOnSale,
+  PRODUCT_PATH,
+  productHref,
+  type Product,
+  type ProductImage,
+} from "@/lib/catalog"
 import styles from "./product-catalog.module.css"
+
+const CONDITION_TONES = ["new", "demo", "used"]
+
+function conditionTone(condition: string) {
+  const key = condition.trim().toLowerCase()
+  return CONDITION_TONES.includes(key) ? key : "other"
+}
+
+/** The same selling-price label on cards, details, and admin previews. */
+function ProductPrice({
+  product,
+  detail = false,
+}: {
+  product: Product
+  detail?: boolean
+}) {
+  const onSale = isProductOnSale(product)
+  const label = onSale
+    ? "Sale price · "
+    : product.price_cents === product.msrp_cents
+      ? "MSRP · "
+      : ""
+  return (
+    <p className={detail ? styles.detailPrice : undefined}>
+      {formatPrice(product.price_cents)}
+      <span>
+        {label}USD / {product.price_unit}
+      </span>
+      {!detail && onSale && product.msrp_cents !== null && (
+        <span>
+          MSRP <s>{formatPrice(product.msrp_cents)}</s>
+        </span>
+      )}
+    </p>
+  )
+}
+
+// A left click without modifier keys opens the details in place; anything
+// else (new tab, new window) follows the link to the full product page.
+const isPlainClick = (event: MouseEvent) =>
+  event.button === 0 &&
+  !event.metaKey &&
+  !event.ctrlKey &&
+  !event.shiftKey &&
+  !event.altKey
+
+function trackGlassPointer(event: PointerEvent<HTMLElement>) {
+  if (event.pointerType !== "mouse") return
+  const bounds = event.currentTarget.getBoundingClientRect()
+  event.currentTarget.style.setProperty(
+    "--glass-x",
+    `${((event.clientX - bounds.left) / bounds.width) * 100}%`
+  )
+  event.currentTarget.style.setProperty(
+    "--glass-y",
+    `${((event.clientY - bounds.top) / bounds.height) * 100}%`
+  )
+}
 
 function Photo({
   image,
@@ -146,11 +228,14 @@ function ProductDetails({
 }: {
   product: Product
   layoutId: (part: string) => string | undefined
-  close: () => void
+  /** In the dialog; without it the details render as a standalone page. */
+  close?: () => void
 }) {
   const [galleryIndex, setGalleryIndex] = useState<number | null>(null)
   const galleryTrigger = useRef<HTMLButtonElement | null>(null)
   const titleId = `product-title-${product.id}`
+  const atMsrp = product.msrp_cents === product.price_cents
+  const Title = close ? motion.h2 : motion.h1
   const openGallery = (index: number, trigger: HTMLButtonElement) => {
     galleryTrigger.current = trigger
     setGalleryIndex(index)
@@ -167,7 +252,7 @@ function ProductDetails({
       <motion.div
         layoutId={layoutId("card")}
         layoutScroll
-        className={styles.detailCard}
+        className={close ? styles.detailCard : styles.standaloneCard}
       >
         <div className={styles.detailTop}>
           <Image
@@ -177,22 +262,24 @@ function ProductDetails({
             width={150}
             height={56}
           />
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Close product details"
-            data-detail-close
-            onClick={close}
-            autoFocus
-          >
-            <X size={20} />
-          </button>
+          {close && (
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="Close product details"
+              data-detail-close
+              onClick={close}
+              autoFocus
+            >
+              <X size={20} />
+            </button>
+          )}
         </div>
         <div className={styles.detailHeading}>
           <div>
-            <motion.h2 layoutId={layoutId("title")} id={titleId}>
+            <Title layoutId={layoutId("title")} id={titleId}>
               {product.name}
-            </motion.h2>
+            </Title>
             <motion.p layoutId={layoutId("description")}>
               {product.short_description}
             </motion.p>
@@ -263,25 +350,37 @@ function ProductDetails({
           <aside className={styles.pricing} aria-label="Price and condition">
             {product.ready_for_audition && (
               <p className={styles.audition}>
-                <Check size={14} aria-hidden="true" />
-                Ready for Audition
+                <Headphones size={15} strokeWidth={1.6} aria-hidden="true" />
+                <span className={styles.badgeLabel}>Ready for Audition</span>
               </p>
             )}
-            <p className={styles.detailPrice}>
-              {formatPrice(product.price_cents)}
-              <span>USD / {product.price_unit}</span>
-            </p>
+            <ProductPrice product={product} detail />
             <dl>
-              <div>
+              <div className={styles.conditionRow}>
                 <dt>Visual condition</dt>
-                <dd>{product.condition}</dd>
+                <dd>
+                  <span
+                    className={styles.condition}
+                    data-tone={conditionTone(product.condition)}
+                  >
+                    <span className={styles.badgeLabel}>
+                      {product.condition}
+                    </span>
+                  </span>
+                </dd>
               </div>
-              {product.msrp_cents !== null && (
+              {product.msrp_cents !== null && !atMsrp && (
                 <div>
                   <dt>MSRP</dt>
                   <dd>
-                    {formatPrice(product.msrp_cents)}
-                    <span>USD / {product.price_unit}</span>
+                    {isProductOnSale(product) ? (
+                      <s>{formatPrice(product.msrp_cents)}</s>
+                    ) : (
+                      formatPrice(product.msrp_cents)
+                    )}
+                    <span className={styles.unit}>
+                      USD / {product.price_unit}
+                    </span>
                   </dd>
                 </div>
               )}
@@ -311,19 +410,47 @@ function ProductDetails({
   )
 }
 
+/** A product's details as its own page, at /products/<slug>. */
+export function ProductPageView({ product }: { product: Product }) {
+  return (
+    <MotionConfig reducedMotion="user">
+      <ProductDetails product={product} layoutId={() => undefined} />
+    </MotionConfig>
+  )
+}
+
 export function ProductCatalog({ products }: { products: Product[] }) {
   const [active, setActive] = useState<Product | null>(null)
   const dialog = useRef<HTMLDialogElement>(null)
-  const trigger = useRef<HTMLButtonElement | null>(null)
+  const trigger = useRef<HTMLAnchorElement | null>(null)
   const id = useId()
   const reducedMotion = useReducedMotion()
   const layoutId = (product: Product, part: string) =>
     reducedMotion ? undefined : `${id}-${product.id}-${part}`
 
+  // Each product has a URL. Opening the details here pushes it; the shop
+  // layout's @modal slot intercepts it, so this list stays mounted under the
+  // dialog. Loaded directly, the URL shows the full product page instead.
+  const router = useRouter()
+  const pathname = usePathname()
+  const routeSlug = pathname.startsWith(PRODUCT_PATH)
+    ? decodeURIComponent(pathname.slice(PRODUCT_PATH.length))
+    : null
+  const routeProduct = products.find((item) => item.slug === routeSlug) ?? null
+
+  // Back (or any navigation off the product URL) closes the details.
+  const [syncedPath, setSyncedPath] = useState(pathname)
+  if (pathname !== syncedPath) {
+    setSyncedPath(pathname)
+    if (!routeProduct && active) setActive(null)
+  }
+
   useEffect(() => {
     if (!active) return
     const node = dialog.current
-    node?.querySelector<HTMLButtonElement>("[data-detail-close]")?.focus({ preventScroll: true })
+    node
+      ?.querySelector<HTMLButtonElement>("[data-detail-close]")
+      ?.focus({ preventScroll: true })
     const overflow = document.body.style.overflow
     document.body.style.overflow = "hidden"
     return () => {
@@ -335,6 +462,54 @@ export function ProductCatalog({ products }: { products: Product[] }) {
     const node = dialog.current
     return () => node?.close()
   }, [])
+
+  // The native ::backdrop is out of Motion's reach and would otherwise stay at
+  // full blur until the exit finishes, then vanish in one frame. Flagging the
+  // dialog as soon as it closes (button, Escape, backdrop, or Back) lets CSS
+  // fade it out while the card animates back.
+  useLayoutEffect(() => {
+    if (!active) dialog.current?.setAttribute("data-closing", "")
+  }, [active])
+
+  const showDetails = (product: Product, from: HTMLAnchorElement | null) => {
+    trigger.current = from
+    dialog.current?.removeAttribute("data-closing")
+    // Open before mounting Motion's destination so its first layout
+    // measurement sees the visible dialog geometry.
+    dialog.current?.showModal()
+    setActive(product)
+  }
+
+  // Forward to a product URL while this list is showing reopens its details.
+  const reopen = useEffectEvent((product: Product) =>
+    showDetails(product, null)
+  )
+  useEffect(() => {
+    if (!routeProduct || active || dialog.current?.open) return
+    const frame = requestAnimationFrame(() => reopen(routeProduct))
+    return () => cancelAnimationFrame(frame)
+  }, [routeProduct, active])
+
+  const closeDetails = () => {
+    setActive(null)
+    // Leave the product URL, returning to the list's own address.
+    if (routeProduct) router.back()
+  }
+
+  // The whole card opens the details; its link stays the one tab stop, so
+  // keyboard and screen-reader users get the same action without a nested
+  // control. A click on the link bubbles here, so there is one code path.
+  const openDetails = (product: Product, event: MouseEvent<HTMLElement>) => {
+    if (!isPlainClick(event)) return
+    const card = event.currentTarget
+    const selection = window.getSelection()
+    const selectingText =
+      !!selection?.toString() && card.contains(selection.anchorNode)
+    // A drag that selects card text isn't a click on the card.
+    if (selectingText && !(event.target as Element).closest("a")) return
+    showDetails(product, card.querySelector<HTMLAnchorElement>("a"))
+    router.push(productHref(product), { scroll: false })
+  }
 
   return (
     <MotionConfig
@@ -355,6 +530,7 @@ export function ProductCatalog({ products }: { products: Product[] }) {
                 <motion.article
                   layoutId={layoutId(product, "card")}
                   className={styles.card}
+                  onClick={(event) => openDetails(product, event)}
                 >
                   <motion.div
                     layoutId={layoutId(product, "image")}
@@ -386,26 +562,25 @@ export function ProductCatalog({ products }: { products: Product[] }) {
                     </motion.p>
                   </div>
                   <div className={styles.cardAction}>
-                    <p>
-                      {formatPrice(product.price_cents)}
-                      <span>USD / {product.price_unit}</span>
-                    </p>
-                    <button
-                      type="button"
+                    <ProductPrice product={product} />
+                    <Link
+                      href={productHref(product)}
+                      scroll={false}
                       className={styles.detailsButton}
                       aria-haspopup="dialog"
                       aria-label={`Product details: ${product.name}`}
+                      onPointerMove={trackGlassPointer}
                       onClick={(event) => {
-                        trigger.current = event.currentTarget
-                        // Open before mounting Motion's destination so its first
-                        // layout measurement sees the visible dialog geometry.
-                        dialog.current?.showModal()
-                        setActive(product)
+                        // The card's handler opens the dialog and pushes the
+                        // URL; other clicks follow the link to the full page.
+                        if (isPlainClick(event)) event.preventDefault()
                       }}
                     >
-                      Product details
-                      <ArrowUpRight size={16} aria-hidden="true" />
-                    </button>
+                      <span>Product details</span>
+                      <span className={styles.detailsIcon} aria-hidden="true">
+                        <ArrowUpRight size={18} strokeWidth={1.4} />
+                      </span>
+                    </Link>
                   </div>
                 </motion.article>
               </li>
@@ -418,10 +593,10 @@ export function ProductCatalog({ products }: { products: Product[] }) {
           aria-labelledby={active ? `product-title-${active.id}` : undefined}
           onCancel={(event) => {
             event.preventDefault()
-            setActive(null)
+            closeDetails()
           }}
           onClick={(event) => {
-            if (event.target === event.currentTarget) setActive(null)
+            if (event.target === event.currentTarget) closeDetails()
           }}
         >
           <AnimatePresence
@@ -442,7 +617,7 @@ export function ProductCatalog({ products }: { products: Product[] }) {
                 <ProductDetails
                   product={active}
                   layoutId={(part) => layoutId(active, part)}
-                  close={() => setActive(null)}
+                  close={closeDetails}
                 />
               </motion.div>
             )}

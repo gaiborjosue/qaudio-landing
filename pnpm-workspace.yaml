@@ -4,3 +4,10 @@ allowBuilds:
   sharp: true
   unrs-resolver: true
   msw: false
+
+minimumReleaseAgeExclude:
+  - eve@1.0.0-rc.1
+
+ignoredOptionalDependencies:
+  - "@mongodb-js/zstd"
+  - "node-liblzma"

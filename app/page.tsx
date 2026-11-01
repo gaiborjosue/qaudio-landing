@@ -11,12 +11,13 @@ import { VisitSection } from "@/components/visit-section"
 import { ContactFooter } from "@/components/contact-footer"
 import { SiteNav } from "@/components/site-nav"
 import { getStoreSchedule } from "@/lib/store-hours-data"
-
-// Regenerate at most every 5 minutes, matching the store hours cache.
-export const revalidate = 300
+import { getCatalogTaxonomy } from "@/lib/catalog-data"
 
 export default async function Page() {
-  const schedule = await getStoreSchedule()
+  const [schedule, { categories, brands }] = await Promise.all([
+    getStoreSchedule(),
+    getCatalogTaxonomy(),
+  ])
   return (
     <main id="top" className="landing">
       <a className="skip-link" href="#hero-title">
@@ -31,7 +32,7 @@ export default async function Page() {
               alt="Q Audio"
               width={47}
               height={57}
-              priority
+              loading="eager"
             />
           </a>
         </header>
@@ -58,8 +59,8 @@ export default async function Page() {
           <RecordPlayerArm />
         </section>
       </ScrollExperience>
-      <CategorySection />
-      <ProductLinesSection />
+      <CategorySection categories={categories} />
+      <ProductLinesSection brands={brands} />
       <VisitSection schedule={schedule} />
       <ContactFooter />
     </main>

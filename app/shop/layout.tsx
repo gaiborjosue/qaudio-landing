@@ -1,30 +1,21 @@
-import Image from "next/image"
-import Link from "next/link"
-import { SiteNav } from "@/components/site-nav"
+import { Suspense } from "react"
+import { SiteHeader } from "@/components/site-header"
 
 export default function ShopLayout({
   children,
+  modal,
 }: {
   children: React.ReactNode
+  /** Intercepted /products/<slug> while a shop list is showing. */
+  modal: React.ReactNode
 }) {
   return (
     <>
-      <a className="skip-link" href="#shop-content">
-        Skip to content
-      </a>
-      <SiteNav />
-      <header className="site-header">
-        <Link className="brand" href="/" aria-label="Q Audio home">
-          <Image
-            src="/qaudio-logo.svg"
-            alt="Q Audio"
-            width={47}
-            height={57}
-            loading="eager"
-          />
-        </Link>
-      </header>
+      <SiteHeader contentId="shop-content" />
       {children}
+      {/* The slot renders nothing visible; Suspense keeps its (intercepted,
+          URL-dependent) route out of the prerendered shell. */}
+      <Suspense>{modal}</Suspense>
     </>
   )
 }

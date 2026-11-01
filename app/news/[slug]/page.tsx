@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { NewsBody } from "@/components/news-body"
 import { formatNewsDate } from "@/lib/news"
 import { getNewsPost, getNewsSlugs } from "@/lib/news-data"
@@ -9,10 +10,8 @@ import styles from "../news.module.css"
 
 type Props = { params: Promise<{ slug: string }> }
 
-// Published posts are prerendered; newer ones render on first visit. Pages
-// regenerate at most every 5 minutes, matching the news data cache.
-export const revalidate = 300
-
+// Published posts are prerendered; newer ones render on first visit. Their
+// data refreshes with the news cache ("content" profile, 5 minutes).
 export async function generateStaticParams() {
   const slugs = await getNewsSlugs()
   return slugs.map((slug) => ({ slug }))
@@ -20,14 +19,24 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getNewsPost((await params).slug)
-  if (!post) return {}
+  if (!post) return { title: "Page not found" }
   return {
-    title: `${post.title} — Q Audio`,
+    title: post.title,
     description: post.excerpt,
   }
 }
 
-export default async function NewsArticlePage({ params }: Props) {
+export default function NewsArticlePage({ params }: Props) {
+  return (
+    <Suspense>
+      <NewsArticle params={params} />
+    </Suspense>
+  )
+}
+
+// The post comes from the URL, so it streams in from the cache inside
+// Suspense while the shared App Shell prefetches.
+async function NewsArticle({ params }: Props) {
   const post = await getNewsPost((await params).slug)
   if (!post) notFound()
 

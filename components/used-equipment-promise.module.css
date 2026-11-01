@@ -1,0 +1,70 @@
+/* Matches the product cards: white surface, hairline ring, soft shadow. */
+.promise {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 36px;
+  margin-bottom: 32px;
+  padding: 24px;
+  border-radius: 24px;
+  background: #fff;
+  box-shadow:
+    0 0 0 1px #0000000d,
+    0 6px 25px #00000005;
+}
+.photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 14px;
+}
+.promises {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.promises li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  color: #161616;
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.03em;
+}
+.tick {
+  display: grid;
+  flex: 0 0 24px;
+  place-items: center;
+  height: 24px;
+  margin-top: 1px;
+  border: 1px solid #d8d8d8;
+  border-radius: 50%;
+  background: #fff;
+}
+.detail {
+  margin: 22px 0 0;
+  color: #535353;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.caption {
+  margin: 10px 0 0;
+  color: #737373;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 760px) {
+  .promise {
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 18px;
+    border-radius: 20px;
+  }
+  .promises li {
+    font-size: 17px;
+  }
+}

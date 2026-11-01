@@ -1,0 +1,27 @@
+import { defineAgent } from "eve"
+import {
+  FAST_CONTEXT_TOKENS,
+  MAIN_CONTEXT_TOKENS,
+  fastModel,
+  mainModel,
+} from "./lib/models"
+
+export default defineAgent({
+  description:
+    "Q Audio's site assistant: edits store hours and the shop catalog for the owner.",
+  model: mainModel,
+  modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
+  compaction: {
+    model: fastModel,
+    modelContextWindowTokens: FAST_CONTEXT_TOKENS,
+  },
+  // Only the tools in tools/ (read_file and web_fetch are re-added there); no
+  // shell or file writing, and no copy of itself.
+  defaultTools: false,
+  tool: false,
+  limits: {
+    // Ask the owner before a conversation spends another 3M fresh input tokens.
+    sessionUsage: ({ window }) =>
+      window.inputTokens - window.cacheReadTokens >= 3_000_000,
+  },
+})

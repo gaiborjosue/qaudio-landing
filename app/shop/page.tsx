@@ -2,18 +2,32 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
+import { Suspense } from "react"
 import { ProductCatalog } from "@/components/product-catalog"
 import { getCatalogTaxonomy, getProducts } from "@/lib/catalog-data"
 import styles from "@/components/product-catalog.module.css"
 
-export const revalidate = 300
-export const metadata: Metadata = { title: "Shop — Q Audio" }
+export const metadata: Metadata = { title: "Shop" }
 
-export default async function ShopPage({
+type SearchParams = Promise<{ brand?: string | string[] }>
+
+// The brand filter comes from the URL, so the listing renders per request
+// (from cached data) inside Suspense while the shell around it prerenders.
+export default function ShopPage({
   searchParams,
 }: {
-  searchParams: Promise<{ brand?: string | string[] }>
+  searchParams: SearchParams
 }) {
+  return (
+    <main id="shop-content" className={styles.page}>
+      <Suspense>
+        <ShopListing searchParams={searchParams} />
+      </Suspense>
+    </main>
+  )
+}
+
+async function ShopListing({ searchParams }: { searchParams: SearchParams }) {
   const { brand: value } = await searchParams
   const slug = Array.isArray(value) ? value[0] : value
   const { brands } = await getCatalogTaxonomy()
@@ -21,7 +35,7 @@ export default async function ShopPage({
   if (slug && !brand) notFound()
   const products = await getProducts(undefined, brand?.slug)
   return (
-    <main id="shop-content" className={styles.page}>
+    <>
       <div className={styles.heading}>
         {brand ? (
           <Image
@@ -46,6 +60,6 @@ export default async function ShopPage({
         </Link>
       ) : null}
       <ProductCatalog products={products} />
-    </main>
+    </>
   )
 }

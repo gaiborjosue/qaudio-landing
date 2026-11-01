@@ -146,3 +146,22 @@
     will-change: auto;
   }
 }
+
+/* Still (see DriftWall.jsx): tiles arrive with a short fade, so a search
+   narrowing the wall isn't a hard pop. A tile that survives a keystroke keeps
+   its node and doesn't replay it. */
+.drift-wall--still .drift-wall__tile {
+  animation: drift-wall-settle 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes drift-wall-settle {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drift-wall--still .drift-wall__tile {
+    animation: none;
+  }
+}

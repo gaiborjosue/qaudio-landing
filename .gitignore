@@ -35,6 +35,10 @@ pnpm-debug.log*
 # vercel
 .vercel
 
+# eve (admin agent): local dev state, traces, and build output
+/.eve/
+/.output/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

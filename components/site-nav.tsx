@@ -1,6 +1,11 @@
 "use client"
 
-import type { CSSProperties, ElementType, ReactElement } from "react"
+import {
+  Suspense,
+  type CSSProperties,
+  type ElementType,
+  type ReactElement,
+} from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import PillNavBase from "@/components/PillNav"
@@ -22,7 +27,7 @@ const PAGES = [
   { label: "Home", href: "/" },
   { label: "News", href: "/news" },
   { label: "QDeal", href: "/qdeal" },
-  { label: "Used Equipment", href: "/used" },
+  { label: "Used Equipment", href: "/shop/used-equipment" },
 ]
 
 // PillNav's glass with more frost: a heavier blur, a lighter white haze, and
@@ -37,11 +42,26 @@ const FROSTED_GLASS = {
  * fixed to the top right so it stays in reach while scrolling.
  */
 export function SiteNav() {
+  // The current path is unknown while prerendering a shared shell (dynamic
+  // routes, intercepted product URLs), so the menu first renders without an
+  // active item and the highlighted one streams in.
+  return (
+    <Suspense fallback={<SiteNavFrame />}>
+      <CurrentSiteNav />
+    </Suspense>
+  )
+}
+
+function CurrentSiteNav() {
   const pathname = usePathname()
   // Pages below a section (e.g. /news/<post>) keep that section highlighted.
   const activeHref =
     PAGES.find(({ href }) => href !== "/" && pathname.startsWith(`${href}/`))
       ?.href ?? pathname
+  return <SiteNavFrame activeHref={activeHref} />
+}
+
+function SiteNavFrame({ activeHref }: { activeHref?: string }) {
   return (
     <div className="site-nav">
       <PillNav

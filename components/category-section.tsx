@@ -2,17 +2,32 @@
 
 import Image from "next/image"
 import Link from "next/link"
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { ArrowUpRight } from "lucide-react"
 import OptionWheel from "@/components/OptionWheel"
 import { LiquidGlass } from "@/components/ui/liquid-glass"
-import { CATEGORIES, CATEGORY_LABELS, DEFAULT_CATEGORY } from "@/lib/categories"
+import type { CatalogCategory } from "@/lib/catalog"
 
-export function CategorySection() {
-  const [selected, setSelected] = useState(DEFAULT_CATEGORY)
-  const [previewed, setPreviewed] = useState([DEFAULT_CATEGORY])
+// The wheel opens on Turntables, or the first category if it's gone.
+const DEFAULT_SLUG = "turntables"
+
+export function CategorySection({
+  categories,
+}: {
+  categories: CatalogCategory[]
+}) {
+  const defaultIndex = Math.max(
+    0,
+    categories.findIndex((item) => item.slug === DEFAULT_SLUG)
+  )
+  const labels = useMemo(
+    () => categories.map((item) => item.wheel_label),
+    [categories]
+  )
+  const [selected, setSelected] = useState(defaultIndex)
+  const [previewed, setPreviewed] = useState([defaultIndex])
   const [wheelSize, setWheelSize] = useState({ fontSize: 3.25, inset: 96 })
-  const category = CATEGORIES[selected]
+  const category = categories[selected]
 
   function selectCategory(index: number) {
     setSelected(index)
@@ -41,6 +56,8 @@ export function CategorySection() {
     }
   }, [])
 
+  if (!category) return null
+
   return (
     <section
       className="category-section"
@@ -63,8 +80,8 @@ export function CategorySection() {
       <div className="category-explorer">
         <div className="category-wheel-panel">
           <OptionWheel
-            items={CATEGORY_LABELS}
-            defaultSelected={DEFAULT_CATEGORY}
+            items={labels}
+            defaultSelected={defaultIndex}
             onChange={selectCategory}
             fontSize={wheelSize.fontSize}
             inset={wheelSize.inset}
@@ -79,7 +96,7 @@ export function CategorySection() {
         <div className="category-preview">
           <div className="category-atmosphere" aria-hidden="true">
             {previewed.map((index) => {
-              const item = CATEGORIES[index]
+              const item = categories[index]
               return (
                 <div
                   key={item.slug}
@@ -91,14 +108,14 @@ export function CategorySection() {
                 >
                   <Image
                     className="category-scene-haze"
-                    src={item.scene}
+                    src={item.scene_path}
                     alt=""
                     fill
                     sizes="(max-width: 700px) 100vw, 70vw"
                   />
                   <Image
                     className="category-scene-detail"
-                    src={item.scene}
+                    src={item.scene_path}
                     alt=""
                     fill
                     sizes="(max-width: 700px) 100vw, 70vw"
@@ -108,10 +125,10 @@ export function CategorySection() {
             })}
           </div>
           <div className="category-artwork" aria-hidden="true">
-            {CATEGORIES.map((item, index) => (
+            {categories.map((item, index) => (
               <Image
                 key={item.slug}
-                src={`/categories/${item.icon}`}
+                src={item.artwork_path}
                 alt=""
                 width={500}
                 height={500}
@@ -131,7 +148,7 @@ export function CategorySection() {
           >
             <span className="category-count">
               {String(selected + 1).padStart(2, "0")} /{" "}
-              {String(CATEGORIES.length).padStart(2, "0")}
+              {String(categories.length).padStart(2, "0")}
             </span>
             <h3>{category.name}</h3>
           </div>

@@ -5,7 +5,7 @@ import {
   useId,
   useRef,
   useState,
-  type CSSProperties,
+  useSyncExternalStore,
   type HTMLAttributes,
 } from "react"
 import { cn } from "@/lib/utils"
@@ -56,12 +56,12 @@ export function LiquidGlass({
   const blobRef = useRef<string | null>(null)
   const [size, setSize] = useState({ w: 0, h: 0 })
   const [filter, setFilter] = useState<{ id: string; svg: string } | null>(null)
-  const [mode, setMode] = useState<"pending" | "simple" | "opaque">("pending")
-
-  useEffect(() => {
-    if (prefersReducedTransparency()) setMode("opaque")
-    else if (isSafariLike() || !supportsUrlBackdropFilter()) setMode("simple")
-  }, [])
+  // The server and hydration render "pending"; the browser's mode follows.
+  const mode = useSyncExternalStore(
+    noSubscription,
+    browserMode,
+    () => "pending"
+  )
 
   useEffect(() => {
     const el = rootRef.current
@@ -141,9 +141,15 @@ export function LiquidGlass({
     reactId,
   ])
 
+  // Runs on unmount and when a preserved page is hidden (Cache Components
+  // keeps visited pages mounted in <Activity>). Dropping the filter with its
+  // map means a re-shown page never points at a revoked blob URL; the map
+  // effect above rebuilds both when the page is visible again.
   useEffect(
     () => () => {
+      setFilter(null)
       if (blobRef.current) URL.revokeObjectURL(blobRef.current)
+      blobRef.current = null
     },
     []
   )
@@ -200,6 +206,21 @@ function supportsUrlBackdropFilter() {
     CSS.supports("-webkit-backdrop-filter", "url(#x)")
   )
 }
+
+type GlassMode = "pending" | "simple" | "opaque"
+let detectedMode: GlassMode | undefined
+
+// Browser support and the transparency preference are read once per visit.
+function browserMode(): GlassMode {
+  detectedMode ??= prefersReducedTransparency()
+    ? "opaque"
+    : isSafariLike() || !supportsUrlBackdropFilter()
+      ? "simple"
+      : "pending"
+  return detectedMode
+}
+
+const noSubscription = () => () => {}
 
 function prefersReducedTransparency() {
   if (typeof window === "undefined" || !window.matchMedia) return false
