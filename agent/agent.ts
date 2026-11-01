@@ -8,7 +8,7 @@ import {
 
 export default defineAgent({
   description:
-    "Q Audio's site assistant: edits store hours and the shop catalog for the owner.",
+    "Tune, Q Audio's web assistant: edits store hours and the shop catalog for the owner.",
   model: mainModel,
   modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
   compaction: {

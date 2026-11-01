@@ -25,6 +25,11 @@ import styles from "./admin.module.css"
 
 type Agent = UseEveAgentReturn
 
+// Shown at the top of every chat, as if the assistant opened it. The owner is
+// the only admin; the agent's instructions know not to greet a second time.
+const WELCOME =
+  "Hello Dariuz! This is Tune, your Q-Audio web assistant. I can help you with anything you need to do in your website, just ask me 😊!"
+
 // The agent verifies the admin's Supabase access token on every request;
 // getSession() refreshes it when it's about to expire.
 async function accessToken() {
@@ -62,6 +67,7 @@ export function AdminChat({
   const router = useRouter()
   const [, startRefresh] = useTransition()
   const refreshed = useRef(new Set<string>())
+  const [ending, setEnding] = useState(false)
 
   const agent = useEveAgent({
     auth: { bearer: accessToken },
@@ -100,9 +106,18 @@ export function AdminChat({
   const busy = agent.status === "busy"
   const resuming = agent.status === "resuming"
 
-  const newChat = () => {
+  // Chats are disposable: long-term memory keeps what matters, so New chat
+  // ends the server session instead of leaving it behind.
+  const newChat = async () => {
+    setEnding(true)
+    try {
+      if (agent.session) await agent.end()
+    } catch {
+      // Already ended or unreachable; start fresh either way.
+    }
     agent.newSession()
     setAddress("/admin")
+    setEnding(false)
   }
 
   return (
@@ -115,9 +130,14 @@ export function AdminChat({
           height={36}
           loading="eager"
         />
-        <h1>Site assistant</h1>
+        <h1>Tune</h1>
         <span className={styles.email}>{email}</span>
-        <button type="button" className={styles.quiet} onClick={newChat}>
+        <button
+          type="button"
+          className={styles.quiet}
+          disabled={ending}
+          onClick={newChat}
+        >
           New chat
         </button>
         <form action={signOut}>
@@ -171,6 +191,9 @@ function Conversation({
           node.scrollHeight - node.scrollTop - node.clientHeight < 80
       }}
     >
+      <div className={styles.assistant}>
+        <p>{WELCOME}</p>
+      </div>
       {agent.messages.length === 0 && agent.status !== "resuming" && (
         <p className={styles.empty}>
           Ask for a change: hours, a holiday closure, a product, a news post, or
