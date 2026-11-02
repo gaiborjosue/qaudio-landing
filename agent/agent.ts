@@ -1,16 +1,10 @@
 import { defineAgent } from "eve"
-import {
-  FAST_CONTEXT_TOKENS,
-  MAIN_CONTEXT_TOKENS,
-  fastModel,
-  mainModel,
-} from "./lib/models"
+import { FAST_CONTEXT_TOKENS, fastModel, mainChatModel } from "./lib/models"
 
 export default defineAgent({
   description:
     "Tune, Q Audio's web assistant: edits store hours and the shop catalog for the owner.",
-  model: mainModel,
-  modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
+  model: mainChatModel,
   compaction: {
     model: fastModel,
     modelContextWindowTokens: FAST_CONTEXT_TOKENS,

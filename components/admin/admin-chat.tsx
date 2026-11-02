@@ -2,6 +2,7 @@
 
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useTransition,
@@ -21,6 +22,7 @@ import {
   type Interaction,
   type UseEveAgentReturn,
 } from "eve/react"
+import { parts, runs } from "eve/events"
 import {
   refreshSiteContent,
   saveArrangedOrder,
@@ -32,7 +34,11 @@ import {
   type PreviewData,
 } from "@/components/admin/change-preview"
 import { SchedulePicker } from "@/components/admin/schedule-picker"
-import { CopyAction, MessageAction } from "@/components/admin/message-actions"
+import {
+  CopyAction,
+  MessageAction,
+  ModelInfoAction,
+} from "@/components/admin/message-actions"
 import { orderScope, ProductOrder } from "@/components/admin/product-order"
 import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
@@ -260,6 +266,19 @@ function Conversation({
   onEdit: (text: string) => void
 }) {
   const ownerSaved = ownerSavedOrders(agent.messages)
+  // Match each text part to the run that produced it. Session-wide model
+  // settings would mislabel older replies after an automatic model switch.
+  const modelByPart = useMemo(() => {
+    const modelByRun = new Map(
+      runs(agent.view).map((run) => [run.runId, run.modelId])
+    )
+    return new Map(
+      parts(agent.view, { kind: "text" }).map((part) => [
+        part.partId,
+        modelByRun.get(part.runId),
+      ])
+    )
+  }, [agent.view])
   return (
     // Each of the owner's messages anchors its turn near the top, the reply
     // streams in below it and is followed while the reader stays at the
@@ -294,6 +313,7 @@ function Conversation({
                   agent={agent}
                   preview={preview}
                   ownerSaved={ownerSaved}
+                  modelByPart={modelByPart}
                   onEdit={onEdit}
                 />
               </MessageScrollerItem>
@@ -400,12 +420,14 @@ function MessageView({
   agent,
   preview,
   ownerSaved,
+  modelByPart,
   onEdit,
 }: {
   message: EveMessage
   agent: Agent
   preview: PreviewData
   ownerSaved: Map<string, string[]>
+  modelByPart: ReadonlyMap<string, string | undefined>
   onEdit: (text: string) => void
 }) {
   const text = messageText(message)
@@ -454,6 +476,15 @@ function MessageView({
   const writing = message.parts.some(
     (part) => part.type === "text" && part.state === "streaming"
   )
+  const models = [
+    ...new Set(
+      message.parts.flatMap((part) => {
+        if (part.type !== "text" || !part.id || !part.text.trim()) return []
+        const model = modelByPart.get(part.id)
+        return model ? [model] : []
+      })
+    ),
+  ]
 
   return (
     <Message className={styles.message}>
@@ -511,6 +542,7 @@ function MessageView({
         {text && !writing && (
           <MessageFooter className={styles.replyFooter}>
             <CopyAction text={text} />
+            <ModelInfoAction models={models} />
           </MessageFooter>
         )}
       </MessageContent>

@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, type ComponentProps } from "react"
-import { Check, Copy } from "lucide-react"
+import { Check, Copy, Info } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
   Tooltip,
@@ -61,6 +61,19 @@ export function CopyAction({ text }: { text: string }) {
       }
     >
       {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+    </MessageAction>
+  )
+}
+
+/** Shows the models recorded for this reply, including after session replay. */
+export function ModelInfoAction({ models }: { models: readonly string[] }) {
+  return (
+    <MessageAction
+      label={
+        models.length > 0 ? `Model: ${models.join(", ")}` : "Model unavailable"
+      }
+    >
+      <Info aria-hidden="true" />
     </MessageAction>
   )
 }
