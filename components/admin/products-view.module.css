@@ -1,0 +1,157 @@
+/* The admin's Products tab (products-view.tsx): a heading with New product,
+   the product table, and the sheet that holds the product form. Monochrome,
+   like the rest of the admin. */
+
+.page {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 28px 32px 40px;
+}
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+}
+.head h2 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.total {
+  margin: 0;
+  color: #6b6b6b;
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.new {
+  align-self: center;
+  margin-left: auto;
+}
+/* Saved, added, and deleted notes, beside the count. */
+.notice {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* The sheet: the product form at a comfortable width, its header fixed and
+   its body scrolling, with Save kept at the foot (product-editor.module.css).
+   These rules sit outside Tailwind's layers, so they win over the shadcn
+   sheet's utilities. */
+.sheet {
+  width: min(780px, 100vw);
+  max-width: none;
+  background: #fff;
+  color: #111;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.overlay {
+  background: rgb(0 0 0 / 0.2);
+  backdrop-filter: none;
+}
+.sheetHeader {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 16px 16px 24px;
+  border-bottom: 1px solid #ececec;
+}
+.sheetTitle {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 17px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.close {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #4a4a4a;
+  cursor: pointer;
+}
+.close:hover {
+  background: #f0f0f0;
+  color: #111;
+}
+.close:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.sheetBody {
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* The delete confirmation. */
+.confirm {
+  gap: 16px;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 22px;
+  border-radius: 16px;
+  background: #fff;
+  color: #111;
+  font-size: 14px;
+}
+.confirmHeader {
+  gap: 6px;
+  place-items: start;
+  text-align: left;
+}
+.confirmTitle {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.confirmText {
+  margin: 0;
+  color: #4a4a4a;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.confirmActions {
+  flex-direction: row;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 640px) {
+  .page {
+    padding: 20px 16px 32px;
+  }
+  .head h2 {
+    font-size: 22px;
+  }
+  .sheetBody {
+    padding: 20px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet,
+  .overlay {
+    transition: none;
+  }
+  .confirm {
+    animation: none;
+  }
+}

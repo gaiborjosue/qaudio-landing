@@ -4,6 +4,9 @@ const PREVIEW_TOOLS = {
   hours__set_weekly_hours: "set_weekly_hours",
   hours__save_hours_change: "save_hours_change",
   hours__delete_hours_change: "delete_hours_change",
+  // Historical: products are now saved and deleted in the admin's Products
+  // tab, so the agent no longer has these. Kept so older chats still show
+  // their cards.
   products__save_product: "save_product",
   products__delete_product: "delete_product",
   products__reorder_products: "reorder_products",
@@ -26,19 +29,4 @@ export function previewToolName(name: string): PreviewTool | undefined {
     return PREVIEW_TOOLS[name as keyof typeof PREVIEW_TOOLS]
   }
   return Object.values(PREVIEW_TOOLS).find((legacy) => legacy === name)
-}
-
-/** Tools that open an editor in the chat. They save nothing (the owner saves
- * from the editor), so they need no approval or preview. */
-const EDITOR_TOOLS = {
-  products__open_editor: "product_editor",
-  products__open_table: "product_table",
-} as const
-
-export function editorToolName(
-  name: string
-): (typeof EDITOR_TOOLS)[keyof typeof EDITOR_TOOLS] | undefined {
-  return Object.hasOwn(EDITOR_TOOLS, name)
-    ? EDITOR_TOOLS[name as keyof typeof EDITOR_TOOLS]
-    : undefined
 }

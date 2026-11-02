@@ -6,7 +6,7 @@ import { callerSupabase, failure } from "../lib/supabase"
 export default defineTool({
   deferred: true,
   description:
-    "Read one product (draft or published) with every field and its photos in order, by slug or id. Read it before editing, then send the full updated record to products__save_product.",
+    "Read one product (draft or published) with every field and its photos in order, by slug or id.",
   inputSchema: z
     .object({
       slug: z.string().max(120).optional(),

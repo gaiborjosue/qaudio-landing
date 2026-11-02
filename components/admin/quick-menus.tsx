@@ -12,6 +12,7 @@ import {
 } from "lucide-react"
 import type { PreviewData } from "@/components/admin/change-preview"
 import { ItemPicker, type PickerItem } from "@/components/admin/item-picker"
+import type { ProductRequest } from "@/components/admin/products-view"
 import { CreateMenu, type CreateMenuItem } from "@/components/ui/create-menu"
 import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
 import { toStoreDateTime } from "@/lib/admin/store-time"
@@ -23,14 +24,15 @@ import styles from "./admin.module.css"
 /** Sends a line as the owner's message; `item` names the exact item. */
 export type Ask = (text: string, item?: string) => void
 
-// The Create menu's rows and the line each one sends.
+// The Create menu's rows and the line each one sends. Product is the
+// exception: it opens the Products tab's form (see QuickMenus).
 const QUICK_STARTS = [
   {
     icon: Newspaper,
     label: "News post",
     message: "I want to create a news post.",
   },
-  { icon: PackagePlus, label: "Product", message: "I want to add a product." },
+  { icon: PackagePlus, label: "Product", message: null },
   { icon: BadgePercent, label: "QDeal", message: "I want to create a deal." },
   {
     icon: CalendarClock,
@@ -58,15 +60,18 @@ function dealMeta(deal: AdminDealItem, now: string) {
 /**
  * The quick actions: Create and Edit pills side by side, each opening
  * upward from its own corner. Every choice sends a normal chat message, so
- * the rest happens in the chat (questions, previews, and approval).
+ * the rest happens in the chat (questions, previews, and approval), except
+ * products: those open in the Products tab, without the chat.
  */
 export function QuickMenus({
   preview,
   ask,
+  onProduct,
   disabled,
 }: {
   preview: PreviewData
   ask: Ask
+  onProduct: (request: ProductRequest) => void
   disabled: boolean
 }) {
   // Room from each pill's left edge to the row's right one, so a panel
@@ -99,7 +104,7 @@ export function QuickMenus({
 
   const create: CreateMenuItem[] = QUICK_STARTS.map(({ message, ...item }) => ({
     ...item,
-    onSelect: () => ask(message),
+    onSelect: () => (message ? ask(message) : onProduct({ mode: "new" })),
   }))
 
   // Edit and Remove both name the item, and its id rides along hidden.
@@ -136,22 +141,25 @@ export function QuickMenus({
         render: (close) => (
           <ItemPicker
             noun="product"
-            items={preview.products.map((product) =>
-              pick(
-                "product",
-                "product",
-                product.id,
-                product.name,
-                [
-                  product.category.name,
-                  formatPrice(product.price_cents),
-                  product.status !== "published" && "Draft",
-                ]
-                  .filter(Boolean)
-                  .join(" · "),
-                close
-              )
-            )}
+            items={preview.products.map((product) => ({
+              id: product.id,
+              title: product.name,
+              meta: [
+                product.category.name,
+                formatPrice(product.price_cents),
+                product.status !== "published" && "Draft",
+              ]
+                .filter(Boolean)
+                .join(" · "),
+              onEdit: () => {
+                close()
+                onProduct({ mode: "edit", id: product.id })
+              },
+              onRemove: () => {
+                close()
+                onProduct({ mode: "delete", id: product.id })
+              },
+            }))}
           />
         ),
       },

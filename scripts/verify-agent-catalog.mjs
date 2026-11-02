@@ -89,7 +89,7 @@ const { buildStepCatalog } = await internal("execution/catalog/step-catalog.js")
 const { BundleKey } = await internal("runtime/sessions/runtime-context-keys.js")
 const { toInputSchema } = await internal("tools/schema.js")
 const { checkToolCallInput } = await internal("harness/tool-call-io.js")
-const { editorToolName, previewToolName, SAVE_TOOLS } =
+const { previewToolName, SAVE_TOOLS } =
   await import("../lib/admin/tool-names.ts")
 const schemas = await import("../lib/admin/schemas.ts")
 const tools = new Map()
@@ -114,7 +114,7 @@ const catalog = buildStepCatalog({
   session: {},
   endsTurn: true,
 })
-assert.equal(catalog.deferred.size, 18)
+assert.equal(catalog.deferred.size, 14)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -129,7 +129,7 @@ assert(
 )
 for (const [group, count] of Object.entries({
   hours: 4,
-  products: 7,
+  products: 3,
   news: 4,
   deals: 3,
 })) {
@@ -220,7 +220,6 @@ const fixtures = {
   delete_deal: [schemas.deleteDealInputSchema, { id, title: "Sample" }],
 }
 let writes = 0
-let editors = 0
 for (const [name, definition] of catalog.deferred) {
   assert(!catalog.advertised.has(name))
   const legacy = previewToolName(name)
@@ -235,17 +234,9 @@ for (const [name, definition] of catalog.deferred) {
   assert.equal(routed.call.callId, name)
   assert.equal(routed.call.input, input)
   if (!legacy) {
-    // Editor tools open a form the owner saves from, so they save nothing,
-    // need no approval, and take an empty input.
-    if (editorToolName(name)) {
-      editors++
-      assert(!SAVE_TOOLS.has(name))
-      assert.equal(definition.approval, undefined)
-      assert.equal(
-        (await checkToolCallInput(definition, {}, name)).kind,
-        "valid"
-      )
-    }
+    // Reads only: no approval, and nothing to preview.
+    assert(!SAVE_TOOLS.has(name))
+    assert.equal(definition.approval, undefined)
     continue
   }
   writes++
@@ -262,21 +253,28 @@ for (const [name, definition] of catalog.deferred) {
     "valid"
   )
 }
-assert.equal(writes, 10)
-assert.equal(editors, 2)
+assert.equal(writes, 8)
+// Products are saved and deleted in the admin's Products tab; the agent has
+// no product writes left, only their names for older chats' cards.
+const retired = ["products__save_product", "products__delete_product"]
+for (const name of retired) {
+  assert(!tools.has(name) && !catalog.deferred.has(name))
+  assert(SAVE_TOOLS.has(name) && SAVE_TOOLS.has(previewToolName(name)))
+}
 assert.equal(previewToolName("unknown__save_news_post"), undefined)
 assert.equal(
   (
     await checkToolCallInput(
       catalog.advertised.get("eve__tool"),
-      { name: "products__save_product", input: { price_cents: -1 } },
+      { name: "news__save_news_post", input: { title: 1 } },
       "invalid"
     )
   ).kind,
   "invalid"
 )
 
-// Exercise the real preview renderer for every canonical AND historical write.
+// Exercise the real preview renderer for every canonical AND historical write,
+// including the retired product writes older chats still show.
 const { createElement } = await import("react")
 const { renderToStaticMarkup } = await import("react-dom/server")
 const { AppRouterContext } =
@@ -302,7 +300,8 @@ const data = {
   news: [],
   deals: [],
 }
-for (const [name] of catalog.deferred) {
+let renders = 0
+for (const name of [...catalog.deferred.keys(), ...retired]) {
   const legacy = previewToolName(name)
   if (!legacy) continue
   const input = fixtures[legacy][1]
@@ -321,7 +320,9 @@ for (const [name] of catalog.deferred) {
   assert.equal(render(name), render(legacy))
   assert(!render(name).includes("No preview for this change."))
   assert(!render(name).includes("Unknown category"))
+  renders += 2
 }
+assert.equal(renders, 20)
 console.log(
-  "Catalog verified: 18 deferred (hours 4, products 7, news 4, deals 3); 3 authored direct helpers; discovery across groups; canonical routing; all 10 approval/schema policies; 2 approval-free editor tools; 20 current/historical preview renders. No site data read or written."
+  "Catalog verified: 14 deferred (hours 4, products 3, news 4, deals 3); 3 authored direct helpers; discovery across groups; canonical routing; all 8 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 20 current/historical preview renders. No site data read or written."
 )

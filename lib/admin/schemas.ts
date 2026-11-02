@@ -119,6 +119,8 @@ export const productImageInputSchema = z.object({
   height: z.int().positive(),
 })
 
+// Products are saved and deleted in the admin's Products tab (Server Actions
+// validated with these); older chats' product cards still render from them.
 export const productInputSchema = z.object({
   id: z
     .uuid()
@@ -203,42 +205,13 @@ export const reorderProductsInputSchema = z
     "Reorder one category or one brand at a time."
   )
 
-// The product editor and table: chat components the owner fills in and
-// saves themselves (Server Actions), so these tools save nothing.
+// The admin's Products tab: its product form and table save through Server
+// Actions, validated with productInputSchema and these.
 
-/** What the agent already knows about a product, to prefill the editor. */
+/** Some of a product's fields: what the product form starts from. */
 export const productDraftSchema = productInputSchema
   .omit({ id: true, sort_order: true })
   .partial()
-
-/** The editor's starting record, as products__open_editor returns it. */
-export const openedProductSchema = productDraftSchema.extend({
-  id: z.uuid().optional(),
-})
-
-export const openProductEditorInputSchema = z.object({
-  id: z
-    .uuid()
-    .optional()
-    .describe("An existing product's id to edit it; omit to add a new one."),
-  draft: productDraftSchema
-    .optional()
-    .describe(
-      "Fields to prefill, over the saved record when editing: whatever the owner told you or you drafted (copy from the copywriter, alt text for attached photos). Leave out what you don't know."
-    ),
-})
-
-export const openProductTableInputSchema = z.object({
-  search: z
-    .string()
-    .max(80)
-    .optional()
-    .describe("Part of a product, brand, or category name."),
-  category_slug: slug.optional(),
-  brand_slug: slug.optional(),
-  condition: z.enum(["New", "Demo", "Used"]).optional(),
-  status: z.enum(["draft", "published"]).optional(),
-})
 
 /** One product's short fields, as changed in the product table. */
 export const productQuickEditSchema = z
@@ -436,10 +409,6 @@ export type ProductInput = z.infer<typeof productInputSchema>
 export type DeleteProductInput = z.infer<typeof deleteProductInputSchema>
 export type ReorderProductsInput = z.infer<typeof reorderProductsInputSchema>
 export type ProductDraft = z.infer<typeof productDraftSchema>
-export type OpenProductEditorInput = z.infer<
-  typeof openProductEditorInputSchema
->
-export type OpenProductTableInput = z.infer<typeof openProductTableInputSchema>
 export type ProductQuickEdit = z.infer<typeof productQuickEditSchema>
 export type NewsBlockInput = z.infer<typeof newsBlockSchema>
 export type NewsPostInput = z.infer<typeof newsPostInputSchema>

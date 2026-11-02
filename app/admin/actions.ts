@@ -8,8 +8,13 @@ import {
   ProductOrderMismatch,
   saveProductOrder,
 } from "@/lib/admin/product-order"
-import { saveProduct, saveProductQuickEdits } from "@/lib/admin/product-save"
 import {
+  deleteProduct,
+  saveProduct,
+  saveProductQuickEdits,
+} from "@/lib/admin/product-save"
+import {
+  deleteProductInputSchema,
   productInputSchema,
   productQuickEditsSchema,
   reorderProductsInputSchema,
@@ -194,12 +199,10 @@ export type ProductSaveResult =
   | { id: string; slug: string; images: string[]; short_description: string }
 
 /**
- * Saves a product from the chat's product editor, as the signed-in admin
- * (RLS). The owner filled it in and pressed Save, which is their approval,
- * so it doesn't go back to the agent first. Validated with the same schema
- * as the agent's products__save_product, and saved by the same code. A
- * missing card line is written first, from the description, by the fast
- * copywriting model.
+ * Saves a product from the Products tab's product form, as the signed-in
+ * admin (RLS). The owner filled it in and pressed Save, which is their
+ * approval. A missing card line is written first, from the description, by
+ * the fast copywriting model.
  */
 export async function saveProductFromEditor(
   input: unknown
@@ -242,7 +245,7 @@ export async function saveProductFromEditor(
 }
 
 /**
- * Saves the short fields changed in the chat's product table (price,
+ * Saves the short fields changed in the Products tab's table (price,
  * condition, audition, status), as the signed-in admin (RLS).
  */
 export async function saveProductTableEdits(
@@ -265,6 +268,36 @@ export async function saveProductTableEdits(
         error instanceof OwnerError
           ? error.message
           : "Couldn’t save these changes. Try again.",
+    }
+  }
+}
+
+/**
+ * Deletes a product from the Products tab, as the signed-in admin (RLS),
+ * after the owner confirmed it. Its photo files stay in storage.
+ */
+export async function deleteProductFromAdmin(
+  input: unknown
+): Promise<{ error: string } | { deleted: true }> {
+  if (!(await getAdmin())) return { error: "Sign in as an admin." }
+  const parsed = deleteProductInputSchema.safeParse(input)
+  if (!parsed.success) return { error: "That product isn’t valid." }
+  try {
+    const deleted = await deleteProduct(
+      await sessionSupabase(),
+      parsed.data.id,
+      ownerFail
+    )
+    updateTag(CATALOG_CACHE_TAG)
+    return deleted
+      ? { deleted: true }
+      : { error: "This product was already deleted." }
+  } catch (error) {
+    return {
+      error:
+        error instanceof OwnerError
+          ? error.message
+          : "Couldn’t delete the product. Try again.",
     }
   }
 }

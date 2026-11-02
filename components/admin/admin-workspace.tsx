@@ -1,4 +1,4 @@
-import { AdminChat } from "@/components/admin/admin-chat"
+import { AdminShell, type AdminView } from "@/components/admin/admin-shell"
 import {
   getAdminDeals,
   getAdminNews,
@@ -9,13 +9,16 @@ import { requireAdmin } from "@/lib/admin/auth"
 import { getCatalogTaxonomy } from "@/lib/catalog-data"
 
 /**
- * The signed-in admin's chat with the site agent, with the current hours,
- * catalog, news, and deals its previews and Edit menu build on. Reads
- * cookies, so it renders inside <Suspense>.
+ * The signed-in admin's workspace: the chat with the site agent and the
+ * Products tab, with the current hours, catalog, news, and deals their
+ * previews, table, and Edit menu build on. Reads cookies, so it renders
+ * inside <Suspense>.
  */
 export async function AdminWorkspace({
+  view = "chat",
   sessionId,
 }: {
+  view?: AdminView
   sessionId?: Promise<string>
 }) {
   const admin = await requireAdmin()
@@ -28,8 +31,9 @@ export async function AdminWorkspace({
     getAdminDeals(),
   ])
   return (
-    <AdminChat
+    <AdminShell
       key={id ?? "new"}
+      initialView={view}
       sessionId={id}
       email={admin.email}
       preview={{ schedule, taxonomy, products, news, deals }}

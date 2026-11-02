@@ -3,19 +3,17 @@
 import { useId, useState, useTransition } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Pencil, Plus, Search } from "lucide-react"
+import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
+import { GridBeam, type GridBeamLines } from "@/components/ui/grid-beam"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import { parseDollars } from "@/lib/admin/product-editor"
-import type {
-  OpenProductTableInput,
-  ProductQuickEdit,
-} from "@/lib/admin/schemas"
+import type { ProductQuickEdit } from "@/lib/admin/schemas"
 import { Choice } from "./choice"
 import adminStyles from "./admin.module.css"
 import styles from "./product-table.module.css"
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 20
 
 const CONDITIONS = ["New", "Demo", "Used"] as const
 // In the shop's condition-badge colors (Choice carries them).
@@ -48,6 +46,14 @@ type Filters = {
   brand: string
   condition: string
   status: string
+}
+
+const NO_FILTERS: Filters = {
+  search: "",
+  category: "",
+  brand: "",
+  condition: "",
+  status: "",
 }
 
 // Matching ignores case and accents, like the Edit menu's lists.
@@ -99,44 +105,55 @@ function withoutSaved(current: Drafts, sent: Drafts): Drafts {
   return next
 }
 
-const knownSlug = (items: { slug: string }[], slug?: string) =>
-  slug && items.some((item) => item.slug === slug) ? slug : ""
+/**
+ * The beams follow the table's own lines: between the columns, and under
+ * the heading and each row but the last.
+ */
+function tableLines(root: HTMLElement, box: DOMRect): GridBeamLines {
+  const table = root.querySelector("table")
+  const head = table?.tHead?.rows[0]
+  if (!table || !head) return { x: [], y: [] }
+  return {
+    x: [...head.cells]
+      .slice(1)
+      .map((cell) => cell.getBoundingClientRect().left - box.left),
+    y: [...table.rows]
+      .slice(0, -1)
+      .map((row) => row.getBoundingClientRect().bottom - box.top),
+  }
+}
 
 /**
  * Every product, drafts included, as a table the owner filters and edits in
- * place. The short fields (price, condition, audition, status) save here in
- * one go, as the signed-in admin; anything longer opens the product editor.
+ * place, like a CMS collection. The short fields (price, condition,
+ * audition, status) save here in one go, as the signed-in admin; a row's
+ * name or pencil opens the full product form, and its bin deletes it.
  * Unsaved changes are kept by product id, so they survive paging and
  * filtering until Save or Discard.
  */
 export function ProductTable({
   products,
   taxonomy,
-  initialFilters,
-  disabled,
+  beam,
   onOpen,
+  onDelete,
   onSaved,
 }: {
   /** Every product, in shop order. */
   products: AdminProduct[]
   taxonomy: CatalogTaxonomy
-  initialFilters: OpenProductTableInput
-  /** Disables saving, e.g. while the chat reloads. */
-  disabled: boolean
-  /** Opens a product in the full editor; null adds a new product. */
-  onOpen: (product: AdminProduct | null) => void
+  /** Runs the grid beam over the table (off while it isn't shown). */
+  beam: boolean
+  /** Opens a product in the full form. */
+  onOpen: (product: AdminProduct) => void
+  /** Asks to delete a product. */
+  onDelete: (product: AdminProduct) => void
   /** After a save; names are the edited products', in the edits' order. */
-  onSaved: (edits: ProductQuickEdit[], names: string[]) => void
+  onSaved: (names: string[]) => void
 }) {
   const router = useRouter()
   const id = useId()
-  const [filters, setFilters] = useState<Filters>(() => ({
-    search: initialFilters.search ?? "",
-    category: knownSlug(taxonomy.categories, initialFilters.category_slug),
-    brand: knownSlug(taxonomy.brands, initialFilters.brand_slug),
-    condition: initialFilters.condition ?? "",
-    status: initialFilters.status ?? "",
-  }))
+  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [page, setPage] = useState(1)
   const [drafts, setDrafts] = useState<Drafts>({})
   const [saving, startSaving] = useTransition()
@@ -146,6 +163,7 @@ export function ProductTable({
     setFilters((current) => ({ ...current, [key]: value }))
     setPage(1)
   }
+  const filtered = Object.values(filters).some(Boolean)
 
   // Rows filter on their saved values, so a row doesn't vanish while it's
   // being changed.
@@ -217,7 +235,7 @@ export function ProductTable({
         setDrafts((all) => withoutSaved(all, sent))
         router.refresh()
       })
-      onSaved(edits, names)
+      onSaved(names)
     })
   }
 
@@ -290,53 +308,68 @@ export function ProductTable({
             />
           </div>
         ))}
-        <button
-          type="button"
-          className={`${adminStyles.secondary} ${styles.add}`}
-          onClick={() => onOpen(null)}
-        >
-          <Plus size={16} strokeWidth={2} aria-hidden="true" />
-          Add product
-        </button>
+        {filtered && (
+          <button
+            type="button"
+            className={adminStyles.quiet}
+            onClick={() => {
+              setFilters(NO_FILTERS)
+              setPage(1)
+            }}
+          >
+            Clear filters
+          </button>
+        )}
       </div>
 
       <div id={regionId} className={styles.region}>
         {rows.length > 0 && (
-          <div className={styles.scroller}>
-            <table className={styles.table}>
-              <caption className="visually-hidden">Products</caption>
-              <thead>
-                <tr>
-                  <th scope="col" className={styles.photoColumn}>
-                    <span className="visually-hidden">Photo</span>
-                  </th>
-                  <th scope="col">Product</th>
-                  <th scope="col">Category</th>
-                  <th scope="col">Condition</th>
-                  <th scope="col">Price</th>
-                  <th scope="col" className={styles.auditionColumn}>
-                    Audition
-                  </th>
-                  <th scope="col">Status</th>
-                  <th scope="col" className={styles.editColumn}>
-                    <span className="visually-hidden">Edit</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((product) => (
-                  <ProductRow
-                    key={product.id}
-                    product={product}
-                    draft={drafts[product.id] ?? {}}
-                    errorId={`${id}-${product.id}-price`}
-                    changedId={changedId}
-                    onEdit={(change, typing) => edit(product, change, typing)}
-                    onOpen={() => onOpen(product)}
-                  />
-                ))}
-              </tbody>
-            </table>
+          <div className={styles.frame}>
+            <div className={styles.scroller}>
+              <GridBeam
+                className={styles.beam}
+                lines={tableLines}
+                active={beam}
+              >
+                <table className={styles.table}>
+                  <caption className="visually-hidden">Products</caption>
+                  <thead>
+                    <tr>
+                      <th scope="col" className={styles.photoColumn}>
+                        <span className="visually-hidden">Photo</span>
+                      </th>
+                      <th scope="col">Product</th>
+                      <th scope="col">Category</th>
+                      <th scope="col">Condition</th>
+                      <th scope="col">Price</th>
+                      <th scope="col" className={styles.auditionColumn}>
+                        Audition
+                      </th>
+                      <th scope="col">Status</th>
+                      <th scope="col" className={styles.actionsColumn}>
+                        <span className="visually-hidden">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((product) => (
+                      <ProductRow
+                        key={product.id}
+                        product={product}
+                        draft={drafts[product.id] ?? {}}
+                        errorId={`${id}-${product.id}-price`}
+                        changedId={changedId}
+                        onEdit={(change, typing) =>
+                          edit(product, change, typing)
+                        }
+                        onOpen={() => onOpen(product)}
+                        onDelete={() => onDelete(product)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </GridBeam>
+            </div>
           </div>
         )}
         <span id={changedId} hidden>
@@ -346,7 +379,9 @@ export function ProductTable({
         <div className={styles.pager}>
           <p className={styles.count} role="status">
             {shown.length > 0
-              ? plural(shown.length, "product")
+              ? filtered
+                ? `${plural(shown.length, "product")} of ${products.length}`
+                : plural(shown.length, "product")
               : products.length > 0
                 ? "No products match."
                 : "No products yet."}
@@ -388,7 +423,7 @@ export function ProductTable({
             <button
               type="button"
               className={adminStyles.primary}
-              disabled={saving || disabled || unpriced.length > 0}
+              disabled={saving || unpriced.length > 0}
               onClick={save}
             >
               {saving ? "Saving…" : "Save changes"}
@@ -426,6 +461,7 @@ function ProductRow({
   changedId,
   onEdit,
   onOpen,
+  onDelete,
 }: {
   product: AdminProduct
   draft: Draft
@@ -433,6 +469,7 @@ function ProductRow({
   changedId: string
   onEdit: (change: Draft, typing?: boolean) => void
   onOpen: () => void
+  onDelete: () => void
 }) {
   const fields = unsaved(product, draft)
   // A changed cell shows a dot and bold text, and says "Changed" to
@@ -461,7 +498,9 @@ function ProductRow({
         )}
       </td>
       <th scope="row" className={styles.product}>
-        <span className={styles.name}>{product.name}</span>
+        <button type="button" className={styles.name} onClick={onOpen}>
+          {product.name}
+        </button>
         <span className={styles.brand}>{product.brand.name}</span>
       </th>
       <td className={styles.category}>{product.category.name}</td>
@@ -530,16 +569,27 @@ function ProductRow({
           />
         </span>
       </td>
-      <td className={styles.editColumn}>
-        <button
-          type="button"
-          className={styles.iconButton}
-          aria-label={`Edit ${product.name}`}
-          title="Edit"
-          onClick={onOpen}
-        >
-          <Pencil size={15} strokeWidth={2} aria-hidden="true" />
-        </button>
+      <td className={styles.actionsColumn}>
+        <span className={styles.rowActions}>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label={`Edit ${product.name}`}
+            title="Edit"
+            onClick={onOpen}
+          >
+            <Pencil size={15} strokeWidth={2} aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            className={styles.iconButton}
+            aria-label={`Delete ${product.name}`}
+            title="Delete"
+            onClick={onDelete}
+          >
+            <Trash2 size={15} strokeWidth={2} aria-hidden="true" />
+          </button>
+        </span>
       </td>
     </tr>
   )

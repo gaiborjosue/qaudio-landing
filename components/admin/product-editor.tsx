@@ -10,7 +10,7 @@ import {
 } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, ChevronRight, Sparkles, X } from "lucide-react"
+import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react"
 import { saveProductFromEditor } from "@/app/admin/actions"
 import { ProductPageView } from "@/components/product-catalog"
 import {
@@ -78,28 +78,31 @@ function restore(key: string | undefined): ProductValues | null {
 }
 
 /**
- * The product editor: one product's fields as a form, the shop's own page as
- * a live preview, and Save, which writes it directly as the admin (a Server
- * Action, the same checks and save code as the agent's tool). Unsaved work
- * is kept in sessionStorage under `storageKey`, so a reload doesn't lose it.
+ * The product form: one product's fields, the shop's own page as a live
+ * preview, and Save, which writes it directly as the admin (a Server
+ * Action). Unsaved work is kept in sessionStorage under `storageKey`, so
+ * closing the sheet or reloading doesn't lose it; Discard drops it.
  */
 export function ProductEditor({
   initial,
   taxonomy,
   storageKey,
   disabled = false,
+  stickyActions = false,
   onSaved,
-  onDraft,
   onCancel,
+  onDelete,
 }: {
   initial: ProductValues
   taxonomy: CatalogTaxonomy
   storageKey?: string
   disabled?: boolean
+  /** Keeps Save in view at the foot of a scrolling sheet. */
+  stickyActions?: boolean
   onSaved: (saved: SavedProduct, input: ProductInput) => void
-  /** "Draft with Tune": hands the current values to the agent. */
-  onDraft?: (values: ProductValues) => void
   onCancel?: () => void
+  /** Offered for a saved product. */
+  onDelete?: () => void
 }) {
   const router = useRouter()
   const id = useId()
@@ -677,7 +680,11 @@ export function ProductEditor({
           {message}
         </p>
       )}
-      <div className={styles.actions}>
+      <div
+        className={[styles.actions, stickyActions && styles.stickyActions]
+          .filter(Boolean)
+          .join(" ")}
+      >
         <button
           type="button"
           className={adminStyles.primary}
@@ -686,23 +693,16 @@ export function ProductEditor({
         >
           {saving ? "Saving…" : values.id ? "Save changes" : "Add product"}
         </button>
-        {onDraft && (
-          <button
-            type="button"
-            className={adminStyles.secondary}
-            disabled={disabled || saving || uploading}
-            onClick={() => onDraft(values)}
-          >
-            <Sparkles size={15} aria-hidden="true" />
-            Draft with Tune
-          </button>
-        )}
         {onCancel && (
           <button
             type="button"
             className={adminStyles.quiet}
             disabled={saving}
-            onClick={onCancel}
+            onClick={() => {
+              // Discarding drops the work kept for this product.
+              if (storageKey) window.sessionStorage.removeItem(storageKey)
+              onCancel()
+            }}
           >
             {dirty ? "Discard" : "Close"}
           </button>
@@ -711,6 +711,17 @@ export function ProductEditor({
           <span className={adminStyles.hint} role="status">
             Uploading photos…
           </span>
+        )}
+        {onDelete && values.id && (
+          <button
+            type="button"
+            className={`${adminStyles.quiet} ${styles.delete}`}
+            disabled={saving}
+            onClick={onDelete}
+          >
+            <Trash2 size={15} aria-hidden="true" />
+            Delete product
+          </button>
         )}
       </div>
     </div>

@@ -8,8 +8,8 @@ import {
   useTransition,
   type RefObject,
 } from "react"
-import Image from "next/image"
-import { editorToolName, previewToolName } from "@/lib/admin/tool-names"
+import { createPortal } from "react-dom"
+import { previewToolName } from "@/lib/admin/tool-names"
 import { useRouter } from "next/navigation"
 import { ArrowUp, ImagePlus, Pencil, Square, X } from "lucide-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
@@ -23,11 +23,7 @@ import {
   type UseEveAgentReturn,
 } from "eve/react"
 import { parts, runs } from "eve/events"
-import {
-  refreshSiteContent,
-  saveArrangedOrder,
-  signOut,
-} from "@/app/admin/actions"
+import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
 import {
   ChangePreview,
   SAVE_TOOLS,
@@ -40,10 +36,7 @@ import {
   ModelInfoAction,
 } from "@/components/admin/message-actions"
 import { orderScope, ProductOrder } from "@/components/admin/product-order"
-import {
-  ProductEditorCard,
-  ProductTableCard,
-} from "@/components/admin/product-cards"
+import type { ProductRequest } from "@/components/admin/products-view"
 import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
 import { ChromaticButton } from "@/components/chromatic-button"
@@ -89,27 +82,22 @@ async function accessToken() {
   return token
 }
 
-// Next patches history; going around it keeps the chat mounted while the
-// address changes to the conversation's own URL.
-function setAddress(path: string) {
-  if (window.location.pathname === path) return
-  History.prototype.replaceState.call(
-    window.history,
-    window.history.state,
-    "",
-    path
-  )
-}
-
 export function AdminChat({
   sessionId,
-  email,
   preview,
+  actionsTarget,
+  onSession,
+  onProduct,
 }: {
   sessionId?: string
-  email: string
   /** Current site data the change previews build on. */
   preview: PreviewData
+  /** Where New chat goes: the workspace header. */
+  actionsTarget: HTMLElement | null
+  /** The conversation's session id once there is one; none after New chat. */
+  onSession: (sessionId?: string) => void
+  /** Opens a product in the Products tab (the quick menus' Product items). */
+  onProduct: (request: ProductRequest) => void
 }) {
   const router = useRouter()
   const [, startRefresh] = useTransition()
@@ -123,8 +111,7 @@ export function AdminChat({
       resume: true,
     }),
     onSessionChange(session) {
-      if (session)
-        setAddress(`/admin/s/${encodeURIComponent(session.sessionId)}`)
+      if (session) onSession(session.sessionId)
     },
     // Saves run in the agent's own process, which can't reach Next's cache,
     // so refresh the pages a finished turn changed (and this page's previews).
@@ -163,7 +150,7 @@ export function AdminChat({
       // Already ended or unreachable; start fresh either way.
     }
     agent.newSession()
-    setAddress("/admin")
+    onSession(undefined)
     setEnding(false)
   }
 
@@ -186,33 +173,20 @@ export function AdminChat({
     // Morphs and other Motion animations go instant under reduced motion.
     <MotionConfig reducedMotion="user">
       <TooltipProvider>
+        {actionsTarget &&
+          createPortal(
+            <button
+              type="button"
+              className={styles.quiet}
+              disabled={ending}
+              onClick={newChat}
+            >
+              New chat
+            </button>,
+            actionsTarget
+          )}
         <div className={styles.workspace}>
           <div className={styles.chat}>
-            <header className={styles.header}>
-              <Image
-                src="/qaudio-logo.svg"
-                alt="Q Audio"
-                width={30}
-                height={36}
-                loading="eager"
-              />
-              <h1>Tune</h1>
-              <span className={styles.email}>{email}</span>
-              <button
-                type="button"
-                className={styles.quiet}
-                disabled={ending}
-                onClick={newChat}
-              >
-                New chat
-              </button>
-              <form action={signOut}>
-                <button type="submit" className={styles.quiet}>
-                  Sign out
-                </button>
-              </form>
-            </header>
-
             <Conversation
               agent={agent}
               preview={preview}
@@ -239,6 +213,7 @@ export function AdminChat({
               <QuickMenus
                 preview={preview}
                 ask={ask}
+                onProduct={onProduct}
                 disabled={resuming || ending}
               />
             </div>
@@ -270,7 +245,6 @@ function Conversation({
   onEdit: (text: string) => void
 }) {
   const ownerSaved = ownerSavedOrders(agent.messages)
-  const editors = productEditorStates(agent.messages)
   // Match each text part to the run that produced it. Session-wide model
   // settings would mislabel older replies after an automatic model switch.
   const modelByPart = useMemo(() => {
@@ -302,8 +276,8 @@ function Conversation({
             {agent.messages.length === 0 && agent.status !== "resuming" && (
               <MessageScrollerItem className={styles.emptyState}>
                 <p className={styles.empty}>
-                  Ask for a change: hours, a holiday closure, a product, a news
-                  post, or a deal.
+                  Ask for a change: hours, a holiday closure, a news post, or a
+                  deal.
                 </p>
               </MessageScrollerItem>
             )}
@@ -318,7 +292,6 @@ function Conversation({
                   agent={agent}
                   preview={preview}
                   ownerSaved={ownerSaved}
-                  editors={editors}
                   modelByPart={modelByPart}
                   onEdit={onEdit}
                 />
@@ -340,59 +313,13 @@ function Conversation({
 }
 
 // Lines meant for the agent, not the bubble: uploaded photos, the item an
-// Edit-menu choice names, a product order the owner arranged and saved on a
-// reorder card ("Order:" is the earlier form, kept for old chats), and what
-// the owner saved or asked to draft in a product editor or table.
+// Edit-menu choice names, and a product order the owner arranged and saved
+// on a reorder card ("Order:" is the earlier form). Older chats also carry
+// what the owner saved or asked to draft in the chat's former product
+// editor and table.
 const HIDDEN_LINE =
   /^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor): .*$/gm
 const ORDER_SAVED = /^Order saved: (.+)$/m
-const PRODUCT_SAVED = /^Product saved: (.+)$/m
-
-/**
- * The product editors' states, read from the conversation so a reopened
- * chat shows them too: the product each one saved (a "Product saved:" line
- * names its card), and which ones a newer editor for the same product (or
- * another new product) replaced.
- */
-function productEditorStates(messages: readonly EveMessage[]) {
-  const saved = new Map<string, string>()
-  const opened: { call: string; target: string }[] = []
-  for (const message of messages) {
-    for (const part of message.parts) {
-      if (
-        part.type === "tool" &&
-        part.state === "completed" &&
-        editorToolName(part.name) === "product_editor"
-      ) {
-        const output = part.output as { product?: { id?: unknown } } | undefined
-        const id = output?.product?.id
-        opened.push({
-          call: part.callId,
-          target: typeof id === "string" ? id : "new",
-        })
-      } else if (message.role === "user" && part.type === "text") {
-        const line = part.text.match(PRODUCT_SAVED)?.[1]
-        if (!line) continue
-        try {
-          const note = JSON.parse(line) as { call?: unknown; id?: unknown }
-          if (typeof note.call === "string" && typeof note.id === "string") {
-            saved.set(note.call, note.id)
-          }
-        } catch {
-          // Not a save note; leave the cards as they are.
-        }
-      }
-    }
-  }
-  const replaced = new Set(
-    opened
-      .filter(({ target }, index) =>
-        opened.slice(index + 1).some((later) => later.target === target)
-      )
-      .map(({ call }) => call)
-  )
-  return { saved, replaced }
-}
 
 /**
  * Reorder cards the owner rearranged and saved themselves, by tool call: an
@@ -440,11 +367,11 @@ function messageText(message: EveMessage) {
 
 type ReplyPart = EveMessage["parts"][number]
 
-/** A working step: a call that's neither a change card nor an open question. */
+/** A working step: a call that's neither a change card nor an open question.
+ * Older chats' product editor and table calls read as steps too. */
 const isStep = (part: ReplyPart): part is EveToolPart =>
   part.type === "tool" &&
   !SAVE_TOOLS.has(part.name) &&
-  !editorToolName(part.name) &&
   part.interaction?.status !== "open"
 
 /**
@@ -476,7 +403,6 @@ function MessageView({
   agent,
   preview,
   ownerSaved,
-  editors,
   modelByPart,
   onEdit,
 }: {
@@ -484,7 +410,6 @@ function MessageView({
   agent: Agent
   preview: PreviewData
   ownerSaved: Map<string, string[]>
-  editors: ReturnType<typeof productEditorStates>
   modelByPart: ReadonlyMap<string, string | undefined>
   onEdit: (text: string) => void
 }) {
@@ -580,29 +505,6 @@ function MessageView({
                     agent={agent}
                     preview={preview}
                     ownerSaved={ownerSaved.get(part.callId)}
-                  />
-                )
-              }
-              if (editorToolName(part.name)) {
-                // Opening is quick; until then it's a step like any other.
-                if (part.state !== "completed") {
-                  return <Steps key={key} parts={[part]} />
-                }
-                return editorToolName(part.name) === "product_editor" ? (
-                  <ProductEditorCard
-                    key={key}
-                    part={part}
-                    agent={agent}
-                    preview={preview}
-                    saved={editors.saved.get(part.callId)}
-                    replaced={editors.replaced.has(part.callId)}
-                  />
-                ) : (
-                  <ProductTableCard
-                    key={key}
-                    part={part}
-                    agent={agent}
-                    preview={preview}
                   />
                 )
               }

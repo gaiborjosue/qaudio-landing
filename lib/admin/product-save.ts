@@ -4,14 +4,14 @@ import type { Database } from "../supabase/database.types"
 import type { ProductInput, ProductQuickEdit } from "./schemas"
 import { placeUploads, type Fail } from "./uploads"
 
-// Reading and saving products, shared by the agent's tools and the admin
-// chat's product editor and table (Server Actions). Both pass a client
-// signed in as the admin, so RLS applies. Relative imports, because the
-// agent imports this too.
+// Reading, saving, and deleting products, shared by the agent's read tool and
+// the admin's Products tab (Server Actions). Both pass a client signed in as
+// the admin, so RLS applies. Relative imports, because the agent imports this
+// too.
 
 type Supabase = SupabaseClient<Database>
 
-/** A product as products__save_product takes it, with its id and order. */
+/** A product with every field, its id, and its order. */
 export type ProductRecord = ProductInput & { id: string; sort_order: number }
 
 /** One product with every field and its photos in order, or null. */
@@ -89,9 +89,7 @@ export async function saveProduct(
   if (result.error) throw fail("Product", result.error)
   const product = result.data[0]
   if (!product) {
-    throw new Error(
-      "Product: no product with that id. Look it up again with products__list_catalog."
-    )
+    throw new Error("Product: no product with that id; it may be deleted.")
   }
 
   // Photos are keyed by position, so an upsert rewrites each slot in place
@@ -142,4 +140,22 @@ export async function saveProductQuickEdits(
     }
   }
   return { saved: edits.length }
+}
+
+/**
+ * Deletes a product by id; its photo rows go with it (the files stay in
+ * storage). Returns false when no product has that id.
+ */
+export async function deleteProduct(
+  supabase: Supabase,
+  id: string,
+  fail: Fail
+) {
+  const { data, error } = await supabase
+    .from("products")
+    .delete()
+    .eq("id", id)
+    .select("id")
+  if (error) throw fail("Product", error)
+  return data.length > 0
 }

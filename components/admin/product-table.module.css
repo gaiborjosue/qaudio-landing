@@ -1,13 +1,15 @@
-/* The product table (product-table.tsx): filters on top, every product as a
-   row with its short fields editable in place, then paging and the bar
-   that saves the changes. Monochrome; product photos keep their color.
-   Changed cells are marked in ink (a dot and bold text), and a missing
-   price with a heavier border. The rows sit in a horizontal scroller and
-   the chat row clips paint, so focus rings are drawn inside each control. */
+/* The Products tab's table (product-table.tsx): filters on top, every
+   product as a row with its short fields editable in place, then paging and
+   the bar that saves the changes. Monochrome; product photos keep their
+   color. Changed cells are marked in ink (a dot and bold text), and a
+   missing price with a heavier border. The table sits in a rounded frame,
+   ruled like a grid for the beams (grid-beam.tsx) that run along its lines,
+   and scrolls sideways on narrow screens, so focus rings are drawn inside
+   each control. */
 
 .productTable {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   min-width: 0;
   color: #111;
   font-size: 14px;
@@ -53,58 +55,68 @@
   flex: 0 1 170px;
   min-width: 0;
 }
-.add {
-  flex: none;
-  margin-left: auto;
-}
 
 /* Table */
 
 .region {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
+}
+.frame {
+  overflow: hidden;
+  border: 1px solid #e2e2e2;
+  border-radius: 14px;
+  background: #fff;
 }
 .scroller {
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
+/* The beam's canvas covers the whole table, also where it scrolls. */
+.beam {
+  min-width: 860px;
+}
 .table {
   width: 100%;
-  min-width: 720px;
   border-collapse: collapse;
   background: #fff;
 }
 .table th,
 .table td {
-  padding: 6px 8px;
+  padding: 8px 12px;
   text-align: left;
   vertical-align: middle;
 }
+/* Grid lines between the columns and under each row. */
+.table tr > * + * {
+  border-left: 1px solid #efefef;
+}
 .table thead th {
-  padding-top: 4px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #dedede;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e2e2e2;
+  background: #fafafa;
   color: #6b6b6b;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
 }
 .table tbody tr:not(:last-child) > * {
-  border-bottom: 1px solid #ececec;
+  border-bottom: 1px solid #efefef;
 }
 .table tbody tr:hover {
   background: #fafafa;
 }
 .photoColumn {
-  width: 56px;
+  width: 64px;
 }
 .table .auditionColumn {
-  width: 76px;
+  width: 84px;
   text-align: center;
 }
-.editColumn {
-  width: 48px;
+.actionsColumn {
+  width: 92px;
 }
 
 .photo {
@@ -116,17 +128,34 @@
   object-fit: contain;
 }
 .table .product {
-  min-width: 160px;
+  min-width: 180px;
   font-weight: 400;
 }
+/* The name opens the product's form. */
 .name {
   display: -webkit-box;
-  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #111;
+  font: inherit;
   font-size: 14px;
   font-weight: 500;
   line-height: 1.3;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+}
+.name:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.name:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #111;
+  outline-offset: 1px;
 }
 .brand {
   display: block;
@@ -229,6 +258,10 @@
   width: 6px;
 }
 
+.rowActions {
+  display: flex;
+  gap: 2px;
+}
 .iconButton {
   display: grid;
   place-items: center;
@@ -281,15 +314,22 @@
   margin-right: 6px;
 }
 
-/* Unsaved changes */
+/* Unsaved changes: a bar that stays at the foot of the page while there
+   are any. */
 
 .footer {
+  position: sticky;
+  bottom: 16px;
+  z-index: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 10px 12px;
-  padding-top: 12px;
-  border-top: 1px solid #ececec;
+  padding: 12px 16px;
+  border: 1px solid #e2e2e2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 0.08);
 }
 .changed {
   margin: 0;
@@ -319,8 +359,5 @@
   }
   .facet {
     flex: 1 1 calc(50% - 4px);
-  }
-  .add {
-    margin-left: 0;
   }
 }

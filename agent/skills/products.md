@@ -1,28 +1,21 @@
 ---
-description: Use before adding, editing, unpublishing, deleting, or reordering shop products or their photos.
+description: Use before answering questions about shop products or reordering them, and when the owner asks to add, edit, publish, unpublish, or delete one.
 ---
 
-Load these instructions with `eve__skill({ name: "products" })`. Discover this group with `eve__search({ query: "products__" })` unless its signatures are already in context. Execute the discovered tools with `eve__tool({ name, input })`, using their exact names and signatures. Read current data before writing; reuse discovery while its signatures remain in context. For requests spanning domains, also load the other skill and discover its group as needed.
+Load these instructions with `eve__skill({ name: "products" })`. Discover this group with `eve__search({ query: "products__" })` unless its signatures are already in context. Execute the discovered tools with `eve__tool({ name, input })`, using their exact names and signatures. Reuse discovery while its signatures remain in context. For requests spanning domains, also load the other skill and discover its group as needed.
+
+What you can do with products:
+
+- Read them: `products__list_catalog` lists categories, brands, and every product (drafts included) in the shop's order; `products__get_product` reads one product with every field and its photos.
+- Reorder them with `products__reorder_products` (below).
+
+Adding, editing, publishing, unpublishing, and deleting products is done by the owner in the admin's Products tab (the Chat / Products switch at the top of the page): a table with filters, a sheet with the full product form, and Delete. You have no tool for it. When the owner asks for one of those, say in one short line that it's in the Products tab; don't collect the product's details or offer to save it. If they ask you to write a product's copy from notes, a spec sheet, or a manufacturer page, ask the `copywriter` subagent and give them its description and card line to paste into the form.
 
 How the shop catalog works:
 
-- Every product has a `slug` (lowercase words joined by dashes, unique; its page is `/products/<slug>`), a `category_slug` and a `brand_slug` that must already exist (see `products__list_catalog`; new categories and brands need artwork deployed with the site, so they can't be added here), and a `name` of up to 160 characters.
-- Copy: `short_description` is the card line (one sentence, 300 characters at most). `description` is the details page's text as Markdown: an opening line (shown as the intro), "- " feature bullets, and optionally a bold closing line (`**Hand assembled in the USA**`), with [text](https://…) links only from the material. The copywriter returns both. In the product editor the card line can stay empty: Save has it written from the description. When you propose a save yourself, include it.
-- Price: `price_cents` is the current selling price (required, positive, in US cents); `msrp_cents` is the manufacturer's list price, or null when unknown. To put a product on sale, keep its MSRP and set `price_cents` below it (for example, 79900 with MSRP 99900 shows a $799 sale price and crossed-out $999 MSRP). Cards, details, and the approval preview label it "Sale price". Equal prices show "MSRP"; a missing MSRP or a selling price above it is not labelled as a sale. Never invent an MSRP to create a sale label. To end a sale, restore the owner's regular selling price; leave MSRP intact. `price_unit` is `each` or `pair` (speakers are usually sold in pairs).
-- `condition` is `New`, `Demo`, or `Used`. `ready_for_audition` marks a product the shop can play for visitors. `manufacturer_url` is the brand's product page (https only) or null.
-- `status` `published` shows the product in the shop; `draft` hides it. In the editor a new product starts as a draft and the owner picks; when proposing one yourself, ask which they want. Unpublishing (saving as draft) is safer than deleting.
-- `sort_order`: lower values show first. Leave it out when editing to keep the product's place; a new product without it gets 0 and shows first. To arrange a whole category or brand, use `products__reorder_products` (below).
-- Photos: `images` lists every photo in display order. The first is the card photo and the gallery's lead. Each needs its media `path`, `width`, `height`, and an `alt` text describing the photo (for example "Orbit Theory in walnut, front three-quarter view"). Newly attached photos have `uploads/` paths; saving moves them into `products/` and returns the saved paths, so use those in later edits. Saving replaces the product's whole photo list, so include existing photos you keep.
-
-Steps:
-
-1. To add a product, open the editor right away with `products__open_editor` (no `id`) instead of collecting fields one question at a time. Put what you know in `draft`: the name, the category and brand slugs (from `products__list_catalog`; leave them out if unsure), condition, prices, and any copy. A new product's slug follows its name; leave `slug` out unless the owner gave one. The owner fills in the rest, adds photos, and saves it there.
-2. To edit one product, find it with `products__list_catalog`, then open the editor with its `id`. When the owner already said what to change, put just those fields in `draft`; the saved record fills the rest. If they stated one exact change in full (for example "set the Orbit Theory to $1,299"), you may propose it with `products__save_product` instead (read the record with `products__get_product` first).
-3. To browse, compare, or change several products, open `products__open_table`, with filters from the request (search, category, brand, condition, status). The owner edits price, condition, audition, and status in the rows, or opens a row in the full editor.
-4. Copy: when the owner gives notes, a spec sheet, or a manufacturer page, ask the `copywriter` subagent with the product name, brand, category, condition, and all that material, then open the editor with the copy in `draft`. Write the alt text for attached photos yourself and pass them as `images` (path, width, height, alt).
-5. A message saying "Draft the copy for this product." ends with an `Editor: {"call", "id"?, "draft"}` line: the editor's current values. Draft what's missing: the copy (ask the copywriter, reading `manufacturer_url` with `web_fetch` when it's set) and the alt text of each photo that has none (those photos are attached). Then call `products__open_editor` with the same `id` and `draft` set to their values plus yours. Keep everything they entered.
-6. A `Product saved: {…}` line means the owner saved it from an editor, and `Products updated: […]` that they saved changes in the table. It's done: confirm in one short line, give a new product's address (`/products/<slug>`), and mention when it's a draft that won't show in the shop yet.
-7. To delete, call `products__delete_product` with the id and name. Photo files stay in storage.
+- Every product has a `slug` (its page is `/products/<slug>`), a category and a brand, a `name`, a card line (`short_description`), and a Markdown `description`.
+- Price: `price_cents` is the current selling price in US cents, and `msrp_cents` the manufacturer's list price or null. A selling price below MSRP shows as a sale. `price_unit` is `each` or `pair`. Say prices in dollars.
+- `condition` is `New`, `Demo`, or `Used`. `status` `published` shows the product in the shop; `draft` hides it.
 
 Product order:
 
