@@ -1,13 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "../supabase/database.types"
 import type { ReorderProductsInput } from "./schemas"
+import type { Fail } from "./uploads"
 
 // Saving a product order, shared by the agent's products__reorder_products
 // tool and the admin chat's "Save this order" (a Server Action). Both pass a
 // client signed in as the admin, so RLS applies. Relative imports, because
 // the agent imports this too.
-
-type DatabaseError = { code?: string; message: string }
 
 /** The ids don't list the set's current products exactly once. */
 export class ProductOrderMismatch extends Error {}
@@ -21,7 +20,7 @@ export class ProductOrderMismatch extends Error {}
 export async function saveProductOrder(
   supabase: SupabaseClient<Database>,
   { category_slug, brand_slug, product_ids }: ReorderProductsInput,
-  fail: (what: string, error: DatabaseError) => Error
+  fail: Fail
 ): Promise<{ changed: number }> {
   let query = supabase.from("products").select("id, name, sort_order")
   if (category_slug) query = query.eq("category_slug", category_slug)

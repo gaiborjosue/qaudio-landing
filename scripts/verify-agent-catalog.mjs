@@ -89,7 +89,7 @@ const { buildStepCatalog } = await internal("execution/catalog/step-catalog.js")
 const { BundleKey } = await internal("runtime/sessions/runtime-context-keys.js")
 const { toInputSchema } = await internal("tools/schema.js")
 const { checkToolCallInput } = await internal("harness/tool-call-io.js")
-const { previewToolName, SAVE_TOOLS } =
+const { editorToolName, previewToolName, SAVE_TOOLS } =
   await import("../lib/admin/tool-names.ts")
 const schemas = await import("../lib/admin/schemas.ts")
 const tools = new Map()
@@ -114,7 +114,7 @@ const catalog = buildStepCatalog({
   session: {},
   endsTurn: true,
 })
-assert.equal(catalog.deferred.size, 16)
+assert.equal(catalog.deferred.size, 18)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -129,7 +129,7 @@ assert(
 )
 for (const [group, count] of Object.entries({
   hours: 4,
-  products: 5,
+  products: 7,
   news: 4,
   deals: 3,
 })) {
@@ -177,9 +177,7 @@ const fixtures = {
       brand_slug: "sample",
       name: "Sample",
       short_description: "",
-      description_intro: "",
-      features: [],
-      description_closing: "",
+      description: "",
       price_cents: 100,
       msrp_cents: null,
       price_unit: "each",
@@ -222,6 +220,7 @@ const fixtures = {
   delete_deal: [schemas.deleteDealInputSchema, { id, title: "Sample" }],
 }
 let writes = 0
+let editors = 0
 for (const [name, definition] of catalog.deferred) {
   assert(!catalog.advertised.has(name))
   const legacy = previewToolName(name)
@@ -235,7 +234,20 @@ for (const [name, definition] of catalog.deferred) {
   assert.equal(routed.call.toolName, name)
   assert.equal(routed.call.callId, name)
   assert.equal(routed.call.input, input)
-  if (!legacy) continue
+  if (!legacy) {
+    // Editor tools open a form the owner saves from, so they save nothing,
+    // need no approval, and take an empty input.
+    if (editorToolName(name)) {
+      editors++
+      assert(!SAVE_TOOLS.has(name))
+      assert.equal(definition.approval, undefined)
+      assert.equal(
+        (await checkToolCallInput(definition, {}, name)).kind,
+        "valid"
+      )
+    }
+    continue
+  }
   writes++
   assert(SAVE_TOOLS.has(name) && SAVE_TOOLS.has(legacy))
   assert.equal(previewToolName(legacy), legacy)
@@ -251,6 +263,7 @@ for (const [name, definition] of catalog.deferred) {
   )
 }
 assert.equal(writes, 10)
+assert.equal(editors, 2)
 assert.equal(previewToolName("unknown__save_news_post"), undefined)
 assert.equal(
   (
@@ -310,5 +323,5 @@ for (const [name] of catalog.deferred) {
   assert(!render(name).includes("Unknown category"))
 }
 console.log(
-  "Catalog verified: 16 deferred (hours 4, products 5, news 4, deals 3); 3 authored direct helpers; discovery across groups; canonical routing; all 10 approval/schema policies; 20 current/historical preview renders. No site data read or written."
+  "Catalog verified: 18 deferred (hours 4, products 7, news 4, deals 3); 3 authored direct helpers; discovery across groups; canonical routing; all 10 approval/schema policies; 2 approval-free editor tools; 20 current/historical preview renders. No site data read or written."
 )

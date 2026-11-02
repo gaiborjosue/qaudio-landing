@@ -1,7 +1,12 @@
 import "server-only"
 import { cacheLife, cacheTag } from "next/cache"
 import { publicSupabase, mediaUrl } from "@/lib/supabase/public"
-import type { CatalogBrand, CatalogCategory, Product } from "@/lib/catalog"
+import {
+  descriptionFromColumns,
+  type CatalogBrand,
+  type CatalogCategory,
+  type Product,
+} from "@/lib/catalog"
 
 // Categories, brands, and published products, read as an anonymous visitor
 // for the home page wheel and brand wall, the shop, and product pages. Results
@@ -36,9 +41,20 @@ type ProductRow = NonNullable<
   Awaited<ReturnType<typeof productsQuery>>["data"]
 >[number]
 
-function toProduct({ product_images, ...product }: ProductRow): Product {
+function toProduct({
+  product_images,
+  description_intro,
+  features,
+  description_closing,
+  ...product
+}: ProductRow): Product {
   return {
     ...product,
+    description: descriptionFromColumns({
+      description_intro,
+      features,
+      description_closing,
+    }),
     manufacturer_url: product.manufacturer_url?.startsWith("https://")
       ? product.manufacturer_url
       : null,

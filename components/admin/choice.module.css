@@ -1,0 +1,93 @@
+/* The admin's select (choice.tsx, on shadcn's Select): the editor's 40px
+   fields, or 32px in the product table. Monochrome, except product
+   conditions, which carry the shop's condition-badge colors (see .condition
+   in components/product-catalog.module.css): green for New, blue for Demo,
+   amber for Used. The label always carries the meaning. */
+
+:is(.trigger, .item)[data-tone] {
+  --tone-bg: #f0f0f0;
+  --tone-line: #dcdcdc;
+  --tone-ink: #404040;
+  --tone-dot: #8a8a8a;
+}
+:is(.trigger, .item)[data-tone="new"] {
+  --tone-bg: #e8f6ec;
+  --tone-line: #bfe4ca;
+  --tone-ink: #12632d;
+  --tone-dot: #22a553;
+}
+:is(.trigger, .item)[data-tone="demo"] {
+  --tone-bg: #e9f1fe;
+  --tone-line: #c4d8f8;
+  --tone-ink: #1c4fa0;
+  --tone-dot: #3b82f6;
+}
+:is(.trigger, .item)[data-tone="used"] {
+  --tone-bg: #fdf2dd;
+  --tone-line: #f2d9a1;
+  --tone-ink: #8a5100;
+  --tone-dot: #e19a1a;
+}
+
+.trigger {
+  width: 100%;
+  height: 40px;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.trigger:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -1px;
+}
+.trigger[aria-invalid="true"] {
+  border-color: #111;
+  box-shadow: inset 0 0 0 1px #111;
+}
+.trigger[data-placeholder] {
+  color: #6b6b6b;
+}
+/* the chosen condition reads as its badge */
+.trigger[data-tone] {
+  border-color: var(--tone-line);
+  background: var(--tone-bg);
+  color: var(--tone-ink);
+  font-weight: 500;
+}
+.small {
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.content {
+  min-width: 160px;
+  padding: 4px;
+  border-radius: 12px;
+  font-size: 14px;
+}
+.item {
+  min-height: 34px;
+  padding: 6px 30px 6px 10px;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.item[data-tone] {
+  color: var(--tone-ink);
+}
+
+.dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tone-dot);
+}

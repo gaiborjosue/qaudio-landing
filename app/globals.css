@@ -13,9 +13,11 @@
   --color-primary-foreground: var(--background);
   --color-border: #dedede;
   --color-ring: #777;
-  /* Greys for shadcn's Calendar and Streamdown (admin chat). */
+  /* Greys for shadcn's Calendar, Select, and Streamdown (admin chat). */
   --color-muted: #f2f2f2;
   --color-muted-foreground: #666;
+  --color-accent: #f2f2f2;
+  --color-accent-foreground: var(--foreground);
   --color-popover: var(--background);
   --color-popover-foreground: var(--foreground);
   --color-input: #dedede;

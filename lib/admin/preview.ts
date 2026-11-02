@@ -1,4 +1,9 @@
-import type { CatalogBrand, CatalogCategory, Product } from "@/lib/catalog"
+import type {
+  CatalogBrand,
+  CatalogCategory,
+  Product,
+  ProductImage,
+} from "@/lib/catalog"
 import type {
   DayHoursInput,
   DealInput,
@@ -105,9 +110,7 @@ export function productFromInput(
       slug: input.slug,
       name: input.name,
       short_description: input.short_description,
-      description_intro: input.description_intro,
-      features: input.features,
-      description_closing: input.description_closing,
+      description: input.description,
       price_cents: input.price_cents,
       msrp_cents: input.msrp_cents,
       price_unit: input.price_unit,
@@ -131,8 +134,11 @@ export function productFromInput(
   }
 }
 
-/** A catalog product with its status, for the admin's previews. */
-export type AdminProduct = Product & { status: string }
+/** A catalog product with its status and photo paths, for the admin. */
+export type AdminProduct = Omit<Product, "images"> & {
+  status: string
+  images: (ProductImage & { path: string })[]
+}
 
 /** A news post as the Edit menu lists it; dates are store time. */
 export type AdminNewsItem = {

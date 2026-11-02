@@ -39,6 +39,7 @@ import {
   type Product,
   type ProductImage,
 } from "@/lib/catalog"
+import { MarkdownText } from "./markdown-text"
 import styles from "./product-catalog.module.css"
 
 const CONDITION_TONES = ["new", "demo", "used"]
@@ -332,21 +333,10 @@ function ProductDetails({
           </div>
         )}
         <div className={styles.detailsBody}>
-          <div className={styles.description}>
-            <p className={styles.intro}>{product.description_intro}</p>
-            {product.features.length > 0 && (
-              <ul>
-                {product.features.map((feature, index) => (
-                  <li key={index}>{feature}</li>
-                ))}
-              </ul>
-            )}
-            {product.description_closing && (
-              <p className={styles.closing}>
-                <strong>{product.description_closing}</strong>
-              </p>
-            )}
-          </div>
+          <MarkdownText
+            className={styles.description}
+            text={product.description}
+          />
           <aside className={styles.pricing} aria-label="Price and condition">
             {product.ready_for_audition && (
               <p className={styles.audition}>

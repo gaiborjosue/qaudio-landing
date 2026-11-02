@@ -35,6 +35,7 @@ import {
   weeklyHoursInputSchema,
 } from "@/lib/admin/schemas"
 import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
+import { descriptionFromColumns } from "@/lib/catalog"
 import {
   addDays,
   formatChangeDates,
@@ -102,6 +103,29 @@ function newsTiming(slug: string, status: string, publishedAt: string | null) {
 }
 
 /**
+ * A product proposal from before the description became one Markdown field
+ * (an intro, feature bullets, and a closing line), as it reads now, so older
+ * chats still show their previews.
+ */
+function withDescription(input: unknown) {
+  if (!input || typeof input !== "object" || "description" in input) {
+    return input
+  }
+  const { description_intro, features, description_closing, ...rest } =
+    input as Record<string, unknown>
+  if (typeof description_intro !== "string") return input
+  return {
+    ...rest,
+    description: descriptionFromColumns({
+      description_intro,
+      features: Array.isArray(features) ? features.map(String) : [],
+      description_closing:
+        typeof description_closing === "string" ? description_closing : "",
+    }),
+  }
+}
+
+/**
  * A save tool's proposed change, drawn with the site's own components. The
  * input comes from the model, so it's checked again here; anything that
  * doesn't parse shows as a note instead of a broken preview. Listings and
@@ -157,7 +181,7 @@ export function ChangePreview({
       )
     }
     case "save_product": {
-      const parsed = productInputSchema.safeParse(input)
+      const parsed = productInputSchema.safeParse(withDescription(input))
       if (!parsed.success) break
       const result = productFromInput(parsed.data, data.taxonomy)
       if ("problem" in result) return <Note>{result.problem}</Note>

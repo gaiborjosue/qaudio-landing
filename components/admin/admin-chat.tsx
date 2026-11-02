@@ -9,7 +9,7 @@ import {
   type RefObject,
 } from "react"
 import Image from "next/image"
-import { previewToolName } from "@/lib/admin/tool-names"
+import { editorToolName, previewToolName } from "@/lib/admin/tool-names"
 import { useRouter } from "next/navigation"
 import { ArrowUp, ImagePlus, Pencil, Square, X } from "lucide-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
@@ -40,6 +40,10 @@ import {
   ModelInfoAction,
 } from "@/components/admin/message-actions"
 import { orderScope, ProductOrder } from "@/components/admin/product-order"
+import {
+  ProductEditorCard,
+  ProductTableCard,
+} from "@/components/admin/product-cards"
 import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
 import { ChromaticButton } from "@/components/chromatic-button"
@@ -266,6 +270,7 @@ function Conversation({
   onEdit: (text: string) => void
 }) {
   const ownerSaved = ownerSavedOrders(agent.messages)
+  const editors = productEditorStates(agent.messages)
   // Match each text part to the run that produced it. Session-wide model
   // settings would mislabel older replies after an automatic model switch.
   const modelByPart = useMemo(() => {
@@ -313,6 +318,7 @@ function Conversation({
                   agent={agent}
                   preview={preview}
                   ownerSaved={ownerSaved}
+                  editors={editors}
                   modelByPart={modelByPart}
                   onEdit={onEdit}
                 />
@@ -334,10 +340,59 @@ function Conversation({
 }
 
 // Lines meant for the agent, not the bubble: uploaded photos, the item an
-// Edit-menu choice names, and a product order the owner arranged and saved
-// on a reorder card ("Order:" is the earlier form, kept for old chats).
-const HIDDEN_LINE = /^(Photo uploaded|Item|Order|Order saved): .*$/gm
+// Edit-menu choice names, a product order the owner arranged and saved on a
+// reorder card ("Order:" is the earlier form, kept for old chats), and what
+// the owner saved or asked to draft in a product editor or table.
+const HIDDEN_LINE =
+  /^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor): .*$/gm
 const ORDER_SAVED = /^Order saved: (.+)$/m
+const PRODUCT_SAVED = /^Product saved: (.+)$/m
+
+/**
+ * The product editors' states, read from the conversation so a reopened
+ * chat shows them too: the product each one saved (a "Product saved:" line
+ * names its card), and which ones a newer editor for the same product (or
+ * another new product) replaced.
+ */
+function productEditorStates(messages: readonly EveMessage[]) {
+  const saved = new Map<string, string>()
+  const opened: { call: string; target: string }[] = []
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (
+        part.type === "tool" &&
+        part.state === "completed" &&
+        editorToolName(part.name) === "product_editor"
+      ) {
+        const output = part.output as { product?: { id?: unknown } } | undefined
+        const id = output?.product?.id
+        opened.push({
+          call: part.callId,
+          target: typeof id === "string" ? id : "new",
+        })
+      } else if (message.role === "user" && part.type === "text") {
+        const line = part.text.match(PRODUCT_SAVED)?.[1]
+        if (!line) continue
+        try {
+          const note = JSON.parse(line) as { call?: unknown; id?: unknown }
+          if (typeof note.call === "string" && typeof note.id === "string") {
+            saved.set(note.call, note.id)
+          }
+        } catch {
+          // Not a save note; leave the cards as they are.
+        }
+      }
+    }
+  }
+  const replaced = new Set(
+    opened
+      .filter(({ target }, index) =>
+        opened.slice(index + 1).some((later) => later.target === target)
+      )
+      .map(({ call }) => call)
+  )
+  return { saved, replaced }
+}
 
 /**
  * Reorder cards the owner rearranged and saved themselves, by tool call: an
@@ -389,6 +444,7 @@ type ReplyPart = EveMessage["parts"][number]
 const isStep = (part: ReplyPart): part is EveToolPart =>
   part.type === "tool" &&
   !SAVE_TOOLS.has(part.name) &&
+  !editorToolName(part.name) &&
   part.interaction?.status !== "open"
 
 /**
@@ -420,6 +476,7 @@ function MessageView({
   agent,
   preview,
   ownerSaved,
+  editors,
   modelByPart,
   onEdit,
 }: {
@@ -427,6 +484,7 @@ function MessageView({
   agent: Agent
   preview: PreviewData
   ownerSaved: Map<string, string[]>
+  editors: ReturnType<typeof productEditorStates>
   modelByPart: ReadonlyMap<string, string | undefined>
   onEdit: (text: string) => void
 }) {
@@ -522,6 +580,29 @@ function MessageView({
                     agent={agent}
                     preview={preview}
                     ownerSaved={ownerSaved.get(part.callId)}
+                  />
+                )
+              }
+              if (editorToolName(part.name)) {
+                // Opening is quick; until then it's a step like any other.
+                if (part.state !== "completed") {
+                  return <Steps key={key} parts={[part]} />
+                }
+                return editorToolName(part.name) === "product_editor" ? (
+                  <ProductEditorCard
+                    key={key}
+                    part={part}
+                    agent={agent}
+                    preview={preview}
+                    saved={editors.saved.get(part.callId)}
+                    replaced={editors.replaced.has(part.callId)}
+                  />
+                ) : (
+                  <ProductTableCard
+                    key={key}
+                    part={part}
+                    agent={agent}
+                    preview={preview}
                   />
                 )
               }

@@ -26,10 +26,10 @@ export type Product = {
   id: string
   slug: string
   name: string
+  /** The card line. */
   short_description: string
-  description_intro: string
-  features: string[]
-  description_closing: string
+  /** The details page's description, as Markdown. */
+  description: string
   /** Current selling price, including any sale, in US cents. */
   price_cents: number
   /** Manufacturer list price for comparison; null when unknown. */
@@ -58,3 +58,40 @@ export const isProductOnSale = (
 export const PRODUCT_PATH = "/products/"
 export const productHref = (product: Pick<Product, "slug">) =>
   `${PRODUCT_PATH}${product.slug}`
+
+/** A product's description columns, as the database stores them. */
+export type DescriptionColumns = {
+  description_intro: string
+  features: string[]
+  description_closing: string
+}
+
+/**
+ * The description as one Markdown text. The database keeps the shape it was
+ * imported with (an intro line, feature bullets, a closing line); the admin
+ * writes the whole Markdown into description_intro and empties the other
+ * two, so either kind reads back the same way.
+ */
+export function descriptionFromColumns({
+  description_intro,
+  features,
+  description_closing,
+}: DescriptionColumns) {
+  const closing = description_closing.trim()
+  return [
+    description_intro.trim(),
+    features.map((feature) => `- ${feature.trim()}`).join("\n"),
+    closing && `**${closing}**`,
+  ]
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+/** The columns a Markdown description is saved to. */
+export function descriptionColumns(description: string): DescriptionColumns {
+  return {
+    description_intro: description.trim(),
+    features: [],
+    description_closing: "",
+  }
+}

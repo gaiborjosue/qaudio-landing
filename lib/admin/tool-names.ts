@@ -27,3 +27,18 @@ export function previewToolName(name: string): PreviewTool | undefined {
   }
   return Object.values(PREVIEW_TOOLS).find((legacy) => legacy === name)
 }
+
+/** Tools that open an editor in the chat. They save nothing (the owner saves
+ * from the editor), so they need no approval or preview. */
+const EDITOR_TOOLS = {
+  products__open_editor: "product_editor",
+  products__open_table: "product_table",
+} as const
+
+export function editorToolName(
+  name: string
+): (typeof EDITOR_TOOLS)[keyof typeof EDITOR_TOOLS] | undefined {
+  return Object.hasOwn(EDITOR_TOOLS, name)
+    ? EDITOR_TOOLS[name as keyof typeof EDITOR_TOOLS]
+    : undefined
+}

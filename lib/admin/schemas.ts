@@ -128,10 +128,16 @@ export const productInputSchema = z.object({
   category_slug: slug,
   brand_slug: slug,
   name: z.string().trim().min(1).max(160),
-  short_description: z.string().max(300).describe("The card line."),
-  description_intro: z.string().max(2000),
-  features: z.array(z.string().trim().min(1).max(400)).max(30),
-  description_closing: z.string().max(1000),
+  short_description: z
+    .string()
+    .max(300)
+    .describe("The card line: one sentence, 300 characters at most."),
+  description: z
+    .string()
+    .max(10000)
+    .describe(
+      "The details page's description, as Markdown: an opening paragraph, then - bullets for features, **bold** for emphasis, [text](https://…) links, and ### headings if it needs sections."
+    ),
   price_cents: z
     .int()
     .positive()
@@ -196,6 +202,65 @@ export const reorderProductsInputSchema = z
     (input) => !(input.category_slug && input.brand_slug),
     "Reorder one category or one brand at a time."
   )
+
+// The product editor and table: chat components the owner fills in and
+// saves themselves (Server Actions), so these tools save nothing.
+
+/** What the agent already knows about a product, to prefill the editor. */
+export const productDraftSchema = productInputSchema
+  .omit({ id: true, sort_order: true })
+  .partial()
+
+/** The editor's starting record, as products__open_editor returns it. */
+export const openedProductSchema = productDraftSchema.extend({
+  id: z.uuid().optional(),
+})
+
+export const openProductEditorInputSchema = z.object({
+  id: z
+    .uuid()
+    .optional()
+    .describe("An existing product's id to edit it; omit to add a new one."),
+  draft: productDraftSchema
+    .optional()
+    .describe(
+      "Fields to prefill, over the saved record when editing: whatever the owner told you or you drafted (copy from the copywriter, alt text for attached photos). Leave out what you don't know."
+    ),
+})
+
+export const openProductTableInputSchema = z.object({
+  search: z
+    .string()
+    .max(80)
+    .optional()
+    .describe("Part of a product, brand, or category name."),
+  category_slug: slug.optional(),
+  brand_slug: slug.optional(),
+  condition: z.enum(["New", "Demo", "Used"]).optional(),
+  status: z.enum(["draft", "published"]).optional(),
+})
+
+/** One product's short fields, as changed in the product table. */
+export const productQuickEditSchema = z
+  .object({
+    id: z.uuid(),
+    price_cents: z.int().positive().optional(),
+    condition: z.enum(["New", "Demo", "Used"]).optional(),
+    ready_for_audition: z.boolean().optional(),
+    status: z.enum(["draft", "published"]).optional(),
+  })
+  .refine(
+    (edit) =>
+      Object.entries(edit).some(
+        ([key, value]) => key !== "id" && value !== undefined
+      ),
+    "Change at least one field."
+  )
+
+export const productQuickEditsSchema = z
+  .array(productQuickEditSchema)
+  .min(1)
+  .max(200)
 
 // News posts: body blocks follow NewsBlock in lib/news.ts, with image `src`
 // as a media path.
@@ -370,6 +435,12 @@ export type DeleteHoursChangeInput = z.infer<
 export type ProductInput = z.infer<typeof productInputSchema>
 export type DeleteProductInput = z.infer<typeof deleteProductInputSchema>
 export type ReorderProductsInput = z.infer<typeof reorderProductsInputSchema>
+export type ProductDraft = z.infer<typeof productDraftSchema>
+export type OpenProductEditorInput = z.infer<
+  typeof openProductEditorInputSchema
+>
+export type OpenProductTableInput = z.infer<typeof openProductTableInputSchema>
+export type ProductQuickEdit = z.infer<typeof productQuickEditSchema>
 export type NewsBlockInput = z.infer<typeof newsBlockSchema>
 export type NewsPostInput = z.infer<typeof newsPostInputSchema>
 export type DeleteNewsPostInput = z.infer<typeof deleteNewsPostInputSchema>

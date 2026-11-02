@@ -8,8 +8,14 @@ import {
   ProductOrderMismatch,
   saveProductOrder,
 } from "@/lib/admin/product-order"
-import { reorderProductsInputSchema } from "@/lib/admin/schemas"
-import { CATALOG_CACHE_TAG } from "@/lib/catalog-data"
+import { saveProduct, saveProductQuickEdits } from "@/lib/admin/product-save"
+import {
+  productInputSchema,
+  productQuickEditsSchema,
+  reorderProductsInputSchema,
+} from "@/lib/admin/schemas"
+import { writeCardLine } from "@/lib/admin/card-line"
+import { CATALOG_CACHE_TAG, getCatalogTaxonomy } from "@/lib/catalog-data"
 import { DEALS_CACHE_TAG } from "@/lib/deals-data"
 import { NEWS_CACHE_TAG } from "@/lib/news-data"
 import { STORE_HOURS_CACHE_TAG } from "@/lib/store-hours-data"
@@ -143,5 +149,122 @@ export async function saveArrangedOrder(
       }
     }
     return { error: "Couldn’t save the order. Try again." }
+  }
+}
+
+/** A save the owner can act on: why it failed, field by field if it can. */
+class OwnerError extends Error {
+  constructor(
+    message: string,
+    readonly field?: string
+  ) {
+    super(message)
+  }
+}
+
+// Database errors, worded for the owner rather than the model.
+function ownerFail(what: string, error: { code?: string; message: string }) {
+  if (/jwt/i.test(error.message) || error.code?.startsWith("PGRST30")) {
+    return new OwnerError("Your session expired. Reload the page to sign in.")
+  }
+  if (error.code === "23505") {
+    return new OwnerError("Another product already uses this address.", "slug")
+  }
+  if (error.code === "23503") {
+    return new OwnerError("Pick a category and a brand from the lists.")
+  }
+  if (error.code === "42501") {
+    return new OwnerError("Only site admins can save products.")
+  }
+  return new OwnerError(`${what} couldn’t be saved: ${error.message}`)
+}
+
+/** The first problem with each field, keyed by the field's name. */
+function fieldErrors(issues: { path: PropertyKey[]; message: string }[]) {
+  const fields: Record<string, string> = {}
+  for (const issue of issues) {
+    const field = String(issue.path[0] ?? "")
+    if (field && !fields[field]) fields[field] = issue.message
+  }
+  return fields
+}
+
+export type ProductSaveResult =
+  | { error: string; fields?: Record<string, string> }
+  | { id: string; slug: string; images: string[]; short_description: string }
+
+/**
+ * Saves a product from the chat's product editor, as the signed-in admin
+ * (RLS). The owner filled it in and pressed Save, which is their approval,
+ * so it doesn't go back to the agent first. Validated with the same schema
+ * as the agent's products__save_product, and saved by the same code. A
+ * missing card line is written first, from the description, by the fast
+ * copywriting model.
+ */
+export async function saveProductFromEditor(
+  input: unknown
+): Promise<ProductSaveResult> {
+  if (!(await getAdmin())) return { error: "Sign in as an admin." }
+  const parsed = productInputSchema.safeParse(input)
+  if (!parsed.success) {
+    return {
+      error: "Check the marked fields.",
+      fields: fieldErrors(parsed.error.issues),
+    }
+  }
+  const product = parsed.data
+  if (!product.short_description.trim()) {
+    const { categories, brands } = await getCatalogTaxonomy()
+    product.short_description = await writeCardLine({
+      name: product.name,
+      brand:
+        brands.find((brand) => brand.slug === product.brand_slug)?.name ?? "",
+      category:
+        categories.find((category) => category.slug === product.category_slug)
+          ?.name ?? "",
+      condition: product.condition,
+      description: product.description,
+    })
+  }
+  try {
+    const saved = await saveProduct(await sessionSupabase(), product, ownerFail)
+    updateTag(CATALOG_CACHE_TAG)
+    return { ...saved, short_description: product.short_description }
+  } catch (error) {
+    if (error instanceof OwnerError) {
+      return {
+        error: error.message,
+        ...(error.field && { fields: { [error.field]: error.message } }),
+      }
+    }
+    return { error: "Couldn’t save the product. Try again." }
+  }
+}
+
+/**
+ * Saves the short fields changed in the chat's product table (price,
+ * condition, audition, status), as the signed-in admin (RLS).
+ */
+export async function saveProductTableEdits(
+  edits: unknown
+): Promise<{ error: string } | { saved: number }> {
+  if (!(await getAdmin())) return { error: "Sign in as an admin." }
+  const parsed = productQuickEditsSchema.safeParse(edits)
+  if (!parsed.success) return { error: "Some of these changes aren’t valid." }
+  try {
+    const result = await saveProductQuickEdits(
+      await sessionSupabase(),
+      parsed.data,
+      ownerFail
+    )
+    updateTag(CATALOG_CACHE_TAG)
+    return result
+  } catch (error) {
+    return {
+      error:
+        error instanceof OwnerError
+          ? error.message
+          : "Couldn’t save these changes. Try again.",
+    }
   }
 }

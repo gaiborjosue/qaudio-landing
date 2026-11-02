@@ -1,7 +1,7 @@
 import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
+import { saveProduct } from "../../lib/admin/product-save"
 import { productInputSchema } from "../../lib/admin/schemas"
-import { placeUploads } from "../lib/media"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
@@ -20,67 +20,16 @@ export default defineTool({
     start: ({ id, name }) => (id ? `Edit ${name}` : `Add ${name}`),
     complete: (input) => `Saved ${input.name}`,
   },
-  async execute({ id, images, ...fields }, ctx) {
-    const supabase = callerSupabase(ctx)
-    // Move newly uploaded photos into products/ before any row points at them.
-    const place = await placeUploads(
-      supabase,
-      images.map((image) => image.path),
-      "products"
-    )
-    const row = {
-      ...fields,
-      name: fields.name.trim(),
-      short_description: fields.short_description.trim(),
-      description_intro: fields.description_intro.trim(),
-      description_closing: fields.description_closing.trim(),
-    }
-    const result = id
-      ? await supabase
-          .from("products")
-          .update(row)
-          .eq("id", id)
-          .select("id, slug")
-      : await supabase.from("products").insert(row).select("id, slug")
-    if (result.error) throw failure("Product", result.error)
-    const product = result.data[0]
-    if (!product) {
-      throw new Error(
-        "Product: no product with that id. Look it up again with products__list_catalog."
-      )
-    }
-
-    // Photos are keyed by position, so an upsert rewrites each slot in place
-    // and the delete trims slots past the new list.
-    if (images.length > 0) {
-      const upserted = await supabase.from("product_images").upsert(
-        images.map((image, sort_order) => ({
-          product_id: product.id,
-          sort_order,
-          path: place(image.path),
-          alt: image.alt.trim(),
-          width: image.width,
-          height: image.height,
-        })),
-        { onConflict: "product_id,sort_order" }
-      )
-      if (upserted.error) throw failure("Product photos", upserted.error)
-    }
-    const trimmed = await supabase
-      .from("product_images")
-      .delete()
-      .eq("product_id", product.id)
-      .gte("sort_order", images.length)
-    if (trimmed.error) throw failure("Product photos", trimmed.error)
-
+  async execute(input, ctx) {
+    const saved = await saveProduct(callerSupabase(ctx), input, failure)
     return {
       saved: true,
-      id: product.id,
-      slug: product.slug,
-      status: fields.status,
-      url: `/products/${product.slug}`,
+      id: saved.id,
+      slug: saved.slug,
+      status: input.status,
+      url: `/products/${saved.slug}`,
       // Saved photo paths; use these (not uploads/) in later edits.
-      images: images.map((image) => place(image.path)),
+      images: saved.images,
       revalidate: ["catalog"],
     }
   },

@@ -8,6 +8,7 @@ import {
   type AdminSchedule,
 } from "@/lib/admin/preview"
 import { toStoreDateTime } from "@/lib/admin/store-time"
+import { descriptionFromColumns } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
 import { publicSupabase } from "@/lib/supabase/public"
 import { sessionSupabase } from "@/lib/supabase/server"
@@ -73,12 +74,32 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
     .order("sort_order")
     .order("id")
   if (error) throw new Error(`Admin products: ${error.message}`)
-  return data.map(({ product_images, ...product }) => ({
-    ...product,
-    images: product_images
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map(({ path, ...image }) => ({ ...image, src: mediaUrl(path) })),
-  }))
+  return data.map(
+    ({
+      product_images,
+      description_intro,
+      features,
+      description_closing,
+      ...product
+    }) => ({
+      ...product,
+      description: descriptionFromColumns({
+        description_intro,
+        features,
+        description_closing,
+      }),
+      images: product_images
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map(({ id, path, alt, width, height }) => ({
+          id,
+          path,
+          alt,
+          width,
+          height,
+          src: mediaUrl(path),
+        })),
+    })
+  )
 }
 
 /**

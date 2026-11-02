@@ -1,0 +1,139 @@
+import type { AdminProduct } from "./preview"
+import type { ProductDraft, ProductInput } from "./schemas"
+
+// The product editor's form state: what the owner types, before it's a
+// ProductInput. Prices stay as typed ("1,299") until Save turns them into
+// cents.
+
+export type EditorPhoto = {
+  path: string
+  alt: string
+  width: number
+  height: number
+}
+
+export type ProductValues = {
+  /** Set once the product exists; Save then edits it. */
+  id?: string
+  name: string
+  slug: string
+  category_slug: string
+  brand_slug: string
+  condition: ProductInput["condition"]
+  ready_for_audition: boolean
+  status: ProductInput["status"]
+  /** Dollars as typed. */
+  price: string
+  msrp: string
+  price_unit: ProductInput["price_unit"]
+  /** The card line; empty means Save has it written from the description. */
+  short_description: string
+  /** Markdown. */
+  description: string
+  manufacturer_url: string
+  images: EditorPhoto[]
+}
+
+const dollars = (cents: number | null | undefined) =>
+  cents ? String(cents / 100) : ""
+
+/** The editor's starting values: a saved record or draft, with defaults. */
+export function valuesFrom(
+  record: ProductDraft & { id?: string } = {}
+): ProductValues {
+  return {
+    id: record.id,
+    name: record.name ?? "",
+    slug: record.slug ?? "",
+    category_slug: record.category_slug ?? "",
+    brand_slug: record.brand_slug ?? "",
+    condition: record.condition ?? "New",
+    ready_for_audition: record.ready_for_audition ?? false,
+    status: record.status ?? "draft",
+    price: dollars(record.price_cents),
+    msrp: dollars(record.msrp_cents),
+    price_unit: record.price_unit ?? "each",
+    short_description: record.short_description ?? "",
+    description: record.description ?? "",
+    manufacturer_url: record.manufacturer_url ?? "",
+    images: record.images ?? [],
+  }
+}
+
+/** A product from the page's data, as the editor starts it. */
+export function valuesFromProduct(product: AdminProduct): ProductValues {
+  return valuesFrom({
+    id: product.id,
+    slug: product.slug,
+    name: product.name,
+    category_slug: product.category.slug,
+    brand_slug: product.brand.slug,
+    condition: product.condition as ProductInput["condition"],
+    ready_for_audition: product.ready_for_audition,
+    status: product.status as ProductInput["status"],
+    price_cents: product.price_cents,
+    msrp_cents: product.msrp_cents,
+    price_unit: product.price_unit as ProductInput["price_unit"],
+    short_description: product.short_description,
+    description: product.description,
+    manufacturer_url: product.manufacturer_url,
+    images: product.images.map(({ path, alt, width, height }) => ({
+      path,
+      alt,
+      width,
+      height,
+    })),
+  })
+}
+
+/** "$1,299.50" or "1299.5" as cents; NaN when it isn't a price. */
+export function parseDollars(text: string) {
+  const clean = text.replace(/[$,\s]/g, "")
+  if (!/^\d+(\.\d{1,2})?$/.test(clean)) return Number.NaN
+  return Math.round(Number(clean) * 100)
+}
+
+/** "Rega Planar 3" → "rega-planar-3": a slug from a name. */
+export function slugify(text: string) {
+  return text
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120)
+    .replace(/-+$/, "")
+}
+
+/**
+ * The record Save sends, before validation (productInputSchema checks it on
+ * both sides). Empty optional fields become null; a photo without alt text
+ * gets the product's name, so a missing description never blocks a save.
+ */
+export function inputFromValues(values: ProductValues) {
+  const msrp = values.msrp.trim()
+  const name = values.name.trim()
+  return {
+    ...(values.id && { id: values.id }),
+    slug: values.slug.trim(),
+    category_slug: values.category_slug,
+    brand_slug: values.brand_slug,
+    name,
+    short_description: values.short_description.trim(),
+    description: values.description.trim(),
+    price_cents: parseDollars(values.price),
+    msrp_cents: msrp ? parseDollars(msrp) : null,
+    price_unit: values.price_unit,
+    condition: values.condition,
+    ready_for_audition: values.ready_for_audition,
+    manufacturer_url: values.manufacturer_url.trim() || null,
+    status: values.status,
+    images: values.images.map((image, index) => ({
+      ...image,
+      alt:
+        image.alt.trim() ||
+        (index === 0 ? name : `${name}, photo ${index + 1}`) ||
+        "Product photo",
+    })),
+  }
+}
