@@ -2,13 +2,57 @@ import "server-only"
 import { connection } from "next/server"
 import {
   toDayHours,
+  type AdminDealItem,
+  type AdminNewsItem,
   type AdminProduct,
   type AdminSchedule,
 } from "@/lib/admin/preview"
+import { toStoreDateTime } from "@/lib/admin/store-time"
 import { mediaUrl } from "@/lib/media"
 import { publicSupabase } from "@/lib/supabase/public"
 import { sessionSupabase } from "@/lib/supabase/server"
 import type { DayHours } from "@/lib/store-hours"
+
+/**
+ * Every news post, drafts and scheduled ones included, newest first, read
+ * as the admin for the Edit menu.
+ */
+export async function getAdminNews(): Promise<AdminNewsItem[]> {
+  const supabase = await sessionSupabase()
+  const { data, error } = await supabase
+    .from("news_posts")
+    .select("id, title, status, published_at")
+    .order("published_at", { ascending: false, nullsFirst: true })
+    .limit(200)
+  if (error) throw new Error(`Admin news: ${error.message}`)
+  return data.map((post) => ({
+    id: post.id,
+    title: post.title,
+    status: post.status,
+    publishedAt: post.published_at && toStoreDateTime(post.published_at),
+  }))
+}
+
+/**
+ * Every QDeal promotion (drafts, scheduled, live, and expired), in /qdeal's
+ * order, read as the admin for the Edit menu.
+ */
+export async function getAdminDeals(): Promise<AdminDealItem[]> {
+  const supabase = await sessionSupabase()
+  const { data, error } = await supabase
+    .from("deals")
+    .select("id, title, status, starts_at, ends_at")
+    .order("sort_order")
+    .order("created_at")
+  if (error) throw new Error(`Admin deals: ${error.message}`)
+  return data.map((deal) => ({
+    id: deal.id,
+    title: deal.title,
+    status: deal.status,
+    startsAt: deal.starts_at && toStoreDateTime(deal.starts_at),
+    endsAt: deal.ends_at && toStoreDateTime(deal.ends_at),
+  }))
+}
 
 /**
  * Every product, drafts included, in the shop's order, read fresh as the

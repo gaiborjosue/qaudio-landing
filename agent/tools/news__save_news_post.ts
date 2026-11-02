@@ -11,6 +11,7 @@ import { placeUploads } from "../lib/media"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Add a news post, or replace an existing one by id. Send the complete post: title, slug, every body block, the cover, status, and published_at. The card excerpt is written automatically from the body. The owner sees the news card and article preview and must approve before anything is saved.",
   inputSchema: newsPostInputSchema,
@@ -77,7 +78,7 @@ export default defineTool({
     const saved = result.data[0]
     if (!saved) {
       throw new Error(
-        "News post: no post with that id. Look it up again with list_news."
+        "News post: no post with that id. Look it up again with news__list_news."
       )
     }
     const live =

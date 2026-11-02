@@ -1,9 +1,16 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import {
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+  type RefObject,
+} from "react"
 import Image from "next/image"
+import { previewToolName } from "@/lib/admin/tool-names"
 import { useRouter } from "next/navigation"
-import { ArrowUp, ImagePlus, Square, X } from "lucide-react"
+import { ArrowUp, ImagePlus, Pencil, Square, X } from "lucide-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Streamdown } from "streamdown"
 import {
@@ -14,19 +21,40 @@ import {
   type Interaction,
   type UseEveAgentReturn,
 } from "eve/react"
-import { refreshSiteContent, signOut } from "@/app/admin/actions"
+import {
+  refreshSiteContent,
+  saveArrangedOrder,
+  signOut,
+} from "@/app/admin/actions"
 import {
   ChangePreview,
   SAVE_TOOLS,
   type PreviewData,
 } from "@/components/admin/change-preview"
 import { SchedulePicker } from "@/components/admin/schedule-picker"
+import { CopyAction, MessageAction } from "@/components/admin/message-actions"
+import { orderScope, ProductOrder } from "@/components/admin/product-order"
+import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
+import { Steps } from "@/components/admin/steps"
+import { ChromaticButton } from "@/components/chromatic-button"
+import { Bubble, BubbleContent } from "@/components/ui/bubble"
+import { Message, MessageContent, MessageFooter } from "@/components/ui/message"
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from "@/components/ui/message-scroller"
+import { TooltipProvider } from "@/components/ui/tooltip"
 import { UploadDropzone } from "@/components/ui/upload-dropzone"
 import {
   discardUpload,
   PHOTO_MAX_BYTES,
   uploadPhoto,
 } from "@/lib/admin/photo-upload"
+import { reorderProductsInputSchema } from "@/lib/admin/schemas"
 import { formatStoreDateTime } from "@/lib/admin/store-time"
 import { mediaUrl } from "@/lib/media"
 import { browserSupabase } from "@/lib/supabase/browser"
@@ -129,45 +157,93 @@ export function AdminChat({
     setEnding(false)
   }
 
+  // Quick actions send the owner's opening line, as if typed, and the agent
+  // takes it from there. An Edit choice adds a hidden "Item:" line naming the
+  // exact item (the bubble drops it, like "Photo uploaded:").
+  const ask: Ask = (text, item) =>
+    void agent.send(item ? `${text}\nItem: ${item}` : text)
+
+  // The composer's text lives here so a sent message's Edit can put its
+  // words back in the field.
+  const [draft, setDraft] = useState("")
+  const field = useRef<HTMLTextAreaElement>(null)
+  const edit = (text: string) => {
+    setDraft(text)
+    field.current?.focus()
+  }
+
   return (
     // Morphs and other Motion animations go instant under reduced motion.
     <MotionConfig reducedMotion="user">
-      <div className={styles.chat}>
-        <header className={styles.header}>
-          <Image
-            src="/qaudio-logo.svg"
-            alt="Q Audio"
-            width={30}
-            height={36}
-            loading="eager"
-          />
-          <h1>Tune</h1>
-          <span className={styles.email}>{email}</span>
-          <button
-            type="button"
-            className={styles.quiet}
-            disabled={ending}
-            onClick={newChat}
-          >
-            New chat
-          </button>
-          <form action={signOut}>
-            <button type="submit" className={styles.quiet}>
-              Sign out
-            </button>
-          </form>
-        </header>
+      <TooltipProvider>
+        <div className={styles.workspace}>
+          <div className={styles.chat}>
+            <header className={styles.header}>
+              <Image
+                src="/qaudio-logo.svg"
+                alt="Q Audio"
+                width={30}
+                height={36}
+                loading="eager"
+              />
+              <h1>Tune</h1>
+              <span className={styles.email}>{email}</span>
+              <button
+                type="button"
+                className={styles.quiet}
+                disabled={ending}
+                onClick={newChat}
+              >
+                New chat
+              </button>
+              <form action={signOut}>
+                <button type="submit" className={styles.quiet}>
+                  Sign out
+                </button>
+              </form>
+            </header>
 
-        <Conversation agent={agent} preview={preview} busy={busy} />
+            <Conversation
+              agent={agent}
+              preview={preview}
+              busy={busy}
+              onEdit={edit}
+            />
 
-        {agent.error && (
-          <p className={styles.error} role="alert">
-            {agent.error.message}
-          </p>
-        )}
+            {agent.error && (
+              <p className={styles.error} role="alert">
+                {agent.error.message}
+              </p>
+            )}
 
-        <Composer agent={agent} disabled={resuming} busy={busy} />
-      </div>
+            {/* Quick actions, at the top left of the message field. Outside
+                the composer's form, so Enter in a list's search can't send
+                the message. Stroke on: the white menus need their hairline
+                on this light grey page. */}
+            <div
+              className={styles.quickActions}
+              role="group"
+              aria-label="Quick actions"
+              data-stroke="on"
+            >
+              <QuickMenus
+                preview={preview}
+                ask={ask}
+                disabled={resuming || ending}
+              />
+            </div>
+
+            <Composer
+              agent={agent}
+              disabled={resuming}
+              busy={busy}
+              text={draft}
+              onText={setDraft}
+              field={field}
+            />
+          </div>
+        </div>
+      </TooltipProvider>
     </MotionConfig>
   )
 }
@@ -176,162 +252,269 @@ function Conversation({
   agent,
   preview,
   busy,
+  onEdit,
 }: {
   agent: Agent
   preview: PreviewData
   busy: boolean
+  onEdit: (text: string) => void
 }) {
-  const log = useRef<HTMLDivElement>(null)
-  const pinned = useRef(true)
-
-  // Follow new output while the reader is at the bottom.
-  useEffect(() => {
-    const node = log.current
-    if (node && pinned.current) node.scrollTop = node.scrollHeight
-  }, [agent.messages])
-
+  const ownerSaved = ownerSavedOrders(agent.messages)
   return (
-    <div
-      ref={log}
-      className={styles.log}
-      role="log"
-      aria-label="Conversation"
-      aria-busy={busy}
-      onScroll={(event) => {
-        const node = event.currentTarget
-        pinned.current =
-          node.scrollHeight - node.scrollTop - node.clientHeight < 80
-      }}
-    >
-      <div className={styles.assistant}>
-        <p>{WELCOME}</p>
-      </div>
-      {agent.messages.length === 0 && agent.status !== "resuming" && (
-        <p className={styles.empty}>
-          Ask for a change: hours, a holiday closure, a product, a news post, or
-          a deal.
-        </p>
-      )}
-      {agent.messages.map((message) => (
-        <MessageView
-          key={message.id}
-          message={message}
-          agent={agent}
-          preview={preview}
-        />
-      ))}
-      {busy && (
-        <p className={styles.working} role="status">
-          Working…
-        </p>
-      )}
-    </div>
+    // Each of the owner's messages anchors its turn near the top, the reply
+    // streams in below it and is followed while the reader stays at the
+    // live edge, and a reopened chat opens at its last turn.
+    <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
+      <MessageScroller>
+        <MessageScrollerViewport aria-label="Conversation">
+          <MessageScrollerContent className={styles.log} aria-busy={busy}>
+            <MessageScrollerItem>
+              <Message className={styles.message}>
+                <MessageContent className={styles.reply}>
+                  <p>{WELCOME}</p>
+                </MessageContent>
+              </Message>
+            </MessageScrollerItem>
+            {agent.messages.length === 0 && agent.status !== "resuming" && (
+              <MessageScrollerItem className={styles.emptyState}>
+                <p className={styles.empty}>
+                  Ask for a change: hours, a holiday closure, a product, a news
+                  post, or a deal.
+                </p>
+              </MessageScrollerItem>
+            )}
+            {agent.messages.map((message) => (
+              <MessageScrollerItem
+                key={message.id}
+                messageId={message.id}
+                scrollAnchor={message.role === "user"}
+              >
+                <MessageView
+                  message={message}
+                  agent={agent}
+                  preview={preview}
+                  ownerSaved={ownerSaved}
+                  onEdit={onEdit}
+                />
+              </MessageScrollerItem>
+            ))}
+            {busy && (
+              <MessageScrollerItem>
+                <p className={styles.working} role="status">
+                  Working…
+                </p>
+              </MessageScrollerItem>
+            )}
+          </MessageScrollerContent>
+        </MessageScrollerViewport>
+        <MessageScrollerButton className="motion-reduce:transition-none" />
+      </MessageScroller>
+    </MessageScrollerProvider>
   )
 }
 
-const PHOTO_LINE = /^Photo uploaded: .*$/gm
+// Lines meant for the agent, not the bubble: uploaded photos, the item an
+// Edit-menu choice names, and a product order the owner arranged and saved
+// on a reorder card ("Order:" is the earlier form, kept for old chats).
+const HIDDEN_LINE = /^(Photo uploaded|Item|Order|Order saved): .*$/gm
+const ORDER_SAVED = /^Order saved: (.+)$/m
+
+/**
+ * Reorder cards the owner rearranged and saved themselves, by tool call: an
+ * "Order saved:" message belongs to the latest reorder card before it. Read
+ * from the conversation, so a reopened chat shows them saved too.
+ */
+function ownerSavedOrders(messages: readonly EveMessage[]) {
+  const saved = new Map<string, string[]>()
+  let card: string | null = null
+  for (const message of messages) {
+    for (const part of message.parts) {
+      if (
+        part.type === "tool" &&
+        previewToolName(part.name) === "reorder_products"
+      ) {
+        card = part.callId
+      } else if (message.role === "user" && part.type === "text" && card) {
+        const line = part.text.match(ORDER_SAVED)?.[1]
+        if (!line) continue
+        try {
+          const input = reorderProductsInputSchema.safeParse(JSON.parse(line))
+          if (input.success) saved.set(card, input.data.product_ids)
+        } catch {
+          // Not an order; leave the card as it is.
+        }
+        card = null
+      }
+    }
+  }
+  return saved
+}
+
+/** A message's words; the owner's without the lines meant for the agent. */
+function messageText(message: EveMessage) {
+  return message.parts
+    .flatMap((part) => {
+      if (part.type !== "text") return []
+      return message.role === "user"
+        ? part.text.replace(HIDDEN_LINE, "").trim()
+        : part.text.trim()
+    })
+    .filter(Boolean)
+    .join("\n\n")
+}
+
+type ReplyPart = EveMessage["parts"][number]
+
+/** A working step: a call that's neither a change card nor an open question. */
+const isStep = (part: ReplyPart): part is EveToolPart =>
+  part.type === "tool" &&
+  !SAVE_TOOLS.has(part.name) &&
+  part.interaction?.status !== "open"
+
+/**
+ * A reply's parts in order, with each run of working steps gathered into
+ * one. Parts that draw nothing (control calls, reasoning, files) are left
+ * out, so they don't split a run.
+ */
+function replyRuns(parts: readonly ReplyPart[]) {
+  const runs: (
+    | { part: ReplyPart; index: number; steps?: undefined }
+    | { part?: undefined; index?: undefined; steps: EveToolPart[] }
+  )[] = []
+  parts.forEach((part, index) => {
+    if (part.type === "tool" && part.kind === "control") return
+    if (part.type === "reasoning" || part.type === "file") return
+    if (isStep(part)) {
+      const last = runs.at(-1)
+      if (last?.steps) last.steps.push(part)
+      else runs.push({ steps: [part] })
+      return
+    }
+    runs.push({ part, index })
+  })
+  return runs
+}
 
 function MessageView({
   message,
   agent,
   preview,
+  ownerSaved,
+  onEdit,
 }: {
   message: EveMessage
   agent: Agent
   preview: PreviewData
+  ownerSaved: Map<string, string[]>
+  onEdit: (text: string) => void
 }) {
+  const text = messageText(message)
+
   if (message.role === "user") {
+    const photos = message.parts.flatMap((part) =>
+      part.type === "file" && part.url && part.mediaType.startsWith("image/")
+        ? [part.url]
+        : []
+    )
     return (
-      <div className={styles.user}>
-        {message.parts.map((part, index) => {
-          if (part.type === "text") {
-            const text = part.text.replace(PHOTO_LINE, "").trim()
-            return text ? <p key={part.id ?? index}>{text}</p> : null
-          }
-          if (
-            part.type === "file" &&
-            part.url &&
-            part.mediaType.startsWith("image/")
-          ) {
-            return (
-              // eslint-disable-next-line @next/next/no-img-element -- uploaded photo of unknown size
-              <img
-                key={index}
-                className={styles.sentPhoto}
-                src={part.url}
-                alt=""
-              />
-            )
-          }
-          return null
-        })}
-      </div>
+      <Message align="end" className={styles.message}>
+        <MessageContent>
+          {photos.length > 0 && (
+            <div className={styles.sentPhotos}>
+              {photos.map((url, index) => (
+                // eslint-disable-next-line @next/next/no-img-element -- uploaded photo of unknown size
+                <img
+                  key={index}
+                  className={styles.sentPhoto}
+                  src={url}
+                  alt=""
+                />
+              ))}
+            </div>
+          )}
+          {text && (
+            <>
+              <Bubble align="end" variant="muted">
+                <BubbleContent className={styles.bubble}>{text}</BubbleContent>
+              </Bubble>
+              <MessageFooter>
+                <CopyAction text={text} />
+                <MessageAction label="Edit" onClick={() => onEdit(text)}>
+                  <Pencil aria-hidden="true" />
+                </MessageAction>
+              </MessageFooter>
+            </>
+          )}
+        </MessageContent>
+      </Message>
     )
   }
 
+  // Copy waits for the reply's text to finish arriving.
+  const writing = message.parts.some(
+    (part) => part.type === "text" && part.state === "streaming"
+  )
+
   return (
-    <div className={styles.assistant}>
-      {message.parts.map((part, index) => {
-        const key =
-          ("id" in part && part.id) ||
-          ("callId" in part && part.callId) ||
-          index
-        switch (part.type) {
-          case "text":
-            return (
-              <Streamdown
-                key={key}
-                className={styles.markdown}
-                mode={part.state === "streaming" ? "streaming" : "static"}
-                isAnimating={part.state === "streaming"}
-                // No code, table, or image buttons; links open as plain
-                // links (only the owner reads this chat).
-                controls={false}
-                linkSafety={{ enabled: false }}
-                skipHtml
-              >
-                {part.text}
-              </Streamdown>
-            )
-          case "tool":
-            if (part.kind === "control") return null
-            if (SAVE_TOOLS.has(part.name)) {
+    <Message className={styles.message}>
+      <MessageContent className={styles.reply}>
+        {replyRuns(message.parts).map(({ part, index, steps }) => {
+          if (steps) return <Steps key={steps[0].callId} parts={steps} />
+          const key =
+            ("id" in part && part.id) ||
+            ("callId" in part && part.callId) ||
+            index
+          switch (part.type) {
+            case "text":
               return (
-                <ChangeCard
+                <Streamdown
                   key={key}
-                  part={part}
-                  agent={agent}
-                  preview={preview}
-                />
+                  className={styles.markdown}
+                  mode={part.state === "streaming" ? "streaming" : "static"}
+                  isAnimating={part.state === "streaming"}
+                  // No code, table, or image buttons; links open as plain
+                  // links (only the owner reads this chat).
+                  controls={false}
+                  linkSafety={{ enabled: false }}
+                  skipHtml
+                >
+                  {part.text}
+                </Streamdown>
               )
-            }
-            if (part.interaction?.status === "open") {
-              return (
+            case "tool":
+              if (part.kind === "control") return null
+              if (SAVE_TOOLS.has(part.name)) {
+                return (
+                  <ChangeCard
+                    key={key}
+                    part={part}
+                    agent={agent}
+                    preview={preview}
+                    ownerSaved={ownerSaved.get(part.callId)}
+                  />
+                )
+              }
+              // Not a step, so it's a question still waiting for an answer.
+              return part.interaction ? (
                 <Prompt
                   key={key}
                   interaction={part.interaction}
                   agent={agent}
                 />
-              )
-            }
-            return <Activity key={key} part={part} />
-          case "interaction":
-            return <Prompt key={key} interaction={part} agent={agent} />
-          default:
-            return null
-        }
-      })}
-    </div>
-  )
-}
-
-function Activity({ part }: { part: EveToolPart }) {
-  const failed = part.state === "failed"
-  return (
-    <p className={styles.activity}>
-      {part.label}
-      {failed && ` — ${part.error?.message ?? "failed"}`}
-    </p>
+              ) : null
+            case "interaction":
+              return <Prompt key={key} interaction={part} agent={agent} />
+            default:
+              return null
+          }
+        })}
+        {text && !writing && (
+          <MessageFooter className={styles.replyFooter}>
+            <CopyAction text={text} />
+          </MessageFooter>
+        )}
+      </MessageContent>
+    </Message>
   )
 }
 
@@ -356,44 +539,121 @@ function ChangeCard({
   part,
   agent,
   preview,
+  ownerSaved,
 }: {
   part: EveToolPart
   agent: Agent
   preview: PreviewData
+  /** The order the owner arranged on this reorder card and saved. */
+  ownerSaved?: string[]
 }) {
   const interaction = part.interaction
-  const pending = interaction?.status === "open"
+  const pending = !ownerSaved && interaction?.status === "open"
   const output = part.output as { url?: unknown } | undefined
   const pageUrl =
     part.state === "completed" && typeof output?.url === "string"
       ? output.url
       : null
 
+  // A proposed product order can be rearranged here. A changed order is the
+  // owner's own decision, so "Save this order" saves it directly (a Server
+  // Action, as the admin) rather than asking for a second approval, then
+  // tells the agent with a hidden "Order saved:" line. That message
+  // withdraws the agent's proposal, and this card shows the saved order.
+  const [arranged, setArranged] = useState<string[] | null>(null)
+  const [saving, startSaving] = useTransition()
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const order =
+    pending && previewToolName(part.name) === "reorder_products"
+      ? reorderProductsInputSchema.safeParse(part.input).data
+      : undefined
+  const known = new Set(preview.products.map((product) => product.id))
+  const sortable = order?.product_ids.every((id) => known.has(id)) ?? false
+  const changed =
+    order !== undefined &&
+    arranged !== null &&
+    arranged.join() !== order.product_ids.join()
+  const shownInput =
+    ownerSaved && part.input
+      ? { ...(part.input as object), product_ids: ownerSaved }
+      : changed
+        ? { ...order, product_ids: arranged }
+        : part.input
+
+  const saveArranged = () => {
+    if (!order || !arranged) return
+    const input = { ...order, product_ids: arranged }
+    setSaveError(null)
+    startSaving(async () => {
+      const result = await saveArrangedOrder(input)
+      if ("error" in result) {
+        setSaveError(result.error)
+        return
+      }
+      await agent.send(
+        `I saved ${orderScope(order, preview.taxonomy)} in the order I arranged.\nOrder saved: ${JSON.stringify(input)}`
+      )
+    })
+  }
+
   return (
     <section
       className={styles.card}
-      data-state={part.state}
+      data-state={ownerSaved ? "completed" : part.state}
       aria-label={part.label}
     >
       <header className={styles.cardHeader}>
         <h2>{interaction?.request.prompt ?? part.label}</h2>
         <span className={styles.status}>
-          {CHANGE_STATUS[part.state] ?? part.state}
+          {ownerSaved ? "Saved" : (CHANGE_STATUS[part.state] ?? part.state)}
         </span>
       </header>
+      {order && sortable && (
+        <ProductOrder
+          ids={arranged ?? order.product_ids}
+          products={preview.products}
+          onReorder={setArranged}
+        />
+      )}
       {part.state !== "streaming" && part.input !== undefined && (
         <details className={styles.preview} open={pending || undefined}>
           <summary>Preview</summary>
-          <ChangePreview tool={part.name} input={part.input} data={preview} />
+          <ChangePreview tool={part.name} input={shownInput} data={preview} />
         </details>
       )}
       {part.state === "failed" && part.error && (
         <p className={styles.error}>{part.error.message}</p>
       )}
+      {saveError && (
+        <p className={styles.error} role="alert">
+          {saveError}
+        </p>
+      )}
       {pending && interaction && (
         <div className={styles.actions}>
-          <Options interaction={interaction} agent={agent} />
-          {part.name === "save_news_post" && (
+          {changed ? (
+            <div className={styles.options}>
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={saving || agent.status === "resuming"}
+                onClick={saveArranged}
+              >
+                {saving ? "Saving…" : "Save this order"}
+              </button>
+              <button
+                type="button"
+                className={styles.secondary}
+                disabled={saving}
+                onClick={() => setArranged(null)}
+              >
+                Reset
+              </button>
+            </div>
+          ) : (
+            <Options interaction={interaction} agent={agent} />
+          )}
+          {previewToolName(part.name) === "save_news_post" && (
             <SchedulePicker
               current={newsPublishAt(part.input)}
               disabled={agent.status === "resuming"}
@@ -406,7 +666,13 @@ function ChangeCard({
           )}
         </div>
       )}
-      {pending && <p className={styles.hint}>Or type what to change.</p>}
+      {pending && (
+        <p className={styles.hint}>
+          {order && sortable
+            ? "Drag to rearrange, or type what to change."
+            : "Or type what to change."}
+        </p>
+      )}
       {pageUrl && (
         <a
           className={styles.link}
@@ -523,12 +789,17 @@ function Composer({
   agent,
   disabled,
   busy,
+  text,
+  onText: setText,
+  field,
 }: {
   agent: Agent
   disabled: boolean
   busy: boolean
+  text: string
+  onText: (text: string) => void
+  field: RefObject<HTMLTextAreaElement | null>
 }) {
-  const [text, setText] = useState("")
   const [photos, setPhotos] = useState<Photo[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
@@ -798,6 +1069,7 @@ function Composer({
           Message
         </label>
         <textarea
+          ref={field}
           id="admin-message"
           rows={1}
           value={text}
@@ -831,16 +1103,33 @@ function Composer({
             <Square size={16} aria-hidden="true" />
           </button>
         )}
-        <button
+        <ChromaticButton
           type="submit"
           className={styles.send}
           aria-label="Send"
+          color="#b126ff"
+          colorMode="spectrum"
+          speed={0.7}
+          paused={false}
+          phase={0}
+          feather={100}
+          projectionScale={174.7}
+          intensity={0.9}
+          grain={0.105}
+          seed={7}
+          borderRadius={50}
+          hoverEffect="brighten"
+          entrance="blur-up"
+          entranceSpeed={1}
+          entranceBlur={10}
+          entranceDistance={20}
+          entranceScale={0.65}
           disabled={
             disabled || uploading || (!text.trim() && ready.length === 0)
           }
         >
           <ArrowUp size={20} aria-hidden="true" />
-        </button>
+        </ChromaticButton>
       </div>
     </form>
   )

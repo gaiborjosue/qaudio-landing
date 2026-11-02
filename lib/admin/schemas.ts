@@ -159,7 +159,7 @@ export const productInputSchema = z.object({
     .int()
     .optional()
     .describe(
-      "Lower shows first. Omit to keep an existing product's place; a new one without it gets 0 and shows first. Use reorder_products to arrange a whole listing."
+      "Lower shows first. Omit to keep an existing product's place; a new one without it gets 0 and shows first. Use products__reorder_products to arrange a whole listing."
     ),
   images: z
     .array(productImageInputSchema)

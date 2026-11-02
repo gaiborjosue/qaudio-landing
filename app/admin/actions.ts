@@ -4,6 +4,11 @@ import { headers } from "next/headers"
 import { redirect } from "next/navigation"
 import { updateTag } from "next/cache"
 import { getAdmin } from "@/lib/admin/auth"
+import {
+  ProductOrderMismatch,
+  saveProductOrder,
+} from "@/lib/admin/product-order"
+import { reorderProductsInputSchema } from "@/lib/admin/schemas"
 import { CATALOG_CACHE_TAG } from "@/lib/catalog-data"
 import { DEALS_CACHE_TAG } from "@/lib/deals-data"
 import { NEWS_CACHE_TAG } from "@/lib/news-data"
@@ -108,5 +113,35 @@ export async function refreshSiteContent(tags: string[]) {
   if (!Array.isArray(tags)) return
   for (const tag of new Set(tags)) {
     if (typeof tag === "string" && SITE_TAGS.has(tag)) updateTag(tag)
+  }
+}
+
+/**
+ * Saves a product order the owner arranged by hand on a reorder card, as the
+ * signed-in admin (RLS). Arranging it and pressing Save is the owner's
+ * approval, so it doesn't go back to the agent for another one.
+ */
+export async function saveArrangedOrder(
+  input: unknown
+): Promise<{ error: string } | { changed: number }> {
+  if (!(await getAdmin())) return { error: "Sign in as an admin." }
+  const parsed = reorderProductsInputSchema.safeParse(input)
+  if (!parsed.success) return { error: "That order isn’t valid." }
+  try {
+    const { changed } = await saveProductOrder(
+      await sessionSupabase(),
+      parsed.data,
+      (what, error) => new Error(`${what}: ${error.message}`)
+    )
+    updateTag(CATALOG_CACHE_TAG)
+    return { changed }
+  } catch (error) {
+    if (error instanceof ProductOrderMismatch) {
+      return {
+        error:
+          "These products changed since the list was made. Ask Tune for a fresh one.",
+      }
+    }
+    return { error: "Couldn’t save the order. Try again." }
   }
 }

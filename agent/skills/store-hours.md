@@ -2,6 +2,8 @@
 description: Use before changing the regular weekly hours or adding, editing, or removing a schedule change (special hours, holiday closures).
 ---
 
+Load these instructions with `eve__skill({ name: "store-hours" })`. Discover this group with `eve__search({ query: "hours__" })` unless its signatures are already in context. Execute the discovered tools with `eve__tool({ name, input })`, using their exact names and signatures. Read current data before writing; reuse discovery while its signatures remain in context. For requests spanning domains, also load the other skill and discover its group as needed.
+
 How the site's hours work:
 
 - The regular week has exactly seven days, Monday first. Each day is `open` (with `opens_at` before `closes_at`, 24-hour `HH:MM`), `appointment` (by appointment only), or `closed`. Only open days carry times.
@@ -11,8 +13,8 @@ How the site's hours work:
 
 Steps:
 
-1. Call `get_store_hours` for the current week, today's store date, and the existing changes with their ids.
+1. Call `hours__get_store_hours` for the current week, today's store date, and the existing changes with their ids.
 2. Resolve relative dates ("next Friday", "Thanksgiving week") against today's store date, and say the exact dates back when you propose.
-3. For the regular week, call `set_weekly_hours` with all seven days, unchanged days included.
-4. For a dated change, call `save_hours_change` (with `id` to edit one). To remove one, call `delete_hours_change` with its `id` and a short summary such as "Closed Nov 7–15".
+3. For the regular week, call `hours__set_weekly_hours` with all seven days, unchanged days included.
+4. For a dated change, call `hours__save_hours_change` (with `id` to edit one). To remove one, call `hours__delete_hours_change` with its `id` and a short summary such as "Closed Nov 7–15".
 5. "Closed on Monday" usually means one date (a schedule change), not the regular week. Ask if it's unclear.

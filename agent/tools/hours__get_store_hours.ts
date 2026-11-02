@@ -6,6 +6,7 @@ import { callerSupabase, failure } from "../lib/supabase"
 const hhmm = (time: string | null) => time?.slice(0, 5) ?? null
 
 export default defineTool({
+  deferred: true,
   description:
     "Read the store's regular weekly hours (Monday first) and every schedule change (special hours or closure) that hasn't ended, with ids. Read this before changing hours.",
   inputSchema: z.object({}),

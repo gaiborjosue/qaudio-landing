@@ -5,6 +5,7 @@ import { fromStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Add a QDeal promotion, or replace an existing one by id. Send the complete deal, including its whole product list in display order. The owner sees the deal card preview and must approve before anything is saved.",
   inputSchema: dealInputSchema,
@@ -36,7 +37,7 @@ export default defineTool({
     const saved = result.data[0]
     if (!saved) {
       throw new Error(
-        "Deal: no deal with that id. Look it up again with list_deals."
+        "Deal: no deal with that id. Look it up again with deals__list_deals."
       )
     }
 

@@ -4,6 +4,7 @@ import { toStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "List news posts, newest first, including drafts and scheduled posts, with optional filters. Use it to find a post's id or slug and to check that a new slug is free.",
   inputSchema: z.object({

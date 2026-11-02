@@ -4,6 +4,7 @@ import { deleteHoursChangeInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Remove a schedule change by id, so the regular hours apply again on its dates. The owner approves first.",
   inputSchema: deleteHoursChangeInputSchema,

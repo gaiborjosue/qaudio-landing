@@ -4,6 +4,7 @@ import { deleteDealInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Permanently delete a QDeal promotion and its products by id. To hide it but keep it, save it as a draft or let its end date pass. The owner approves first.",
   inputSchema: deleteDealInputSchema,

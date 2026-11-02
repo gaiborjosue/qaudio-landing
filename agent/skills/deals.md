@@ -2,6 +2,8 @@
 description: Use before adding, editing, scheduling, ending, or deleting a QDeal promotion or its products.
 ---
 
+Load these instructions with `eve__skill({ name: "deals" })`. Discover this group with `eve__search({ query: "deals__" })` unless its signatures are already in context. Execute the discovered tools with `eve__tool({ name, input })`, using their exact names and signatures. Read current data before writing; reuse discovery while its signatures remain in context. For requests spanning domains, also load the other skill and discover its group as needed.
+
 How QDeal works:
 
 - `/qdeal` lists live deals as cards, lowest `sort_order` first, above the page's fixed advice text. With no live deal, the page shows only the text.
@@ -11,7 +13,7 @@ How QDeal works:
 
 Steps:
 
-1. Call `list_deals` for every deal (drafts, scheduled, live, and expired) with ids, dates, and products.
+1. Call `deals__list_deals` for every deal (drafts, scheduled, live, and expired) with ids, dates, and products.
 2. Resolve dates ("through Black Friday weekend") against today's store date and say the exact times back. An end date usually means the end of that day: use `T23:59`.
-3. Call `save_deal` with the complete deal, including the whole product list in order (with `id` when editing). The owner previews the card and approves.
-4. To delete, call `delete_deal` with the id and title. Saving as a draft keeps it for next time.
+3. Call `deals__save_deal` with the complete deal, including the whole product list in order (with `id` when editing). The owner previews the card and approves.
+4. To delete, call `deals__delete_deal` with the id and title. Saving as a draft keeps it for next time.

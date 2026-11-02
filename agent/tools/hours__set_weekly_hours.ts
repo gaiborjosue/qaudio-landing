@@ -4,6 +4,7 @@ import { weeklyHoursInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Replace the regular weekly hours. Send all seven days, Monday first, including unchanged ones. The owner sees a preview of the site's hours list and must approve before anything is saved.",
   inputSchema: weeklyHoursInputSchema,

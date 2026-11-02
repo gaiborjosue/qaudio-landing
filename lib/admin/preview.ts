@@ -134,6 +134,24 @@ export function productFromInput(
 /** A catalog product with its status, for the admin's previews. */
 export type AdminProduct = Product & { status: string }
 
+/** A news post as the Edit menu lists it; dates are store time. */
+export type AdminNewsItem = {
+  id: string
+  title: string
+  status: string
+  /** "YYYY-MM-DDTHH:MM", or null for an undated draft. */
+  publishedAt: string | null
+}
+
+/** A QDeal promotion as the Edit menu lists it; dates are store time. */
+export type AdminDealItem = {
+  id: string
+  title: string
+  status: string
+  startsAt: string | null
+  endsAt: string | null
+}
+
 /**
  * The listed products in their proposed order, or the ids it can't show
  * (products added since the page loaded).

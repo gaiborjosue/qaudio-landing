@@ -130,12 +130,131 @@
 
 /* Chat */
 
+/* The chat column, centered. */
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 920px);
+  justify-content: center;
+}
+
+/* Quick actions: the Create and Edit pills at the top left of the message
+   field, their panels opening upward over the conversation. The composer
+   below brings its own 12px of top padding. */
+.quickActions {
+  padding: 8px 20px 0;
+}
+.quickMenus {
+  display: flex;
+  gap: 8px;
+}
+.quickMenus > * {
+  flex: none;
+}
+
+/* The Edit menu's lists (item-picker.tsx), inside the menu's panel, so
+   they use its ink (--on-slab). */
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  font-size: 13px;
+}
+.pickerSearch {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border-radius: var(--crt-row-r, 999px);
+  background: rgba(var(--on-slab-rgb), 0.05);
+  color: rgba(var(--on-slab-rgb), 0.6);
+}
+.pickerSearch:focus-within {
+  outline: 2px solid var(--on-slab);
+  outline-offset: -2px;
+}
+.pickerSearch input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--on-slab);
+  font: inherit;
+  outline: none;
+}
+.pickerList {
+  display: grid;
+  gap: 2px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+}
+.pickerList li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px 6px 14px;
+  border-radius: var(--crt-row-r, 12px);
+}
+.pickerList li:hover {
+  background: rgba(var(--on-slab-rgb), 0.05);
+}
+.pickerText {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+.pickerTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  line-height: 1.3;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.pickerMeta {
+  overflow: hidden;
+  color: rgba(var(--on-slab-rgb), 0.6);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pickerList button {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: rgba(var(--on-slab-rgb), 0.7);
+  cursor: pointer;
+}
+.pickerList button:hover {
+  background: rgba(var(--on-slab-rgb), 0.08);
+  color: var(--on-slab);
+}
+.pickerList button:focus-visible {
+  outline: 2px solid var(--on-slab);
+  outline-offset: -2px;
+}
+.pickerEmpty {
+  margin: 0;
+  padding: 6px 14px;
+  color: rgba(var(--on-slab-rgb), 0.6);
+}
+
 .chat {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto;
   height: 100svh;
-  max-width: 920px;
-  margin: 0 auto;
+  min-width: 0;
 }
 .header {
   display: flex;
@@ -157,13 +276,11 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The thread's rows (shadcn Message Scroller content; the scroller owns the
+   scrolling). */
 .log {
-  display: flex;
-  flex-direction: column;
   gap: 14px;
-  overflow-y: auto;
   padding: 24px 20px;
-  overscroll-behavior: contain;
 }
 .empty,
 .working {
@@ -175,27 +292,57 @@
   margin: auto 0;
   text-align: center;
 }
-.user,
-.assistant {
+/* an empty chat's hint */
+.emptyState {
   display: grid;
+  justify-items: center;
+  margin: auto 0;
+}
+.emptyState .empty {
+  margin: 0;
+}
+/* A turn (shadcn Message), at the chat's own type size rather than the
+   component's 12px. */
+.message {
+  font-size: inherit;
+  line-height: inherit;
+}
+/* The agent's turn: its reply, cards, and questions. */
+.reply {
   gap: 10px;
-  max-width: 100%;
 }
-.user {
-  justify-self: end;
-  align-self: flex-end;
-  max-width: min(560px, 85%);
-  padding: 10px 14px;
-  border-radius: 18px;
-  background: #ececec;
-}
-.user p,
-.assistant > p {
+.reply > p {
   margin: 0;
   font-size: 15px;
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* Copy under a reply. (Rows are paint-contained, so nothing here reaches
+   past the row's edges: no negative margin, and an inset focus ring.) */
+.replyFooter {
+  padding: 0;
+}
+/* The owner's words (shadcn Bubble, muted), in the chat's grey and size. */
+.bubble {
+  padding: 10px 14px;
+  border-radius: 18px;
+  background: #ececec;
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.sentPhotos {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: flex-end;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.messageAction:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
 }
 .sentPhoto {
   max-width: 220px;
@@ -203,10 +350,29 @@
   border-radius: 10px;
   object-fit: cover;
 }
-.activity {
-  margin: 0;
-  color: #6b6b6b;
+/* The agent's working steps (steps.tsx, on shadcn's Trace): one quiet row
+   that expands into the trail. Rows are paint-contained, so the trigger's
+   focus ring is drawn inside its own padding. */
+.step {
   font-size: 13px;
+  line-height: 1.5;
+}
+.stepsTrigger {
+  padding: 2px 6px;
+}
+.stepsTrigger:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.stepsTrail {
+  margin-left: 12px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .reply :global([data-slot="trace-collapsible-content"]),
+  .reply
+    :global([data-slot="trace-collapsible-trigger"] [data-slot="trace-icon"]) {
+    transition: none;
+  }
 }
 .error {
   margin: 0;
@@ -407,8 +573,7 @@
 .inputRow:focus-within {
   border-color: #111;
 }
-.iconButton,
-.send {
+.iconButton {
   display: grid;
   flex-shrink: 0;
   place-items: center;
@@ -420,9 +585,26 @@
   color: #111;
   cursor: pointer;
 }
-.send {
-  background: #111;
-  color: #fff;
+/* Keep the composer's circle while retaining Chromatic Button's material
+   and CSS fallback. Extra specificity beats the component's default size. */
+.send.send {
+  flex-shrink: 0;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font: inherit;
+}
+.send.send:disabled {
+  --chromatic-button-opacity: 0.4;
+  opacity: 0.4;
+  cursor: default;
+}
+.send.send:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
 }
 
 @media (max-width: 640px) {
@@ -441,6 +623,9 @@
   }
   .composer {
     padding: 10px 12px 14px;
+  }
+  .quickActions {
+    padding: 6px 12px 0;
   }
   .hoursPreview {
     padding: 20px 14px;
@@ -482,6 +667,39 @@
   border-radius: 5px;
   background: #f0f0f0;
   font-size: 13px;
+}
+
+/* A proposed product order to rearrange (product-order.tsx, on the
+   sortable list): each row a color photo, the name, and brand · price. */
+.order {
+  font-size: 14px;
+}
+.orderPhoto {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: #f4f4f4;
+  object-fit: contain;
+}
+.orderText {
+  display: grid;
+  flex: 1;
+  gap: 1px;
+  min-width: 0;
+}
+.orderName {
+  overflow: hidden;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.orderMeta {
+  overflow: hidden;
+  color: #6b6b6b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Approval actions, with the news schedule picker beside them. */

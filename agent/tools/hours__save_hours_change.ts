@@ -4,6 +4,7 @@ import { hoursChangeInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Add a schedule change (special hours, appointment-only days, or a closure for one or more dates), or edit one by id. It overrides the regular week for those dates and shows on the site as a schedule-change notice from 60 days before until it ends. The owner previews and approves it before it's saved.",
   inputSchema: hoursChangeInputSchema,
@@ -38,7 +39,7 @@ export default defineTool({
     const saved = result.data[0]
     if (!saved) {
       throw new Error(
-        "Schedule change: no change with that id. Read the hours again with get_store_hours."
+        "Schedule change: no change with that id. Read the hours again with hours__get_store_hours."
       )
     }
     return { saved: true, id: saved.id, revalidate: ["store-hours"] }

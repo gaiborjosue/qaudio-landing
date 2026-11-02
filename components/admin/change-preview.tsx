@@ -1,6 +1,7 @@
 "use client"
 
 import Image from "next/image"
+import { previewToolName } from "@/lib/admin/tool-names"
 import { DealCard } from "@/components/deal-card"
 import { NewsBody } from "@/components/news-body"
 import { NewsCard } from "@/components/news-card"
@@ -15,6 +16,8 @@ import {
   withChange,
   withWeek,
   withoutChange,
+  type AdminDealItem,
+  type AdminNewsItem,
   type AdminProduct,
   type AdminSchedule,
   type CatalogTaxonomy,
@@ -43,24 +46,16 @@ import {
 import visitStyles from "../visit-section.module.css"
 import styles from "./admin.module.css"
 
-/** Tools whose calls change the site and wait for the owner's approval. */
-export const SAVE_TOOLS = new Set([
-  "set_weekly_hours",
-  "save_hours_change",
-  "delete_hours_change",
-  "save_product",
-  "delete_product",
-  "reorder_products",
-  "save_news_post",
-  "delete_news_post",
-  "save_deal",
-  "delete_deal",
-])
+// Keep the public import used by the chat.
+export { SAVE_TOOLS } from "@/lib/admin/tool-names"
 
 export type PreviewData = {
   schedule: AdminSchedule
   taxonomy: CatalogTaxonomy
   products: AdminProduct[]
+  /** For the Edit menu's lists. */
+  news: AdminNewsItem[]
+  deals: AdminDealItem[]
 }
 
 /** The visit section's hours column (photo, glass, and list) as it would read. */
@@ -121,7 +116,7 @@ export function ChangePreview({
   input: unknown
   data: PreviewData
 }) {
-  switch (tool) {
+  switch (previewToolName(tool)) {
     case "set_weekly_hours": {
       const parsed = weeklyHoursInputSchema.safeParse(input)
       if (!parsed.success) break

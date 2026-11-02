@@ -5,6 +5,7 @@ import { placeUploads } from "../lib/media"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Add a product, or replace an existing one's fields and photos by id. Send the complete record: every field and the full photo list in display order (omitted photos are removed from the product). The owner sees the product page preview and must approve before anything is saved.",
   inputSchema: productInputSchema,
@@ -45,7 +46,7 @@ export default defineTool({
     const product = result.data[0]
     if (!product) {
       throw new Error(
-        "Product: no product with that id. Look it up again with list_catalog."
+        "Product: no product with that id. Look it up again with products__list_catalog."
       )
     }
 

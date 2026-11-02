@@ -4,6 +4,7 @@ import { toStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "List every QDeal promotion (drafts, scheduled, live, and expired) with its products in order and store-time dates. Read it before changing a deal.",
   inputSchema: z.object({}),

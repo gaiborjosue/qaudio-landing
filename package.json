@@ -20,6 +20,7 @@
     "@base-ui/react": "^1.9.0",
     "@gsap/react": "^2.1.2",
     "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@shadcn/react": "^0.3.1",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.118.0",
     "@supermemory/eve": "0.1.3",

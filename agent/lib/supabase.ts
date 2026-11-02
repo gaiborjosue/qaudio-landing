@@ -122,7 +122,7 @@ export function failure(what: string, error: NonNullable<DatabaseError>) {
   }
   if (error.code === "23503") {
     return new Error(
-      `${what}: unknown category or brand slug. Use list_catalog for valid slugs.`
+      `${what}: unknown category or brand slug. Use products__list_catalog for valid slugs.`
     )
   }
   if (error.code === "23514") {

@@ -4,6 +4,7 @@ import { deleteNewsPostInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "Permanently delete a news post by id. To hide it but keep it, save it as a draft instead. The owner approves first.",
   inputSchema: deleteNewsPostInputSchema,

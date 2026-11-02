@@ -4,8 +4,9 @@ import { toStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
-    "Read one news post (draft, scheduled, or published) with its cover, body blocks, and store-time published_at, by slug or id. Read it before editing, then send the full updated post to save_news_post.",
+    "Read one news post (draft, scheduled, or published) with its cover, body blocks, and store-time published_at, by slug or id. Read it before editing, then send the full updated post to news__save_news_post.",
   inputSchema: z
     .object({
       slug: z.string().max(120).optional(),

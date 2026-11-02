@@ -3,6 +3,7 @@ import { z } from "zod"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
+  deferred: true,
   description:
     "List the shop's categories and brands (slug and name) and its products, including drafts, in the shop's display order, with optional filters. Use it to find a product's slug or id, valid category and brand slugs, and the current order.",
   inputSchema: z.object({
