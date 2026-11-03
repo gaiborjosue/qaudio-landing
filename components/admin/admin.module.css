@@ -352,38 +352,16 @@
   min-width: 0;
   min-height: 0;
 }
-.email {
-  overflow: hidden;
-  margin-right: 8px;
-  color: #6b6b6b;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* The thread's rows (shadcn Message Scroller content; the scroller owns the
    scrolling). */
 .log {
   gap: 14px;
   padding: 24px 20px;
 }
-.empty,
 .working {
   margin: 0;
   color: #6b6b6b;
   font-size: 14px;
-}
-.empty {
-  margin: auto 0;
-  text-align: center;
-}
-/* an empty chat's hint */
-.emptyState {
-  display: grid;
-  justify-items: center;
-  margin: auto 0;
-}
-.emptyState .empty {
-  margin: 0;
 }
 /* A turn (shadcn Message), at the chat's own type size rather than the
    component's 12px. */
@@ -689,12 +667,6 @@
 .send.send:focus-visible {
   outline: 2px solid #111;
   outline-offset: 2px;
-}
-
-@media (max-width: 900px) {
-  .email {
-    display: none;
-  }
 }
 
 @media (max-width: 640px) {

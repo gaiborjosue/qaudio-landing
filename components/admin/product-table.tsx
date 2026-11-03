@@ -299,6 +299,7 @@ export function ProductTable({
             {/* "all" stands for no filter: the select needs a value. */}
             <Choice
               small
+              openDown
               value={filters[facet.key] || ALL}
               options={[{ value: ALL, label: facet.all }, ...facet.options]}
               onChange={(value) =>

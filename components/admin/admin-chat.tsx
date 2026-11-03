@@ -273,14 +273,6 @@ function Conversation({
                 </MessageContent>
               </Message>
             </MessageScrollerItem>
-            {agent.messages.length === 0 && agent.status !== "resuming" && (
-              <MessageScrollerItem className={styles.emptyState}>
-                <p className={styles.empty}>
-                  Ask for a change: hours, a holiday closure, a news post, or a
-                  deal.
-                </p>
-              </MessageScrollerItem>
-            )}
             {agent.messages.map((message) => (
               <MessageScrollerItem
                 key={message.id}

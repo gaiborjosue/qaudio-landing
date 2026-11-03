@@ -21,7 +21,7 @@ export async function AdminWorkspace({
   view?: AdminView
   sessionId?: Promise<string>
 }) {
-  const admin = await requireAdmin()
+  await requireAdmin()
   const [id, schedule, taxonomy, products, news, deals] = await Promise.all([
     sessionId,
     getAdminSchedule(),
@@ -35,7 +35,6 @@ export async function AdminWorkspace({
       key={id ?? "new"}
       initialView={view}
       sessionId={id}
-      email={admin.email}
       preview={{ schedule, taxonomy, products, news, deals }}
     />
   )

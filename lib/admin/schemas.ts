@@ -175,6 +175,18 @@ export const productInputSchema = z.object({
     .describe("In display order; the first is the card photo."),
 })
 
+/** The copywriter only needs a description; the other details add context. */
+export const productCardLineInputSchema = productInputSchema
+  .pick({
+    name: true,
+    brand_slug: true,
+    category_slug: true,
+    condition: true,
+    description: true,
+  })
+  .partial({ name: true, brand_slug: true, category_slug: true })
+  .extend({ description: productInputSchema.shape.description.trim().min(1) })
+
 export const deleteProductInputSchema = z.object({
   id: z.uuid(),
   name: z

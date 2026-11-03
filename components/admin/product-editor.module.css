@@ -401,9 +401,10 @@
 .inlineActions {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  align-items: center;
+  gap: 8px 14px;
 }
-.inlineActions button {
+.editCard {
   padding: 2px 0;
   border: 0;
   background: none;
@@ -414,7 +415,11 @@
   text-underline-offset: 3px;
   cursor: pointer;
 }
-.inlineActions button:focus-visible {
+.editCard:focus-visible {
   outline: 2px solid #111;
   outline-offset: 2px;
+}
+.editCard:disabled {
+  opacity: 0.5;
+  cursor: default;
 }

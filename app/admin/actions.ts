@@ -15,6 +15,7 @@ import {
 } from "@/lib/admin/product-save"
 import {
   deleteProductInputSchema,
+  productCardLineInputSchema,
   productInputSchema,
   productQuickEditsSchema,
   reorderProductsInputSchema,
@@ -197,6 +198,34 @@ function fieldErrors(issues: { path: PropertyKey[]; message: string }[]) {
 export type ProductSaveResult =
   | { error: string; fields?: Record<string, string> }
   | { id: string; slug: string; images: string[]; short_description: string }
+
+/** Draft a card line for review in the form; this does not save the product. */
+export async function generateProductCardLine(
+  input: unknown
+): Promise<{ error: string } | { short_description: string }> {
+  if (!(await getAdmin())) return { error: "Sign in as an admin." }
+  const parsed = productCardLineInputSchema.safeParse(input)
+  if (!parsed.success) return { error: "Add a valid description first." }
+  const product = parsed.data
+  try {
+    const { categories, brands } = await getCatalogTaxonomy()
+    const line = await writeCardLine({
+      name: product.name ?? "",
+      brand:
+        brands.find((brand) => brand.slug === product.brand_slug)?.name ?? "",
+      category:
+        categories.find((category) => category.slug === product.category_slug)
+          ?.name ?? "",
+      condition: product.condition,
+      description: product.description,
+    })
+    return line
+      ? { short_description: line }
+      : { error: "Add some description text first." }
+  } catch {
+    return { error: "Couldn’t write the card line. Try again." }
+  }
+}
 
 /**
  * Saves a product from the Products tab's product form, as the signed-in

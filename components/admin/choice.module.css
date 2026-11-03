@@ -85,6 +85,7 @@
 }
 
 .dot {
+  align-self: center;
   flex: none;
   width: 7px;
   height: 7px;

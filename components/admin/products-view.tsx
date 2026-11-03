@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "motion/react"
 import { Plus, X } from "lucide-react"
 import { deleteProductFromAdmin } from "@/app/admin/actions"
 import { ProductEditor } from "@/components/admin/product-editor"
@@ -224,6 +225,7 @@ export function ProductsView({
 
       <Sheet open={sheetOpen} onOpenChange={(open) => !open && onSheet(null)}>
         <SheetContent
+          render={<motion.div layoutRoot />}
           side="right"
           showCloseButton={false}
           className={styles.sheet}
@@ -242,7 +244,7 @@ export function ProductsView({
               <X size={18} strokeWidth={2} aria-hidden="true" />
             </SheetClose>
           </div>
-          <div className={styles.sheetBody}>
+          <motion.div layoutScroll className={styles.sheetBody}>
             {shown && (
               <ProductEditor
                 key={editing?.id ?? "new"}
@@ -271,7 +273,7 @@ export function ProductsView({
                 }
               />
             )}
-          </div>
+          </motion.div>
           {sheetOpen && confirmation}
         </SheetContent>
       </Sheet>

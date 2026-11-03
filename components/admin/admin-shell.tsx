@@ -34,7 +34,7 @@ function setAddress(path: string) {
 
 /**
  * The admin workspace: a header with the logo and Tune on the left, the
- * Chat / Products switch in the middle, and the account on the right, over
+ * Chat / Products switch in the middle, and chat/sign-out actions on the right, over
  * the chat with Tune or the Products tab. Both stay mounted, so switching
  * keeps the conversation and the table's filters and unsaved changes. The
  * address follows along (/admin or /admin/s/<session>, and
@@ -43,12 +43,10 @@ function setAddress(path: string) {
 export function AdminShell({
   initialView,
   sessionId,
-  email,
   preview,
 }: {
   initialView: AdminView
   sessionId?: string
-  email: string
   /** Current site data the chat's previews and the Products tab build on. */
   preview: PreviewData
 }) {
@@ -119,7 +117,6 @@ export function AdminShell({
             group={id}
           />
           <div className={styles.account}>
-            <span className={styles.email}>{email}</span>
             <div
               ref={setChatActions}
               className={styles.chatActions}

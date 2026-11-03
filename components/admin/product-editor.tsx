@@ -10,8 +10,12 @@ import {
 } from "react"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
+import { motion } from "motion/react"
 import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react"
-import { saveProductFromEditor } from "@/app/admin/actions"
+import {
+  generateProductCardLine,
+  saveProductFromEditor,
+} from "@/app/admin/actions"
 import { ProductPageView } from "@/components/product-catalog"
 import {
   UploadDropzone,
@@ -29,6 +33,7 @@ import {
 } from "@/lib/admin/product-editor"
 import { productFromInput, type CatalogTaxonomy } from "@/lib/admin/preview"
 import {
+  productCardLineInputSchema,
   productInputSchema,
   UPLOADS,
   type ProductInput,
@@ -119,6 +124,9 @@ export function ProductEditor({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [showDescription, setShowDescription] = useState(false)
   const [editingCard, setEditingCard] = useState(false)
+  const [cardLineError, setCardLineError] = useState<string | null>(null)
+  const [writingCard, startWritingCard] = useTransition()
+  const cardLineRequest = useRef(0)
   const [saving, startSaving] = useTransition()
   const focusError = useRef(false)
 
@@ -142,10 +150,31 @@ export function ProductEditor({
     form.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
   }, [errors])
 
+  // A request from a closed/hidden editor must not update its draft later.
+  useEffect(
+    () => () => {
+      cardLineRequest.current += 1
+    },
+    []
+  )
+
   const set = <K extends keyof ProductValues>(
     key: K,
     value: ProductValues[K]
   ) => {
+    if (
+      [
+        "name",
+        "brand_slug",
+        "category_slug",
+        "condition",
+        "description",
+        "short_description",
+      ].includes(key)
+    ) {
+      cardLineRequest.current += 1
+      setCardLineError(null)
+    }
     setValues((current) => ({
       ...current,
       [key]: value,
@@ -219,6 +248,36 @@ export function ProductEditor({
 
   const candidate = inputFromValues(values)
   const parsed = productInputSchema.safeParse(candidate)
+  const cardLineInput = productCardLineInputSchema.safeParse({
+    name: candidate.name || undefined,
+    brand_slug: candidate.brand_slug || undefined,
+    category_slug: candidate.category_slug || undefined,
+    condition: candidate.condition,
+    description: candidate.description,
+  })
+
+  const writeCard = () => {
+    if (!cardLineInput.success || writingCard) return
+    const request = ++cardLineRequest.current
+    setCardLineError(null)
+    startWritingCard(async () => {
+      try {
+        const result = await generateProductCardLine(cardLineInput.data)
+        // Keep edits made while Tune was writing, including a manual line.
+        if (request !== cardLineRequest.current) return
+        if ("error" in result) {
+          setCardLineError(result.error)
+          return
+        }
+        set("short_description", result.short_description)
+        setEditingCard(false)
+      } catch {
+        if (request === cardLineRequest.current) {
+          setCardLineError("Couldn’t write the card line. Try again.")
+        }
+      }
+    })
+  }
 
   const save = () => {
     if (!parsed.success) {
@@ -403,7 +462,13 @@ export function ProductEditor({
         {values.images.length > 0 && (
           <ol className={styles.photoList}>
             {values.images.map((photo, index) => (
-              <li key={photo.path}>
+              <motion.li
+                key={photo.path}
+                layout="position"
+                transition={{
+                  layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
+                }}
+              >
                 <Image
                   src={mediaUrl(photo.path)}
                   alt=""
@@ -452,7 +517,7 @@ export function ProductEditor({
                     <X size={14} aria-hidden="true" />
                   </button>
                 </div>
-              </li>
+              </motion.li>
             ))}
           </ol>
         )}
@@ -589,8 +654,8 @@ export function ProductEditor({
           </div>,
           styles.full
         )}
-        {/* The card line is written for the owner (from the description,
-            on Save, by the copywriting model); editing it is optional. */}
+        {/* Tune can draft the card line from the current description,
+            ready to review or edit before Save. */}
         <div className={`${styles.field} ${styles.full}`}>
           <span
             id={`${fieldId("short_description")}-label`}
@@ -612,9 +677,12 @@ export function ProductEditor({
               {...invalid("short_description")}
             />
           ) : (
-            <p className={styles.cardLine}>
-              {values.short_description ||
-                "Tune writes it from the description when you save."}
+            <p
+              className={styles.cardLine}
+              aria-live="polite"
+              aria-busy={writingCard}
+            >
+              {values.short_description}
             </p>
           )}
           {errors.short_description && (
@@ -627,22 +695,31 @@ export function ProductEditor({
           )}
           <div className={styles.inlineActions}>
             {!editingCard && (
-              <button type="button" onClick={() => setEditingCard(true)}>
+              <button
+                type="button"
+                className={styles.editCard}
+                disabled={disabled || saving || writingCard}
+                onClick={() => setEditingCard(true)}
+              >
                 {values.short_description ? "Edit" : "Write it myself"}
               </button>
             )}
-            {(editingCard || values.short_description) && (
+            {(cardLineInput.success || writingCard) && (
               <button
                 type="button"
-                onClick={() => {
-                  set("short_description", "")
-                  setEditingCard(false)
-                }}
+                className={adminStyles.secondary}
+                disabled={disabled || saving || writingCard}
+                onClick={writeCard}
               >
-                Let Tune write it
+                {writingCard ? "Writing…" : "Let Tune write it"}
               </button>
             )}
           </div>
+          {cardLineError && (
+            <p className={styles.problem} role="alert">
+              {cardLineError}
+            </p>
+          )}
         </div>
         {field(
           "manufacturer_url",
@@ -688,7 +765,13 @@ export function ProductEditor({
         <button
           type="button"
           className={adminStyles.primary}
-          disabled={disabled || saving || uploading || (!dirty && !!values.id)}
+          disabled={
+            disabled ||
+            saving ||
+            writingCard ||
+            uploading ||
+            (!dirty && !!values.id)
+          }
           onClick={save}
         >
           {saving ? "Saving…" : values.id ? "Save changes" : "Add product"}
