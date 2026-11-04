@@ -1,6 +1,7 @@
 /* The product editor (product-editor.tsx): the product's place in the shop
    on top, like a table's filters, then its photos, fields, and preview.
-   Monochrome; product photos keep their color. Problems are marked in ink
+   Product photos, condition badges, and Tune's Halo loading rim keep their
+   color; other controls are monochrome. Problems are marked in ink
    (weight and a heavier border), not red. */
 
 .editor {
@@ -181,24 +182,53 @@
   outline-offset: 2px;
 }
 
-.check {
+.auditionField > .label {
+  white-space: nowrap;
+}
+.auditionToggle {
   display: inline-flex;
+  justify-self: center;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 7px;
+  width: 88px;
   height: 40px;
+  padding: 0 10px;
+  border: 1px solid #cfcfcf;
+  border-radius: 999px;
+  background: #f7f7f7;
+  color: #555;
+  font: inherit;
   font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
 }
-.check input {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  accent-color: #111;
+.auditionToggle svg {
+  flex: none;
+}
+.auditionToggle[aria-checked="true"] {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+.auditionToggle:enabled:hover {
+  border-color: #777;
+  background: #ededed;
+}
+.auditionToggle[aria-checked="true"]:enabled:hover {
+  border-color: #292929;
+  background: #292929;
+}
+.auditionToggle:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+.auditionToggle:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
-/* Ready for audition with the manufacturer's page beside it, and Prefill
-   with Tune once the page answers. The group keeps its own row, so the
-   link and the audition box stay together. */
+/* The manufacturer's page and Prefill with Tune once the page answers. */
 .linkRow {
   display: flex;
   flex: 1 1 520px;
@@ -244,8 +274,11 @@
   flex: none;
   height: 40px;
 }
-.prefill[aria-busy="true"] {
-  opacity: 0.6;
+/* Halo's existing loading material, fitted inside the form's 40px row. */
+.tuneLoading[aria-busy="true"] {
+  min-height: 0;
+  height: 38px;
+  padding: 4px 16px;
 }
 .rowNote {
   flex-basis: 100%;
@@ -485,21 +518,26 @@
   outline-offset: -2px;
 }
 
-/* Six columns: name and address share a row, the three prices share the
-   next, and the copy runs full width. */
+/* Name and address share a row. Pricing has its own grid, so only the
+   audition column shrinks to its label. The copy runs full width. */
 .fields {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 14px 16px;
 }
 .fields > .field {
-  grid-column: span 2;
+  grid-column: span 1;
 }
 .fields > .wide {
-  grid-column: span 3;
+  grid-column: span 2;
 }
 .fields > .full {
   grid-column: 1 / -1;
+}
+.pricing {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) max-content;
+  gap: 14px 16px;
 }
 
 /* An input with fixed text before it ("$", "/products/"). */
@@ -557,11 +595,22 @@
   margin-left: auto;
 }
 
+@media (min-width: 641px) and (max-width: 800px) {
+  .fields,
+  .pricing {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .fields > .wide {
+    grid-column: span 1;
+  }
+}
+
 @media (max-width: 640px) {
   .sheetEditor .editorContent {
     padding: 20px 16px;
   }
-  .fields {
+  .fields,
+  .pricing {
     grid-template-columns: minmax(0, 1fr);
   }
   .fields > :is(.field, .wide, .full) {

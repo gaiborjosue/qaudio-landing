@@ -111,7 +111,7 @@ export function TodayPill({
       aberration={0}
       bevelDepth={22}
       // Blur the busy hero dither so the compact pill reads cleanly.
-      frost={compact ? 6 : 0}
+      frost={compact ? 10 : 0}
       {...(status.open ? OPEN_GLASS : CLOSED_GLASS)}
     >
       <span className={styles.row}>

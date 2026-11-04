@@ -3,6 +3,7 @@
 import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react"
 import Image from "next/image"
 import { LayoutGroup, MotionConfig, motion } from "motion/react"
+import { LogOut } from "lucide-react"
 import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
 import type { PreviewData } from "@/components/admin/change-preview"
@@ -124,6 +125,7 @@ export function AdminShell({
             />
             <form action={signOut}>
               <button type="submit" className={styles.quiet}>
+                <LogOut size={15} aria-hidden="true" />
                 Sign out
               </button>
             </form>

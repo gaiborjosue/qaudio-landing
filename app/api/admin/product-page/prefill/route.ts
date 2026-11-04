@@ -1,5 +1,6 @@
 import { getAdmin } from "@/lib/admin/auth"
 import { productPagePrefillRoute } from "@/lib/admin/product-page"
+import { getProductPage } from "@/lib/admin/product-page-data"
 import { draftProductFromPage } from "@/lib/admin/product-prefill"
 import { getCatalogTaxonomy } from "@/lib/catalog-data"
 import { sessionSupabase } from "@/lib/supabase/server"
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
   return productPagePrefillRoute(request, {
     admin: getAdmin,
     apiKey: process.env.TAVILY_API_KEY,
+    extract: (url, { humanId }) => getProductPage(url.href, humanId),
     taxonomy: getCatalogTaxonomy,
     draft: draftProductFromPage,
     store: {

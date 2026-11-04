@@ -13,7 +13,7 @@ import {
 import { createPortal } from "react-dom"
 import { previewToolName } from "@/lib/admin/tool-names"
 import { useRouter } from "next/navigation"
-import { ArrowUp, ImagePlus, Mic, Pencil, Square, X } from "lucide-react"
+import { ArrowUp, ImagePlus, Mic, Pencil, Plus, Square, X } from "lucide-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Streamdown } from "streamdown"
 import {
@@ -44,6 +44,7 @@ import { Steps } from "@/components/admin/steps"
 import { useVoiceInput, VoiceWaveform } from "@/components/admin/voice-input"
 import { ChromaticButton } from "@/components/chromatic-button"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
+import { HaloButton } from "@/components/ui/halo-button"
 import { Message, MessageContent, MessageFooter } from "@/components/ui/message"
 import {
   MessageScroller,
@@ -193,14 +194,17 @@ export function AdminChat({
       <TooltipProvider>
         {actionsTarget &&
           createPortal(
-            <button
+            <HaloButton
               type="button"
-              className={styles.quiet}
+              buttonClassName={styles.newChat}
+              leadingIcon={<Plus size={15} aria-hidden="true" />}
+              isLoading={ending}
+              loadingText="Starting…"
               disabled={ending}
               onClick={newChat}
             >
               New chat
-            </button>,
+            </HaloButton>,
             actionsTarget
           )}
         <div className={styles.workspace}>
@@ -1103,7 +1107,7 @@ function Composer({
         `Photo uploaded: ${photo.path} (${photo.width}×${photo.height})`
     )
     const message = [text.trim(), ...lines].filter(Boolean).join("\n")
-    if (!message || disabled || uploading || dictating) return
+    if (!message || disabled || busy || uploading || dictating) return
     const content =
       ready.length === 0
         ? message
@@ -1292,16 +1296,6 @@ function Composer({
             />
           )}
         </div>
-        {busy && (
-          <button
-            type="button"
-            className={styles.iconButton}
-            aria-label="Stop"
-            onClick={() => void agent.cancel()}
-          >
-            <Square size={16} aria-hidden="true" />
-          </button>
-        )}
         <button
           type="button"
           className={`${styles.iconButton} ${styles.microphone}`}
@@ -1333,13 +1327,17 @@ function Composer({
           )}
         </button>
         <ChromaticButton
-          type="submit"
+          type={busy ? "button" : "submit"}
           className={styles.send}
-          aria-label="Send"
+          aria-label={busy ? "Stop response" : "Send"}
+          title={busy ? "Stop response" : "Send"}
+          data-responding={busy || undefined}
+          data-active={active || undefined}
+          onClick={busy ? () => void agent.cancel() : undefined}
           color="#b126ff"
           colorMode="spectrum"
           speed={0.7}
-          paused={false}
+          paused={busy || !active}
           phase={0}
           feather={100}
           projectionScale={174.7}
@@ -1355,12 +1353,24 @@ function Composer({
           entranceScale={0.65}
           disabled={
             disabled ||
-            uploading ||
-            dictating ||
-            (!text.trim() && ready.length === 0)
+            (!busy &&
+              (uploading || dictating || (!text.trim() && ready.length === 0)))
           }
         >
-          <ArrowUp size={20} aria-hidden="true" />
+          {busy ? (
+            <>
+              <span className={styles.responseVinyl} aria-hidden="true" />
+              <Square
+                className={styles.stopSymbol}
+                size={16}
+                fill="currentColor"
+                strokeWidth={0}
+                aria-hidden="true"
+              />
+            </>
+          ) : (
+            <ArrowUp size={20} aria-hidden="true" />
+          )}
         </ChromaticButton>
       </div>
     </form>

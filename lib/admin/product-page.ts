@@ -598,6 +598,7 @@ export async function productPagePrefillRoute(
     store,
     fetcher,
     requester,
+    extract = extractPage,
   }: {
     admin: () => Promise<{ id: string } | null>
     apiKey: string | undefined
@@ -607,6 +608,8 @@ export async function productPagePrefillRoute(
     store: PhotoStore
     fetcher?: typeof fetch
     requester?: PublicRequester
+    /** The production route caches page reads, never drafts or staged photos. */
+    extract?: typeof extractPage
   }
 ): Promise<Response> {
   const signedIn = await admin()
@@ -623,12 +626,15 @@ export async function productPagePrefillRoute(
       Math.min(PREFILL_PHOTOS_MAX, PRODUCT_PHOTOS_MAX - parsed.data.photos)
     )
 
-    const page = await extractPage(url, {
+    const page = await extract(url, {
       apiKey: apiKey.trim(),
       fetcher,
       signal,
       humanId: tavilyHumanId(signedIn.id),
     })
+    // A shared read can finish after this editor closes. Don't draft or
+    // stage anything for the abandoned request.
+    signal.throwIfAborted()
     const { text, candidates } = compactPage(page.markdown, page.images, url)
     if (text.length < 80) {
       throw new PrefillProblem("There’s too little on this page to go on.", 422)

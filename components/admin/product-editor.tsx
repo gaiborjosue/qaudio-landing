@@ -23,6 +23,7 @@ import {
   saveProductFromEditor,
 } from "@/app/admin/actions"
 import { ProductPageView } from "@/components/product-catalog"
+import { HaloButton } from "@/components/ui/halo-button"
 import {
   UploadDropzone,
   type DropzoneUpload,
@@ -99,13 +100,17 @@ function restore(key: string | undefined): ProductValues | null {
 type Review = {
   fields: Partial<Record<PrefillField, string>>
   photos: string[]
+  /** A successful Prefill stays complete after its fields are accepted. */
+  url?: string
 }
 const NO_REVIEW: Review = { fields: {}, photos: [] }
 const reviewKey = (key: string) => `${key}:tune`
 
 // Kept with the unsaved work, so a reload keeps the marks.
 function restoreReview(key: string | undefined): Review {
-  if (!key || typeof window === "undefined" || !restore(key)) return NO_REVIEW
+  if (!key || typeof window === "undefined") return NO_REVIEW
+  const draft = restore(key)
+  if (!draft) return NO_REVIEW
   try {
     const saved = JSON.parse(
       window.sessionStorage.getItem(reviewKey(key)) ?? "null"
@@ -121,7 +126,14 @@ function restoreReview(key: string | undefined): Review {
     const photos = Array.isArray(saved.photos)
       ? saved.photos.filter((path) => typeof path === "string")
       : []
-    return { fields, photos }
+    // Older drafts kept review marks without the page they came from.
+    const url =
+      typeof saved.url === "string"
+        ? saved.url
+        : Object.keys(fields).length || photos.length
+          ? draft.manufacturer_url.trim()
+          : undefined
+    return { fields, photos, url }
   } catch {
     return NO_REVIEW
   }
@@ -231,7 +243,10 @@ export function ProductEditor({
   const linkState =
     linkReady && linkCheck?.url === link ? linkCheck.state : null
   // A page that refused the check may still let Tune read it.
-  const canPrefill = linkState === "ok" || linkState === "blocked"
+  const canPrefill =
+    (linkState === "ok" || linkState === "blocked") &&
+    pending === 0 &&
+    review.url !== link
 
   useEffect(() => {
     latest.current = { values, review, slugFollows }
@@ -250,7 +265,7 @@ export function ProductEditor({
   // Tune's suggestions waiting for review are kept with that work.
   useEffect(() => {
     if (!storageKey) return
-    if (dirty && pending > 0) {
+    if (dirty && (pending > 0 || review.url)) {
       window.sessionStorage.setItem(
         reviewKey(storageKey),
         JSON.stringify(review)
@@ -495,7 +510,7 @@ export function ProductEditor({
     cardLineRequest.current += 1
     setCardLineError(null)
     setValues(next)
-    setReview({ fields, photos })
+    setReview({ fields, photos, url: before.manufacturer_url.trim() })
     setErrors((current) => {
       const rest = { ...current }
       for (const field of changed) {
@@ -560,6 +575,13 @@ export function ProductEditor({
         )
         return
       }
+      // The completed button disappears. Keep keyboard focus in the form
+      // without interrupting an owner who moved on while Tune was reading.
+      if (document.activeElement === prefillButton.current) {
+        form.current
+          ?.querySelector<HTMLInputElement>("[data-review-link] input")
+          ?.focus()
+      }
       applySuggestions(suggestions, before)
     } catch {
       if (!controller.signal.aborted) {
@@ -588,7 +610,7 @@ export function ProductEditor({
 
   const acceptAll = () => {
     focusAfterReview.current = "all"
-    setReview(NO_REVIEW)
+    setReview((current) => ({ ...NO_REVIEW, url: current.url }))
     setPrefillNote("Kept Tune’s suggestions.")
   }
 
@@ -877,19 +899,9 @@ export function ProductEditor({
               ))}
             </div>
           </fieldset>
-          {/* Audition, then the manufacturer's page beside it. Once the page
-            answers, Tune can read it and fill in the form for review. */}
+          {/* Once the manufacturer's page answers, Tune can read it and fill
+            in the form for review. */}
           <div className={styles.linkRow}>
-            <label className={styles.check}>
-              <input
-                type="checkbox"
-                checked={values.ready_for_audition}
-                onChange={(event) =>
-                  set("ready_for_audition", event.target.checked)
-                }
-              />
-              <span>Ready for audition</span>
-            </label>
             {field(
               "manufacturer_url",
               <>
@@ -930,17 +942,20 @@ export function ProductEditor({
               styles.linkField
             )}
             {canPrefill && (
-              <button
+              <HaloButton
                 ref={prefillButton}
                 type="button"
-                className={`${adminStyles.secondary} ${styles.prefill}`}
+                className={styles.prefill}
+                idleClassName={`${adminStyles.secondary} ${styles.prefill}`}
+                buttonClassName={styles.tuneLoading}
+                isLoading={prefilling}
+                loadingText="Prefilling…"
                 disabled={disabled || saving || writingCard || prefilling}
-                aria-busy={prefilling}
                 onClick={prefill}
               >
                 <WandSparkles size={15} aria-hidden="true" />
-                {prefilling ? "Prefilling…" : "Prefill with Tune"}
-              </button>
+                Prefill with Tune
+              </HaloButton>
             )}
             {prefillError && (
               <p className={`${styles.problem} ${styles.rowNote}`} role="alert">
@@ -1022,56 +1037,98 @@ export function ProductEditor({
             </span>,
             styles.wide
           )}
-          {field(
-            "price_cents",
-            "Price",
-            <span className={styles.affix}>
-              <span aria-hidden="true">$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={values.price}
-                placeholder="1,299"
-                onChange={(event) => set("price", event.target.value)}
-                {...invalid("price_cents")}
-              />
-            </span>
-          )}
-          {field(
-            "msrp_cents",
-            <>
-              List price <span className={styles.aside}>MSRP, optional</span>
-            </>,
-            suggested(
-              "msrp",
+          <div className={`${styles.pricing} ${styles.full}`}>
+            {field(
+              "price_cents",
+              "Price",
               <span className={styles.affix}>
                 <span aria-hidden="true">$</span>
                 <input
                   type="text"
                   inputMode="decimal"
-                  value={values.msrp}
-                  onChange={(event) => set("msrp", event.target.value)}
-                  {...invalid("msrp_cents")}
+                  value={values.price}
+                  placeholder="1,299"
+                  onChange={(event) => set("price", event.target.value)}
+                  {...invalid("price_cents")}
                 />
               </span>
-            )
-          )}
-          {field(
-            "price_unit",
-            "Sold",
-            suggested(
+            )}
+            {field(
+              "msrp_cents",
+              <>
+                List price <span className={styles.aside}>MSRP, optional</span>
+              </>,
+              suggested(
+                "msrp",
+                <span className={styles.affix}>
+                  <span aria-hidden="true">$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={values.msrp}
+                    onChange={(event) => set("msrp", event.target.value)}
+                    {...invalid("msrp_cents")}
+                  />
+                </span>
+              )
+            )}
+            {field(
               "price_unit",
-              <Choice
-                value={values.price_unit}
-                options={UNITS}
-                onChange={(value) =>
-                  set("price_unit", value as "each" | "pair")
+              "Sold",
+              suggested(
+                "price_unit",
+                <Choice
+                  value={values.price_unit}
+                  options={UNITS}
+                  onChange={(value) =>
+                    set("price_unit", value as "each" | "pair")
+                  }
+                  aria-labelledby={`${fieldId("price_unit")}-label`}
+                  {...invalid("price_unit")}
+                />
+              )
+            )}
+            {field(
+              "ready_for_audition",
+              "Ready for audition",
+              <button
+                type="button"
+                role="switch"
+                className={styles.auditionToggle}
+                aria-checked={values.ready_for_audition}
+                aria-labelledby={`${fieldId("ready_for_audition")}-label`}
+                disabled={disabled || saving}
+                onClick={() =>
+                  set("ready_for_audition", !values.ready_for_audition)
                 }
-                aria-labelledby={`${fieldId("price_unit")}-label`}
-                {...invalid("price_unit")}
-              />
-            )
-          )}
+                {...invalid("ready_for_audition")}
+              >
+                <svg
+                  width="28"
+                  height="24"
+                  viewBox="0 0 32 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.75"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="16" cy="7" r="3" />
+                  <path d="M9 21v-1a7 7 0 0 1 14 0v1" />
+                  {values.ready_for_audition ? (
+                    <path d="M8 5a4 4 0 0 0 0 5M4 2a8 8 0 0 0 0 11M24 5a4 4 0 0 1 0 5M28 2a8 8 0 0 1 0 11" />
+                  ) : (
+                    <path d="m4 3 24 18" />
+                  )}
+                </svg>
+                <span aria-hidden="true">
+                  {values.ready_for_audition ? "On" : "Off"}
+                </span>
+              </button>,
+              styles.auditionField
+            )}
+          </div>
           {field(
             "description",
             "Product Description",
@@ -1167,16 +1224,21 @@ export function ProductEditor({
               </span>
             )}
             <div className={styles.inlineActions}>
-              {(cardLineInput.success || writingCard) && (
-                <button
+              {(writingCard ||
+                (!values.short_description.trim() &&
+                  cardLineInput.success)) && (
+                <HaloButton
                   type="button"
-                  className={adminStyles.secondary}
+                  idleClassName={adminStyles.secondary}
+                  buttonClassName={styles.tuneLoading}
+                  isLoading={writingCard}
+                  loadingText="Writing…"
                   disabled={disabled || saving || writingCard || prefilling}
                   onClick={writeCard}
                 >
                   <WandSparkles size={15} aria-hidden="true" />
-                  {writingCard ? "Writing…" : "Let Tune write it"}
-                </button>
+                  Let Tune write it
+                </HaloButton>
               )}
               {!editingCard && (
                 <button

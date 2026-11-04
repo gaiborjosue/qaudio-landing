@@ -602,3 +602,107 @@ test("a page with nothing to fill says so", async () => {
   assert.equal(response.status, 422)
   assert.match((await response.json()).error, /product page/)
 })
+
+test("a reused page keeps authorization, drafts, photo limits, and uploads per request", async () => {
+  const staged = store()
+  const big = await photo(1200, 900)
+  const reads = []
+  const prompts = []
+  const extracted = {
+    markdown: MARKDOWN,
+    images: [
+      { url: "https://cdn.maker.example.com/orbit-rear.jpg", alt: "Rear" },
+    ],
+  }
+  const dependencies = {
+    admin: async () => ({ id: "admin-1" }),
+    apiKey: KEY,
+    taxonomy: async () => taxonomy,
+    extract: async (url, { humanId }) => {
+      reads.push({ url: url.href, humanId })
+      return extracted
+    },
+    fetcher: async () =>
+      assert.fail("a reused page must not call Tavily directly"),
+    draft: async (prompt) => {
+      prompts.push(prompt)
+      return draft({ photos: [{ image: 1, alt: "Walnut" }] })
+    },
+    requester: async (url) => ({
+      url,
+      status: 200,
+      type: "image/png",
+      body: big,
+    }),
+    store: staged,
+  }
+  const request = (photos = 18) =>
+    post("/api/admin/product-page/prefill", {
+      url: `${page.href}#specifications`,
+      photos,
+    })
+  const first = await productPagePrefillRoute(request(), dependencies)
+  const second = await productPagePrefillRoute(request(), dependencies)
+  const otherAdmin = await productPagePrefillRoute(request(20), {
+    ...dependencies,
+    admin: async () => ({ id: "admin-2" }),
+  })
+  assert.equal(first.status, 200)
+  assert.equal(second.status, 200)
+  assert.equal(otherAdmin.status, 200)
+  const firstPhoto = (await first.json()).suggestions.images[0].path
+  const secondPhoto = (await second.json()).suggestions.images[0].path
+  assert.notEqual(firstPhoto, secondPhoto)
+  assert.equal(staged.uploaded.length, 2)
+  assert.equal((await otherAdmin.json()).suggestions.images, undefined)
+  assert.equal(prompts.length, 3)
+  assert.match(prompts[0], /Photos allowed: 2/)
+  assert.match(prompts[2], /Photos allowed: 0/)
+  assert.ok(reads.every(({ url }) => url === page.href))
+  assert.equal(reads[0].humanId, reads[1].humanId)
+  assert.notEqual(reads[0].humanId, reads[2].humanId)
+
+  const stranger = await productPagePrefillRoute(request(), {
+    ...dependencies,
+    admin: async () => null,
+  })
+  const foreign = await productPagePrefillRoute(
+    post(
+      "/api/admin/product-page/prefill",
+      { url: page.href },
+      {
+        site: "https://evil.example",
+      }
+    ),
+    dependencies
+  )
+  assert.equal(stranger.status, 401)
+  assert.equal(foreign.status, 403)
+  assert.equal(reads.length, 3)
+})
+
+test("closing an editor during a shared page read skips drafting and photo staging", async () => {
+  const controller = new AbortController()
+  const request = new Request(`${origin}/api/admin/product-page/prefill`, {
+    method: "POST",
+    headers: { "content-type": "application/json", origin },
+    body: JSON.stringify({ url: page.href }),
+    signal: controller.signal,
+  })
+  const response = await productPagePrefillRoute(request, {
+    admin: async () => ({ id: "admin-1" }),
+    apiKey: KEY,
+    taxonomy: async () => assert.fail("catalog must not be read after closing"),
+    draft: async () =>
+      assert.fail("an abandoned prefill must not call the model"),
+    extract: async () => {
+      controller.abort()
+      return { markdown: MARKDOWN, images: [] }
+    },
+    store: {
+      upload: async () => assert.fail("an abandoned prefill must not upload"),
+      discard: async () => {},
+    },
+  })
+  assert.equal(response.status, 504)
+})
