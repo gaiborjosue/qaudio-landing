@@ -10,6 +10,8 @@ import {
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { descriptionFromColumns } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
+import { productTaxonomyAssets } from "@/lib/catalog-assets"
+import type { MetadataData } from "@/lib/admin/metadata"
 import { publicSupabase } from "@/lib/supabase/public"
 import { sessionSupabase } from "@/lib/supabase/server"
 import type { DayHours } from "@/lib/store-hours"
@@ -82,7 +84,7 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
       description_closing,
       ...product
     }) => ({
-      ...product,
+      ...productTaxonomyAssets(product),
       description: descriptionFromColumns({
         description_intro,
         features,
@@ -139,4 +141,24 @@ export async function getAdminSchedule(): Promise<AdminSchedule> {
       ...(row.note && { note: row.note }),
     })),
   }
+}
+
+/** Raw asset paths and order for the Metadata editor, read as the admin. */
+export async function getAdminMetadata(): Promise<MetadataData> {
+  const supabase = await sessionSupabase()
+  const [categories, brands] = await Promise.all([
+    supabase
+      .from("catalog_categories")
+      .select("*")
+      .order("sort_order")
+      .order("slug"),
+    supabase
+      .from("catalog_brands")
+      .select("*")
+      .order("sort_order")
+      .order("slug"),
+  ])
+  if (categories.error || brands.error)
+    throw new Error("Couldn’t load catalog metadata.")
+  return { categories: categories.data, brands: brands.data }
 }

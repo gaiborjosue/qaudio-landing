@@ -403,6 +403,10 @@ export type Database = {
           title: string
         }[]
       }
+      reorder_catalog_metadata: {
+        Args: { expected: string[]; kind: string; ordered: string[] }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

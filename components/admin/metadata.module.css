@@ -1,0 +1,276 @@
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.tabs {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 999px;
+  background: #ececec;
+}
+.tabs button {
+  padding: 7px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #4a4a4a;
+  font-size: 14px;
+}
+.tabs [aria-selected="true"] {
+  background: #111;
+  color: #fff;
+}
+.search {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 180px;
+  padding: 9px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 999px;
+  background: #fff;
+}
+.search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-size: 14px;
+}
+.search:focus-within {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.tableFrame {
+  overflow-x: auto;
+  border: 1px solid #dedede;
+  border-radius: 14px;
+  background: #fff;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 14px;
+}
+.table th,
+.table td {
+  padding: 12px;
+  border-bottom: 1px solid #e8e8e8;
+  vertical-align: middle;
+}
+.table th {
+  color: #666;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.table td:first-child {
+  color: #777;
+  font-size: 12px;
+}
+.table tr:hover {
+  background: #fafafa;
+}
+.thumb,
+.logoThumb,
+.sceneThumb {
+  position: relative;
+  width: 64px;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.thumb img,
+.logoThumb img {
+  padding: 3px;
+  object-fit: contain;
+  filter: grayscale(1);
+}
+.logoThumb {
+  background: #111;
+}
+.sceneThumb {
+  width: 80px;
+}
+.sceneThumb img {
+  object-fit: cover;
+  filter: grayscale(1);
+}
+.name {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+.name:hover {
+  text-decoration: underline;
+}
+.slug {
+  display: block;
+  margin-top: 3px;
+  color: #777;
+  font-size: 12px;
+}
+.rowActions {
+  display: flex;
+}
+.rowActions button {
+  width: 32px;
+  height: 32px;
+}
+.rowActions button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.empty {
+  padding: 32px !important;
+  color: #666;
+  text-align: center;
+}
+.orderList {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.orderName {
+  padding: 8px;
+  font-size: 14px;
+}
+.orderActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+}
+.sheet.sheet {
+  width: min(640px, 100vw);
+}
+.editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+.fields {
+  display: grid;
+  flex: 1;
+  align-content: start;
+  gap: 22px;
+  margin: 0;
+  padding: 24px;
+  overflow-y: auto;
+  border: 0;
+  overscroll-behavior: contain;
+}
+.fields > label,
+.imageField {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  color: #4a4a4a;
+  font-size: 13px;
+}
+.fields input:not([type="file"]):not([type="checkbox"]) {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid #cfcfcf;
+  border-radius: 10px;
+  background: #fff;
+  color: #111;
+  font-size: 14px;
+}
+.fields input[readonly] {
+  color: #777 !important;
+  background: #fafafa !important;
+}
+.fields input:focus-visible,
+.tabs button:focus-visible,
+.name:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.label {
+  font-weight: 500;
+}
+.hint {
+  color: #777;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.imagePreviews {
+  display: flex;
+  gap: 10px;
+}
+.imagePreview,
+.darkPreview {
+  position: relative;
+  flex: 1;
+  height: 140px;
+  overflow: hidden;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+  background: #f5f5f5;
+}
+.darkPreview {
+  background: #111;
+  border-color: #111;
+}
+.art {
+  padding: 14px;
+  object-fit: contain;
+  filter: grayscale(1);
+}
+.scene {
+  object-fit: cover;
+  filter: grayscale(1);
+}
+.logoOnLight {
+  filter: grayscale(1) invert(1) contrast(2);
+  mix-blend-mode: multiply;
+}
+.invert {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+}
+.invert input {
+  accent-color: #111;
+}
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  flex: none;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #ececec;
+}
+.error {
+  flex-basis: 100%;
+  margin: 0;
+  color: #111;
+  font-size: 13px;
+  font-weight: 500;
+}
+@media (max-width: 640px) {
+  .table {
+    min-width: 660px;
+  }
+  .toolbar > button {
+    margin-left: auto;
+  }
+}

@@ -6,6 +6,8 @@ import { LayoutGroup, MotionConfig, motion } from "motion/react"
 import { LogOut } from "lucide-react"
 import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
+import { MetadataView } from "@/components/admin/metadata-view"
+import type { MetadataData } from "@/lib/admin/metadata"
 import type { PreviewData } from "@/components/admin/change-preview"
 import {
   ProductsView,
@@ -14,11 +16,12 @@ import {
 } from "@/components/admin/products-view"
 import styles from "./admin.module.css"
 
-export type AdminView = "chat" | "products"
+export type AdminView = "chat" | "products" | "metadata"
 
 const VIEWS: { id: AdminView; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "products", label: "Products" },
+  { id: "metadata", label: "Metadata" },
 ]
 
 // Next patches history; going around it keeps the workspace mounted while
@@ -35,8 +38,8 @@ function setAddress(path: string) {
 
 /**
  * The admin workspace: a header with the logo and Tune on the left, the
- * Chat / Products switch in the middle, and chat/sign-out actions on the right, over
- * the chat with Tune or the Products tab. Both stay mounted, so switching
+ * Chat / Products / Metadata switch in the middle, and chat/sign-out actions on the right, over
+ * the chat with Tune or the Products tab. All three stay mounted, so switching
  * keeps the conversation and the table's filters and unsaved changes. The
  * address follows along (/admin or /admin/s/<session>, and
  * /admin/products), so a reload opens the same view.
@@ -45,11 +48,13 @@ export function AdminShell({
   initialView,
   sessionId,
   preview,
+  metadata,
 }: {
   initialView: AdminView
   sessionId?: string
   /** Current site data the chat's previews and the Products tab build on. */
   preview: PreviewData
+  metadata: MetadataData
 }) {
   const id = useId()
   const [view, setView] = useState(initialView)
@@ -61,11 +66,13 @@ export function AdminShell({
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const address = (next: AdminView) =>
-    next === "products"
-      ? "/admin/products"
-      : session.current
-        ? `/admin/s/${encodeURIComponent(session.current)}`
-        : "/admin"
+    next === "metadata"
+      ? "/admin/metadata"
+      : next === "products"
+        ? "/admin/products"
+        : session.current
+          ? `/admin/s/${encodeURIComponent(session.current)}`
+          : "/admin"
 
   const show = (next: AdminView) => {
     current.current = next
@@ -165,13 +172,26 @@ export function AdminShell({
             onDeleting={setDeleting}
           />
         </div>
+        <div
+          id={panelId("metadata")}
+          role="tabpanel"
+          aria-labelledby={tabId("metadata")}
+          className={`${styles.panel} ${styles.productsPanel}`}
+          hidden={view !== "metadata"}
+        >
+          <MetadataView
+            data={metadata}
+            products={preview.products}
+            active={view === "metadata"}
+          />
+        </div>
       </div>
     </MotionConfig>
   )
 }
 
 /**
- * Chat / Products: a pill switch, built as tabs. Arrow keys, Home, and End
+ * Chat / Products / Metadata: a pill switch, built as tabs. Arrow keys, Home, and End
  * move between them; the dark pill slides to the chosen one (instant under
  * reduced motion).
  */

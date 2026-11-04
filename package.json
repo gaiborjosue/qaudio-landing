@@ -16,6 +16,7 @@
     "test:zernio": "node --test scripts/zernio.test.mjs",
     "test:speech": "node --test scripts/speech.test.mjs",
     "test:prefill": "node --test scripts/product-prefill.test.mjs",
+    "test:metadata": "node --test scripts/metadata.test.mjs",
     "import:news": "node --env-file=.env.local scripts/import-news.mjs",
     "import:catalog": "node --env-file=.env.local scripts/import-catalog.mjs"
   },

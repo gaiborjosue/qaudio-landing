@@ -196,8 +196,8 @@
 }
 .switchTab {
   position: relative;
-  min-width: 96px;
-  padding: 7px 18px;
+  min-width: 88px;
+  padding: 7px 14px;
   border: 0;
   border-radius: 999px;
   background: none;
@@ -813,8 +813,7 @@
 .responseVinyl::after {
   inset: 24%;
   background:
-    radial-gradient(circle at 50% 12%, #777 0 1px, transparent 1.5px),
-    #ececec;
+    radial-gradient(circle at 50% 12%, #777 0 1px, transparent 1.5px), #ececec;
   box-shadow:
     0 0 0 1px #000,
     0 0 0 2px #333;
@@ -837,7 +836,7 @@
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: 780px) {
   /* The switch drops to its own row under the logo and the account. */
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -848,6 +847,9 @@
     grid-column: 1 / -1;
     justify-self: center;
   }
+}
+
+@media (max-width: 640px) {
   .log {
     padding: 18px 16px;
   }

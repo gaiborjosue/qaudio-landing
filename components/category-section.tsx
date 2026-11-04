@@ -24,15 +24,22 @@ export function CategorySection({
     () => categories.map((item) => item.wheel_label),
     [categories]
   )
-  const [selected, setSelected] = useState(defaultIndex)
-  const [previewed, setPreviewed] = useState([defaultIndex])
+  const [selectedSlug, setSelectedSlug] = useState(
+    categories[defaultIndex]?.slug
+  )
+  const [previewed, setPreviewed] = useState([categories[defaultIndex]?.slug])
   const [wheelSize, setWheelSize] = useState({ fontSize: 3.25, inset: 96 })
-  const category = categories[selected]
+  const category =
+    categories.find((item) => item.slug === selectedSlug) ??
+    categories[defaultIndex]
+  const selected = categories.indexOf(category)
 
   function selectCategory(index: number) {
-    setSelected(index)
+    const slug = categories[index]?.slug
+    if (!slug) return
+    setSelectedSlug(slug)
     setPreviewed((visited) =>
-      visited.includes(index) ? visited : [...visited, index]
+      visited.includes(slug) ? visited : [...visited, slug]
     )
   }
 
@@ -80,8 +87,11 @@ export function CategorySection({
       <div className="category-explorer">
         <div className="category-wheel-panel">
           <OptionWheel
+            key={categories
+              .map((item) => `${item.slug}:${item.wheel_label}`)
+              .join("|")}
             items={labels}
-            defaultSelected={defaultIndex}
+            defaultSelected={selected}
             onChange={selectCategory}
             fontSize={wheelSize.fontSize}
             inset={wheelSize.inset}
@@ -95,13 +105,14 @@ export function CategorySection({
 
         <div className="category-preview">
           <div className="category-atmosphere" aria-hidden="true">
-            {previewed.map((index) => {
-              const item = categories[index]
+            {[...new Set([...previewed, category.slug])].map((slug) => {
+              const item = categories.find((item) => item.slug === slug)
+              if (!item) return null
               return (
                 <div
                   key={item.slug}
                   className={
-                    index === selected
+                    item.slug === category.slug
                       ? "category-scene is-selected"
                       : "category-scene"
                   }

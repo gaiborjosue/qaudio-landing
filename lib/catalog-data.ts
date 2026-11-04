@@ -2,6 +2,11 @@ import "server-only"
 import { cacheLife, cacheTag } from "next/cache"
 import { publicSupabase, mediaUrl } from "@/lib/supabase/public"
 import {
+  brandAssets,
+  categoryAssets,
+  productTaxonomyAssets,
+} from "@/lib/catalog-assets"
+import {
   descriptionFromColumns,
   type CatalogBrand,
   type CatalogCategory,
@@ -49,7 +54,7 @@ function toProduct({
   ...product
 }: ProductRow): Product {
   return {
-    ...product,
+    ...productTaxonomyAssets(product),
     description: descriptionFromColumns({
       description_intro,
       features,
@@ -86,7 +91,10 @@ export async function getCatalogTaxonomy(): Promise<{
   if (categories.error)
     throw new Error(`Catalog categories: ${categories.error.message}`)
   if (brands.error) throw new Error(`Catalog brands: ${brands.error.message}`)
-  return { categories: categories.data, brands: brands.data }
+  return {
+    categories: categories.data.map(categoryAssets),
+    brands: brands.data.map(brandAssets),
+  }
 }
 
 /** Published products, optionally for one category or brand, in order. */
