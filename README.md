@@ -8,6 +8,8 @@ Run `pnpm install`, copy [.env.example](.env.example) to `.env.local` (git-ignor
 
 Declared versions include Next.js **16.4.2**, React/React DOM **19.3.1**, TypeScript **^5**, Tailwind CSS **^4**, GSAP **^3.15.0**, `@gsap/react` **^2.1.2**, Motion **^14.7.1**, shadcn **^4.22.1**, `@supabase/supabase-js` **2.118.0** and `@supabase/ssr` **0.12.7** (both pinned), eve **1.0.0-rc.1** (pinned; a release candidate), AI SDK `ai` **^7.0.159**, `@openrouter/ai-sdk-provider` **^3.1.0**, Zod **^4.6.7**, Streamdown **^2.7.1**, `react-day-picker` **^10.0.2** (for shadcn’s Calendar), `@shadcn/react` **^0.3.1** (for shadcn’s Message Scroller), `@zernio/node` **0.2.1459** (pinned), and sharp **0.35.5** (pinned; Instagram photo conversion in the agent). See [package.json](package.json) for all dependencies and version ranges.
 
+Voice dictation in the admin chat also needs the server-only `GROQ_API_KEY` (see [Voice input](#voice-input)). Add it to `.env.local` locally and the Next.js service’s environment in production.
+
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Start the development server; `withEve` also starts the admin agent (`eve dev`) behind `/eve/v1/*` |
@@ -16,6 +18,7 @@ Declared versions include Next.js **16.4.2**, React/React DOM **19.3.1**, TypeSc
 | `pnpm lint` | Run ESLint (passes; the remaining warnings are plain `<img>` tags in vendored components and the loader) |
 | `pnpm typecheck` | Run TypeScript without emitting files |
 | `pnpm test:zernio` | Test Zernio connection status, Instagram publishing, photo conversion, profile scoping, and credential redaction with mocked SDK requests |
+| `pnpm test:speech` | Test voice recording/cancellation, audio limits, admin/origin checks, and Groq English translation with mocked browser and provider APIs |
 | `pnpm format` | Format all TS/TSX files with Prettier; writes files |
 | `pnpm import:news` | Upload the seed news photos and upsert the seed posts into Supabase (needs `SUPABASE_SECRET_KEY`); safe to re-run |
 | `pnpm import:catalog` | Upload the seed product photos and upsert the seed products into Supabase by slug (needs `SUPABASE_SECRET_KEY`); resets seeded product fields, never deletes other products |
@@ -38,6 +41,7 @@ The component’s measured responsive fitting sizes the glass to the screen, so 
 - `/news`: one-column news feed, newest first, with progressive loading (details below).
 - `/news/[slug]`: article pages at the live qaudio.com permalinks. Published posts are prerendered from `generateStaticParams`; posts published later render on first visit. Unknown or draft slugs return not found.
 - `/api/news?cursor=&limit=`: JSON feed pages (`{ items, nextCursor }`). Omit `cursor` for the newest cards. `limit` defaults to 3 and allows up to 24. A malformed cursor or limit returns 400.
+- `POST /api/admin/speech`: admin-only, same-origin audio upload; returns English text for the chat draft through Groq Whisper Large v3. See [Voice input](#voice-input).
 - `/qdeal`: live deals from Supabase (currently the Sonos closeouts), then Q Audio’s “Proper advice is priceless!” text (details below).
 - `/admin`: the owner’s workspace (signed-in admins only): the chat with the site assistant, and the Products tab at `/admin/products`. `/admin/s/<session>` reopens a conversation, `/admin/login` signs in (with a password reset form), and `/admin/set-password` follows a reset link. `/auth/confirm` receives Supabase’s email links, and `/eve/v1/*` is the agent’s API. See [Admin assistant](#admin-assistant).
 
@@ -223,6 +227,16 @@ Alternatively, add the product to [supabase/seed/catalog.json](supabase/seed/cat
   - A menu closes on a press outside it or Escape (focus returns to the pill); opening focuses the first row, a list focuses its search or first item, and Back returns focus to the row that opened it. Both are disabled while a chat resumes or ends. The white shapes keep Bencho’s Stroke hairline on (`data-stroke="on"`) to stand off the light grey page.
 - **Conversations:** eve keeps each session while you use it. The first message moves the address to `/admin/s/<session>` (through `History.prototype.replaceState`, so the workspace stays mounted; on the Products tab the address stays `/admin/products` until you switch back). Reloading that address replays it, including an approval still waiting. Chats are disposable: **New chat** ends the session on the server (`agent.end()`, then `newSession()`), and eve then asks the workflow store to delete its run data (outside development). A chat that is just abandoned ends after eve’s default 30 idle days. There’s no chat list, because memory carries over what matters.
 - **Memory:** [Supermemory](https://eve.dev/integrations/supermemory) ([agent/memory/supermemory.ts](agent/memory/supermemory.ts), through [agent/lib/supermemory.ts](agent/lib/supermemory.ts)) saves each completed turn and recalls the owner’s profile and relevant older context before every turn, so a new chat starts informed. Each admin has their own memory (`byPrincipal`), and the default namespace keeps development, previews, and production apart. Capture is told to keep lasting preferences and conventions only (tone, naming, corrections), never catalog, hours, deals, or news, because Supabase is the source of truth and the instructions say so. The model gets `supermemory__search`, `read_session`, `remember`, `forget`, and `forget_matching`; `extract` and `read_document` are removed, since `extract` tells the model to index every attached file and the owner attaches product photos to most chats. Without `SUPERMEMORY_API_KEY`, or if Supermemory is unreachable, memory quietly does nothing and chats still work. `@supermemory/eve` 0.1.x declares eve 0.x only (`<1`), and eve 1.0 rejects its post-compaction recall hook, so the small adapter drops that hook (eve 1.0 keeps recalled messages across compaction itself). Remove the adapter when the provider supports eve 1.0.
+
+### Voice input
+
+The microphone immediately left of Send records a message for review. Clicking it requests browser microphone permission when needed; nothing records on page load. During recording it becomes Stop, and a dense monochrome Web Audio waveform and elapsed time replace the message field. Tiny 2px bars capture microphone loudness every 50ms: new speech enters from the right and the recorded history scrolls smoothly left, with a fine baseline during pauses. Stop releases the microphone immediately and freezes the bars while Groq processes the recording. The resulting English text is appended to any existing draft, the field regains focus, and the owner can edit and send it; dictation never sends a chat message itself. Attached photos stay in place. Send is disabled until dictation finishes.
+
+Groq’s [speech-to-text API](https://console.groq.com/docs/speech-to-text) runs `whisper-large-v3` through `/audio/translations`, which detects the input language and returns English, including for Polish speech. `/api/admin/speech` checks the signed-in admin and request origin on every upload, fixes the model and translation options on the server, and returns only text or a safe error. `GROQ_API_KEY` stays in the Next.js server environment, never the browser or agent. Audio is sent to Groq after Stop; the app does not save recordings in Storage, chat history, or memory. The reviewed text becomes an ordinary chat message only when sent.
+
+Recordings stop automatically at three minutes and are limited to 4 MB (including a separate bounded multipart-body limit to stay below the host’s request cap). MediaRecorder selects WebM/Opus, MP4, or Ogg/Opus according to browser support. HTTPS or localhost is required; plain HTTP on a LAN hostname cannot request microphone access. Escape or the cancel icon discards dictation; switching to Products, starting New chat, hiding the browser tab, or leaving the page cancels capture, pending permission results, and transcription. A late permission grant has its tracks stopped, and late transcripts cannot populate a different chat. Permission, device, connection, and transcription errors preserve the draft and photos. Reduced motion holds the waveform still; animations, audio contexts, tracks, timers, and requests clean up when hidden or unmounted.
+
+The waveform in [components/admin/voice-input.tsx](components/admin/voice-input.tsx) is an original compact implementation inspired by ElevenLabs’ [Bar Visualizer](https://ui.elevenlabs.io/docs/components/bar-visualizer), with no ElevenLabs dependency or service. [lib/admin/voice-recorder.ts](lib/admin/voice-recorder.ts) owns the cancellable recording lifecycle; [lib/admin/speech-api.ts](lib/admin/speech-api.ts) owns request validation and Groq translation. `pnpm test:speech` covers both with mocked APIs. Browser microphone and visual checks remain user-led.
 
 ### Instagram via Zernio
 
@@ -469,7 +483,7 @@ Audited against the installed Next 16.4 docs (production checklist, caching, err
   - `X-Content-Type-Options: nosniff`.
   - `Referrer-Policy: strict-origin-when-cross-origin`.
   - `X-Frame-Options: SAMEORIGIN`.
-  - A `Permissions-Policy` that turns off camera, microphone, geolocation, and topics.
+  - A `Permissions-Policy` that turns off camera, geolocation, and topics. Microphone is allowed for this origin on `/admin` pages (permission is still requested by the browser); it is disabled elsewhere.
 
   It also drops `X-Powered-By`.
 

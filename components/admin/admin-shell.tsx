@@ -138,6 +138,7 @@ export function AdminShell({
           hidden={view !== "chat"}
         >
           <AdminChat
+            active={view === "chat"}
             sessionId={sessionId}
             preview={preview}
             actionsTarget={chatActions}

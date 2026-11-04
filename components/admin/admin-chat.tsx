@@ -6,12 +6,14 @@ import {
   useRef,
   useState,
   useTransition,
+  type Dispatch,
   type RefObject,
+  type SetStateAction,
 } from "react"
 import { createPortal } from "react-dom"
 import { previewToolName } from "@/lib/admin/tool-names"
 import { useRouter } from "next/navigation"
-import { ArrowUp, ImagePlus, Pencil, Square, X } from "lucide-react"
+import { ArrowUp, ImagePlus, Mic, Pencil, Square, X } from "lucide-react"
 import { AnimatePresence, MotionConfig, motion } from "motion/react"
 import { Streamdown } from "streamdown"
 import {
@@ -39,6 +41,7 @@ import { orderScope, ProductOrder } from "@/components/admin/product-order"
 import type { ProductRequest } from "@/components/admin/products-view"
 import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
+import { useVoiceInput, VoiceWaveform } from "@/components/admin/voice-input"
 import { ChromaticButton } from "@/components/chromatic-button"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageContent, MessageFooter } from "@/components/ui/message"
@@ -93,12 +96,14 @@ async function accessToken() {
 }
 
 export function AdminChat({
+  active,
   sessionId,
   preview,
   actionsTarget,
   onSession,
   onProduct,
 }: {
+  active: boolean
   sessionId?: string
   /** Current site data the change previews build on. */
   preview: PreviewData
@@ -113,6 +118,7 @@ export function AdminChat({
   const [, startRefresh] = useTransition()
   const refreshed = useRef(new Set<string>())
   const [ending, setEnding] = useState(false)
+  const [voiceReset, setVoiceReset] = useState(0)
 
   const agent = useEveAgent({
     auth: { bearer: accessToken },
@@ -153,6 +159,7 @@ export function AdminChat({
   // Chats are disposable: long-term memory keeps what matters, so New chat
   // ends the server session instead of leaving it behind.
   const newChat = async () => {
+    setVoiceReset((current) => current + 1)
     setEnding(true)
     try {
       if (agent.session) await agent.end()
@@ -230,7 +237,9 @@ export function AdminChat({
 
             <Composer
               agent={agent}
-              disabled={resuming}
+              active={active}
+              voiceReset={voiceReset}
+              disabled={resuming || ending}
               busy={busy}
               text={draft}
               onText={setDraft}
@@ -931,6 +940,8 @@ const MAX_MB = Math.round(PHOTO_MAX_BYTES / 1e6)
 
 function Composer({
   agent,
+  active,
+  voiceReset,
   disabled,
   busy,
   text,
@@ -938,10 +949,12 @@ function Composer({
   field,
 }: {
   agent: Agent
+  active: boolean
+  voiceReset: number
   disabled: boolean
   busy: boolean
   text: string
-  onText: (text: string) => void
+  onText: Dispatch<SetStateAction<string>>
   field: RefObject<HTMLTextAreaElement | null>
 }) {
   const [photos, setPhotos] = useState<Photo[]>([])
@@ -955,6 +968,20 @@ function Composer({
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
+  const voice = useVoiceInput(active && !disabled, voiceReset)
+  const dictating = voice.phase !== "idle"
+  const wasDictating = useRef(false)
+  useEffect(() => {
+    if (wasDictating.current && !dictating && active && !disabled)
+      field.current?.focus()
+    wasDictating.current = dictating
+  }, [dictating, active, disabled, field])
+  const voiceLabel =
+    voice.phase === "recording"
+      ? "Stop recording"
+      : dictating
+        ? "Cancel voice input"
+        : "Record a message"
 
   useEffect(() => {
     const urls = previews.current
@@ -1079,7 +1106,7 @@ function Composer({
         `Photo uploaded: ${photo.path} (${photo.width}×${photo.height})`
     )
     const message = [text.trim(), ...lines].filter(Boolean).join("\n")
-    if (!message || disabled || uploading) return
+    if (!message || disabled || uploading || dictating) return
     const content =
       ready.length === 0
         ? message
@@ -1112,6 +1139,12 @@ function Composer({
       onSubmit={(event) => {
         event.preventDefault()
         void submit()
+      }}
+      onKeyDown={(event) => {
+        if (event.key === "Escape" && dictating) {
+          event.preventDefault()
+          voice.cancel()
+        }
       }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
@@ -1148,6 +1181,20 @@ function Composer({
           {notice}
         </p>
       )}
+      {voice.error && (
+        <p className={styles.hint} role="alert">
+          {voice.error}
+        </p>
+      )}
+      <span className="visually-hidden" role="status">
+        {voice.phase === "requesting"
+          ? "Waiting for microphone permission."
+          : voice.phase === "recording"
+            ? "Recording. Press Stop recording to transcribe, or Escape to cancel."
+            : voice.phase === "transcribing"
+              ? "Transcribing to English."
+              : ""}
+      </span>
 
       <div className={styles.inputRow}>
         {/* The photo button with its popover, which grows out of the
@@ -1212,31 +1259,42 @@ function Composer({
         <label className="visually-hidden" htmlFor="admin-message">
           Message
         </label>
-        <textarea
-          ref={field}
-          id="admin-message"
-          rows={1}
-          value={text}
-          placeholder="Ask for a change…"
-          onChange={(event) => setText(event.target.value)}
-          onPaste={(event) => {
-            const files = [...event.clipboardData.files]
-            if (files.some((file) => file.type.startsWith("image/"))) {
-              addFiles(files)
-              if (!event.clipboardData.getData("text")) event.preventDefault()
-            }
-          }}
-          onKeyDown={(event) => {
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault()
-              void submit()
-            }
-          }}
-        />
+        <div className={styles.messageField} aria-busy={dictating}>
+          <textarea
+            ref={field}
+            id="admin-message"
+            rows={1}
+            value={text}
+            placeholder={dictating ? "" : "Ask for a change…"}
+            hidden={dictating}
+            readOnly={dictating}
+            onChange={(event) => setText(event.target.value)}
+            onPaste={(event) => {
+              const files = [...event.clipboardData.files]
+              if (files.some((file) => file.type.startsWith("image/"))) {
+                addFiles(files)
+                if (!event.clipboardData.getData("text")) event.preventDefault()
+              }
+            }}
+            onKeyDown={(event) => {
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.nativeEvent.isComposing
+              ) {
+                event.preventDefault()
+                void submit()
+              }
+            }}
+          />
+          {voice.phase !== "idle" && (
+            <VoiceWaveform
+              stream={voice.stream}
+              phase={voice.phase}
+              seconds={voice.seconds}
+            />
+          )}
+        </div>
         {busy && (
           <button
             type="button"
@@ -1247,6 +1305,36 @@ function Composer({
             <Square size={16} aria-hidden="true" />
           </button>
         )}
+        <button
+          type="button"
+          className={`${styles.iconButton} ${styles.microphone}`}
+          aria-label={voiceLabel}
+          title={voiceLabel}
+          data-recording={voice.phase === "recording" || undefined}
+          disabled={disabled || !active}
+          onClick={() => {
+            if (voice.phase === "recording") voice.stop()
+            else if (dictating) voice.cancel()
+            else {
+              closePanel(false)
+              void voice.start((transcript) => {
+                setText((current) =>
+                  current.trimEnd()
+                    ? `${current.trimEnd()} ${transcript}`
+                    : transcript
+                )
+              })
+            }
+          }}
+        >
+          {voice.phase === "recording" ? (
+            <Square size={16} fill="currentColor" aria-hidden="true" />
+          ) : dictating ? (
+            <X size={19} aria-hidden="true" />
+          ) : (
+            <Mic size={20} strokeWidth={1.6} aria-hidden="true" />
+          )}
+        </button>
         <ChromaticButton
           type="submit"
           className={styles.send}
@@ -1269,7 +1357,10 @@ function Composer({
           entranceDistance={20}
           entranceScale={0.65}
           disabled={
-            disabled || uploading || (!text.trim() && ready.length === 0)
+            disabled ||
+            uploading ||
+            dictating ||
+            (!text.trim() && ready.length === 0)
           }
         >
           <ArrowUp size={20} aria-hidden="true" />

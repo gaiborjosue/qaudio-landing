@@ -68,7 +68,19 @@ const nextConfig: NextConfig = {
       new URL("/storage/v1/object/public/media/**", supabaseUrl),
     ],
   },
-  headers: async () => [{ source: "/:path*", headers: securityHeaders }],
+  headers: async () => [
+    { source: "/:path*", headers: securityHeaders },
+    {
+      source: "/admin/:path*",
+      headers: [
+        {
+          key: "Permissions-Policy",
+          value:
+            "camera=(), microphone=(self), geolocation=(), browsing-topics=()",
+        },
+      ],
+    },
+  ],
   // Keep the live qaudio.com address working; the menu links straight to the
   // Used Equipment category.
   redirects: async () => [

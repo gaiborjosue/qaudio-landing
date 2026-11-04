@@ -671,8 +671,14 @@
   border-radius: 24px;
   background: #fff;
 }
-.inputRow textarea {
+.messageField {
   flex: 1;
+  min-width: 0;
+}
+.inputRow textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
   min-height: 40px;
   max-height: 200px;
   padding: 9px 4px;
@@ -683,6 +689,39 @@
   line-height: 1.45;
   resize: none;
   field-sizing: content;
+}
+.inputRow textarea[hidden] {
+  display: none;
+}
+.voiceWaveform {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 4px;
+}
+.voiceWaveform canvas {
+  flex: 1;
+  width: 0;
+  min-width: 0;
+  height: 36px;
+}
+.voiceTime {
+  flex-shrink: 0;
+  color: #666;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.microphone:hover:not(:disabled),
+.microphone[data-recording] {
+  background: #ececec;
+}
+.microphone[data-recording] {
+  color: #111;
+}
+.microphone:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 .inputRow textarea:focus-visible {
   outline: none;
