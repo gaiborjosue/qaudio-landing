@@ -82,7 +82,7 @@ type Agent = UseEveAgentReturn
 // Shown at the top of every chat, as if the assistant opened it. The owner is
 // the only admin; the agent's instructions know not to greet a second time.
 const WELCOME =
-  "Hello Dariuz! This is Tune, your Q-Audio web assistant. I can help you with anything you need to do in your website, just ask me 😊!"
+  "Hello Dariusz! This is Tune, your Q-Audio assistant. I can help you with anything in your website or even post on Instagram, just ask me 😊!"
 
 // The agent verifies the admin's Supabase access token on every request;
 // getSession() refreshes it when it's about to expire.
