@@ -63,7 +63,11 @@ export function Choice({
         {...aria}
       >
         {chosen?.tone && <span className={styles.dot} aria-hidden="true" />}
-        <SelectValue placeholder={placeholder} />
+        <SelectValue
+          className={styles.value}
+          placeholder={placeholder}
+          title={chosen?.label}
+        />
       </SelectTrigger>
       <SelectContent
         className={cn(styles.content, "motion-reduce:animate-none")}
@@ -80,7 +84,9 @@ export function Choice({
             data-tone={option.tone}
           >
             {option.tone && <span className={styles.dot} aria-hidden="true" />}
-            {option.label}
+            <span className={styles.optionLabel} title={option.label}>
+              {option.label}
+            </span>
           </SelectItem>
         ))}
       </SelectContent>

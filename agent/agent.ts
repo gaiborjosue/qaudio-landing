@@ -3,12 +3,14 @@ import { FAST_CONTEXT_TOKENS, fastModel, mainChatModel } from "./lib/models"
 
 export default defineAgent({
   description:
-    "Tune, Q Audio's web assistant: edits store hours, news, and deals, and arranges the shop's product order for the owner.",
+    "Tune, Q Audio's web assistant: edits store hours, news, and deals, arranges the shop's product order, and drafts, schedules, and posts the shop's Instagram for the owner.",
   model: mainChatModel,
   compaction: {
     model: fastModel,
     modelContextWindowTokens: FAST_CONTEXT_TOKENS,
   },
+  // sharp (Instagram photo conversion) is a native addon: keep it unbundled.
+  build: { externalDependencies: ["sharp"] },
   // Only the tools in tools/ (read_file and web_fetch are re-added there); no
   // shell or file writing, and no copy of itself.
   defaultTools: false,

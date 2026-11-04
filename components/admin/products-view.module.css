@@ -39,13 +39,14 @@
   font-weight: 500;
 }
 
-/* The sheet: the product form at a comfortable width, its header fixed and
-   its body scrolling, with Save kept at the foot (product-editor.module.css).
+/* The sheet: a fixed header, then the editor's scrolling fields and bottom
+   action row (product-editor.module.css).
    These rules sit outside Tailwind's layers, so they win over the shadcn
    sheet's utilities. */
 .sheet {
-  width: min(780px, 100vw);
+  width: min(960px, 100vw);
   max-width: none;
+  border-left: 0;
   background: #fff;
   color: #111;
   font-size: 14px;
@@ -94,11 +95,11 @@
   outline-offset: -2px;
 }
 .sheetBody {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 24px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
 }
 
 /* The delete confirmation. */
@@ -140,9 +141,6 @@
   }
   .head h2 {
     font-size: 22px;
-  }
-  .sheetBody {
-    padding: 20px 16px;
   }
 }
 

@@ -240,10 +240,61 @@
 }
 .quickMenus {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 .quickMenus > * {
   flex: none;
+}
+.instagramConnection {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  max-width: 100%;
+}
+.instagramStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #4a4a4a;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: none;
+  cursor: pointer;
+}
+.instagramStatus:hover {
+  background: #ededed;
+  color: #111;
+}
+.instagramStatus:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.instagramStatus > svg {
+  flex: none;
+}
+.instagramStatus > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.instagramCheck {
+  color: #15803d;
+}
+.instagramMessage {
+  max-width: 340px;
+  color: #555;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 /* The Edit menu's lists (item-picker.tsx), inside the menu's panel, so
@@ -456,6 +507,10 @@
   border: 1px solid #dcdcdc;
   border-radius: 16px;
   background: #fff;
+}
+/* A question from Tune: the white card alone, without the outline. */
+.question {
+  border-color: transparent;
 }
 /* Direct children only, so previews keep the site's own typography. */
 .card > p {

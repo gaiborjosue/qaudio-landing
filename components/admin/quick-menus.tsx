@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from "react"
 import {
   BadgePercent,
   CalendarClock,
+  Camera,
   Clock,
   Newspaper,
   Package,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react"
 import type { PreviewData } from "@/components/admin/change-preview"
 import { ItemPicker, type PickerItem } from "@/components/admin/item-picker"
+import { InstagramConnection } from "@/components/admin/instagram-connection"
 import type { ProductRequest } from "@/components/admin/products-view"
 import { CreateMenu, type CreateMenuItem } from "@/components/ui/create-menu"
 import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
@@ -38,6 +40,11 @@ const QUICK_STARTS = [
     icon: CalendarClock,
     label: "Schedule change",
     message: "I want to add a schedule change.",
+  },
+  {
+    icon: Camera,
+    label: "Instagram post",
+    message: "I want to create an Instagram post.",
   },
 ]
 
@@ -243,6 +250,12 @@ export function QuickMenus({
       label: "Weekly hours",
       onSelect: () => ask("I want to change the regular weekly hours."),
     },
+    {
+      // Instagram posts live in Zernio, so the agent lists them.
+      icon: Camera,
+      label: "Instagram post",
+      onSelect: () => ask("I want to change an Instagram post."),
+    },
   ]
 
   return (
@@ -262,6 +275,7 @@ export function QuickMenus({
         disabled={disabled}
         panelWidth={fit(1, 320)}
       />
+      <InstagramConnection />
     </div>
   )
 }

@@ -79,7 +79,7 @@ export async function verifyAdminToken(
   return admin
 }
 
-type CallerContext = {
+export type CallerContext = {
   readonly session: {
     readonly auth: {
       readonly current: {

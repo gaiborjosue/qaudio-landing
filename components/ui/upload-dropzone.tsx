@@ -26,7 +26,9 @@
    · reduced motion is read through useSyncExternalStore, so the server
      render and the first client render agree
    · the progress is a labelled progressbar, and only the box's line is a
-     live region, so the rolling percentage isn't read out digit by digit */
+     live region, so the rolling percentage isn't read out digit by digit
+   · an optional split layout puts the drop target beside an Attach files
+     button with a paperclip icon, separated by "or", in the product sheet */
 
 import {
   useEffect,
@@ -36,7 +38,7 @@ import {
   useSyncExternalStore,
 } from "react"
 import { motion, useAnimationControls } from "motion/react"
-import { Check, Upload as UpIcon } from "lucide-react"
+import { Check, Paperclip, Upload as UpIcon } from "lucide-react"
 
 /* ══ Upload dropzone ══════════════════════════════════════
    A drop box. Carry a file into it: it uploads there — name,
@@ -159,6 +161,7 @@ export function UploadDropzone({
   /* how springy the upload lands, 0..100 */
   bounce = 40,
   corner = 20,
+  split = false,
 }: {
   /** Files on the wire and finished, in the order they were added. */
   uploads: DropzoneUpload[]
@@ -168,6 +171,8 @@ export function UploadDropzone({
   maxBytes: number
   bounce?: number
   corner?: number
+  /** Show the drop target and file-picker button side by side. */
+  split?: boolean
 }) {
   const still = useStillness()
   const [over, setOver] = useState(false)
@@ -271,7 +276,7 @@ export function UploadDropzone({
 
   return (
     <div
-      className="upl"
+      className={split ? "upl upl-split" : "upl"}
       style={
         {
           "--upl-r": `${r}px`,
@@ -367,6 +372,27 @@ export function UploadDropzone({
         </div>
       </motion.div>
 
+      {/* The product sheet offers the same file picker as a matching tile. */}
+      {split && (
+        <>
+          <span className="upl-separator" aria-hidden="true">
+            or
+          </span>
+          <button
+            type="button"
+            className="upl-zone upl-attach"
+            onClick={() => input.current?.click()}
+          >
+            <span className="upl-icon" aria-hidden="true">
+              <Paperclip size={18} strokeWidth={2} />
+            </span>
+            <span className="upl-say">
+              <b>Attach files</b>
+            </span>
+          </button>
+        </>
+      )}
+
       {/* Added here: with a file on the wire the box shows the upload, so a
           refusal from the same drop is said under it instead. */}
       {refuse && f && (
@@ -375,16 +401,18 @@ export function UploadDropzone({
         </p>
       )}
       {/* Where Bencho's tray of files lay: the way in without a drag. */}
-      <p className="upl-or">
-        or{" "}
-        <button
-          type="button"
-          className="upl-browse"
-          onClick={() => input.current?.click()}
-        >
-          browse files
-        </button>
-      </p>
+      {!split && (
+        <p className="upl-or">
+          or{" "}
+          <button
+            type="button"
+            className="upl-browse"
+            onClick={() => input.current?.click()}
+          >
+            browse files
+          </button>
+        </p>
+      )}
       <input
         ref={input}
         type="file"

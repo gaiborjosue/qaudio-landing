@@ -31,6 +31,7 @@
 
 .trigger {
   width: 100%;
+  min-width: 0;
   height: 40px;
   gap: 8px;
   padding: 0 11px;
@@ -41,6 +42,14 @@
   font: inherit;
   font-size: 14px;
   cursor: pointer;
+}
+/* The closed field stays on one line; the menu gives its label more room. */
+.value {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .trigger:focus-visible {
   outline: 2px solid #111;
@@ -82,6 +91,23 @@
 }
 .item[data-tone] {
   color: var(--tone-ink);
+}
+.item [data-slot="select-item-text"] {
+  align-items: center;
+  min-width: 0;
+  flex-shrink: 1;
+  white-space: normal;
+}
+.optionLabel {
+  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .dot {

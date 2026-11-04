@@ -8,10 +8,9 @@ import {
   useTransition,
   type ReactNode,
 } from "react"
-import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { ChevronLeft, ChevronRight, Trash2, X } from "lucide-react"
+import { Trash2, WandSparkles } from "lucide-react"
 import {
   generateProductCardLine,
   saveProductFromEditor,
@@ -38,9 +37,9 @@ import {
   UPLOADS,
   type ProductInput,
 } from "@/lib/admin/schemas"
-import { mediaUrl } from "@/lib/media"
 import { MarkdownText } from "@/components/markdown-text"
 import { Choice } from "./choice"
+import { ProductPhotos } from "./product-photos"
 import adminStyles from "./admin.module.css"
 import styles from "./product-editor.module.css"
 
@@ -102,7 +101,7 @@ export function ProductEditor({
   taxonomy: CatalogTaxonomy
   storageKey?: string
   disabled?: boolean
-  /** Keeps Save in view at the foot of a scrolling sheet. */
+  /** Keep the footer at the sheet's bottom while the fields scroll. */
   stickyActions?: boolean
   onSaved: (saved: SavedProduct, input: ProductInput) => void
   onCancel?: () => void
@@ -224,15 +223,6 @@ export function ProductEditor({
       )
     }
   }
-
-  const movePhoto = (index: number, step: -1 | 1) =>
-    setValues((current) => {
-      const images = [...current.images]
-      const to = index + step
-      if (to < 0 || to >= images.length) return current
-      ;[images[index], images[to]] = [images[to], images[index]]
-      return { ...current, images }
-    })
 
   const removePhoto = (index: number) => {
     const photo = values.images[index]
@@ -373,390 +363,343 @@ export function ProductEditor({
       : null
 
   return (
-    <div ref={form} className={styles.editor}>
-      {/* The product's place in the shop, first, like a table's filters. */}
-      <div className={styles.facets}>
-        {field(
-          "category_slug",
-          "Category",
-          <Choice
-            value={values.category_slug}
-            placeholder="Choose…"
-            options={taxonomy.categories.map(({ slug, name }) => ({
-              value: slug,
-              label: name,
-            }))}
-            onChange={(value) => set("category_slug", value)}
-            aria-labelledby={`${fieldId("category_slug")}-label`}
-            {...invalid("category_slug")}
-          />
-        )}
-        {field(
-          "brand_slug",
-          "Brand",
-          <Choice
-            value={values.brand_slug}
-            placeholder="Choose…"
-            options={taxonomy.brands.map(({ slug, name }) => ({
-              value: slug,
-              label: name,
-            }))}
-            onChange={(value) => set("brand_slug", value)}
-            aria-labelledby={`${fieldId("brand_slug")}-label`}
-            {...invalid("brand_slug")}
-          />
-        )}
-        <fieldset className={styles.segmented}>
-          <legend className={styles.label}>Condition</legend>
-          {/* In the shop's condition-badge colors: the cue the details
+    <div
+      ref={form}
+      className={[styles.editor, stickyActions && styles.sheetEditor]
+        .filter(Boolean)
+        .join(" ")}
+    >
+      <motion.div layoutScroll={stickyActions} className={styles.editorContent}>
+        {/* The product's place in the shop, first, like a table's filters. */}
+        <div className={styles.facets}>
+          {field(
+            "category_slug",
+            "Category",
+            <Choice
+              value={values.category_slug}
+              openDown
+              placeholder="Choose…"
+              options={taxonomy.categories.map(({ slug, name }) => ({
+                value: slug,
+                label: name,
+              }))}
+              onChange={(value) => set("category_slug", value)}
+              aria-labelledby={`${fieldId("category_slug")}-label`}
+              {...invalid("category_slug")}
+            />
+          )}
+          {field(
+            "brand_slug",
+            "Brand",
+            <Choice
+              value={values.brand_slug}
+              openDown
+              placeholder="Choose…"
+              options={taxonomy.brands.map(({ slug, name }) => ({
+                value: slug,
+                label: name,
+              }))}
+              onChange={(value) => set("brand_slug", value)}
+              aria-labelledby={`${fieldId("brand_slug")}-label`}
+              {...invalid("brand_slug")}
+            />
+          )}
+          <fieldset className={styles.segmented}>
+            <legend className={styles.label}>Condition</legend>
+            {/* In the shop's condition-badge colors: the cue the details
               page gives the same value. */}
-          <div>
-            {CONDITIONS.map((condition) => (
-              <label key={condition} data-tone={condition.toLowerCase()}>
-                <input
-                  type="radio"
-                  name={fieldId("condition")}
-                  value={condition}
-                  checked={values.condition === condition}
-                  onChange={() => set("condition", condition)}
-                />
-                <span>{condition}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <fieldset className={styles.segmented}>
-          <legend className={styles.label}>Status</legend>
-          <div>
-            {STATUSES.map((status) => (
-              <label key={status.value}>
-                <input
-                  type="radio"
-                  name={fieldId("status")}
-                  value={status.value}
-                  checked={values.status === status.value}
-                  onChange={() => set("status", status.value)}
-                />
-                <span>{status.label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <label className={styles.check}>
-          <input
-            type="checkbox"
-            checked={values.ready_for_audition}
-            onChange={(event) =>
-              set("ready_for_audition", event.target.checked)
-            }
-          />
-          <span>Ready for audition</span>
-        </label>
-      </div>
-
-      <section className={styles.photos} aria-labelledby={fieldId("photos")}>
-        <h3 id={fieldId("photos")} className={styles.label}>
-          Photos
-          <span className={styles.aside}>The first is the cover</span>
-        </h3>
-        {values.images.length > 0 && (
-          <ol className={styles.photoList}>
-            {values.images.map((photo, index) => (
-              <motion.li
-                key={photo.path}
-                layout="position"
-                transition={{
-                  layout: { duration: 0.32, ease: [0.22, 1, 0.36, 1] },
-                }}
-              >
-                <Image
-                  src={mediaUrl(photo.path)}
-                  alt=""
-                  width={112}
-                  height={112}
-                  sizes="112px"
-                />
-                <input
-                  type="text"
-                  value={photo.alt}
-                  placeholder="Describe this photo"
-                  aria-label={`Description of photo ${index + 1}`}
-                  onChange={(event) =>
-                    set(
-                      "images",
-                      values.images.map((item, at) =>
-                        at === index
-                          ? { ...item, alt: event.target.value }
-                          : item
-                      )
-                    )
-                  }
-                />
-                <div className={styles.photoActions}>
-                  <button
-                    type="button"
-                    aria-label={`Move photo ${index + 1} earlier`}
-                    disabled={index === 0}
-                    onClick={() => movePhoto(index, -1)}
-                  >
-                    <ChevronLeft size={14} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Move photo ${index + 1} later`}
-                    disabled={index === values.images.length - 1}
-                    onClick={() => movePhoto(index, 1)}
-                  >
-                    <ChevronRight size={14} aria-hidden="true" />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`Remove photo ${index + 1}`}
-                    onClick={() => removePhoto(index)}
-                  >
-                    <X size={14} aria-hidden="true" />
-                  </button>
-                </div>
-              </motion.li>
-            ))}
-          </ol>
-        )}
-        <UploadDropzone
-          maxBytes={PHOTO_MAX_BYTES}
-          onFiles={upload}
-          uploads={uploads}
-        />
-        {errors.images && (
-          <span className={styles.problem} role="alert">
-            {errors.images}
-          </span>
-        )}
-      </section>
-
-      <div className={styles.fields}>
-        {field(
-          "name",
-          "Name",
-          <input
-            type="text"
-            value={values.name}
-            maxLength={160}
-            onChange={(event) => set("name", event.target.value)}
-            {...invalid("name")}
-          />,
-          styles.wide
-        )}
-        {field(
-          "slug",
-          "Address",
-          <span className={styles.affix}>
-            <span aria-hidden="true">/products/</span>
-            <input
-              type="text"
-              value={values.slug}
-              maxLength={120}
-              onChange={(event) => {
-                setSlugFollows(false)
-                set("slug", event.target.value)
-              }}
-              {...invalid("slug")}
-            />
-          </span>,
-          styles.wide
-        )}
-        {field(
-          "price_cents",
-          "Price",
-          <span className={styles.affix}>
-            <span aria-hidden="true">$</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={values.price}
-              placeholder="1,299"
-              onChange={(event) => set("price", event.target.value)}
-              {...invalid("price_cents")}
-            />
-          </span>
-        )}
-        {field(
-          "msrp_cents",
-          <>
-            List price <span className={styles.aside}>MSRP, optional</span>
-          </>,
-          <span className={styles.affix}>
-            <span aria-hidden="true">$</span>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={values.msrp}
-              onChange={(event) => set("msrp", event.target.value)}
-              {...invalid("msrp_cents")}
-            />
-          </span>
-        )}
-        {field(
-          "price_unit",
-          "Sold",
-          <Choice
-            value={values.price_unit}
-            options={UNITS}
-            onChange={(value) => set("price_unit", value as "each" | "pair")}
-            aria-labelledby={`${fieldId("price_unit")}-label`}
-            {...invalid("price_unit")}
-          />
-        )}
-        {field(
-          "description",
-          <>
-            Description
-            <span className={styles.aside}>
-              “- ” starts a bullet, **bold** for emphasis
-            </span>
-          </>,
-          <div className={styles.markdownField}>
-            <div className={styles.modes}>
-              <button
-                type="button"
-                aria-pressed={!showDescription}
-                onClick={() => setShowDescription(false)}
-              >
-                Write
-              </button>
-              <button
-                type="button"
-                aria-pressed={showDescription}
-                onClick={() => setShowDescription(true)}
-              >
-                Preview
-              </button>
+            <div>
+              {CONDITIONS.map((condition) => (
+                <label key={condition} data-tone={condition.toLowerCase()}>
+                  <input
+                    type="radio"
+                    name={fieldId("condition")}
+                    value={condition}
+                    checked={values.condition === condition}
+                    onChange={() => set("condition", condition)}
+                  />
+                  <span>{condition}</span>
+                </label>
+              ))}
             </div>
-            {showDescription ? (
-              values.description.trim() ? (
-                <MarkdownText
-                  className={styles.markdownPreview}
-                  text={values.description}
-                />
-              ) : (
-                <p className={styles.markdownPreview}>Nothing written yet.</p>
-              )
-            ) : (
-              <textarea
-                rows={9}
-                value={values.description}
-                placeholder={
-                  "What it is, in a line.\n\n- A feature\n- Another feature\n\n**Hand assembled in the USA**"
-                }
-                onChange={(event) => set("description", event.target.value)}
-                {...invalid("description")}
+          </fieldset>
+          <fieldset className={styles.segmented}>
+            <legend className={styles.label}>Status</legend>
+            <div>
+              {STATUSES.map((status) => (
+                <label key={status.value}>
+                  <input
+                    type="radio"
+                    name={fieldId("status")}
+                    value={status.value}
+                    checked={values.status === status.value}
+                    onChange={() => set("status", status.value)}
+                  />
+                  <span>{status.label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={values.ready_for_audition}
+              onChange={(event) =>
+                set("ready_for_audition", event.target.checked)
+              }
+            />
+            <span>Ready for audition</span>
+          </label>
+        </div>
+
+        <section className={styles.photos} aria-labelledby={fieldId("photos")}>
+          <h3 id={fieldId("photos")} className={styles.label}>
+            Photos
+            <span className={styles.aside}>The first is the cover</span>
+          </h3>
+          {values.images.length > 0 && (
+            <ProductPhotos
+              images={values.images}
+              onChange={(images) => set("images", images)}
+              onRemove={removePhoto}
+            />
+          )}
+          <UploadDropzone
+            maxBytes={PHOTO_MAX_BYTES}
+            onFiles={upload}
+            uploads={uploads}
+            split
+          />
+          {errors.images && (
+            <span className={styles.problem} role="alert">
+              {errors.images}
+            </span>
+          )}
+        </section>
+
+        <div className={styles.fields}>
+          {field(
+            "name",
+            "Name",
+            <input
+              type="text"
+              value={values.name}
+              maxLength={160}
+              onChange={(event) => set("name", event.target.value)}
+              {...invalid("name")}
+            />,
+            styles.wide
+          )}
+          {field(
+            "slug",
+            "Address",
+            <span className={styles.affix}>
+              <span aria-hidden="true">/products/</span>
+              <input
+                type="text"
+                value={values.slug}
+                maxLength={120}
+                onChange={(event) => {
+                  setSlugFollows(false)
+                  set("slug", event.target.value)
+                }}
+                {...invalid("slug")}
               />
-            )}
-          </div>,
-          styles.full
-        )}
-        {/* Tune can draft the card line from the current description,
+            </span>,
+            styles.wide
+          )}
+          {field(
+            "price_cents",
+            "Price",
+            <span className={styles.affix}>
+              <span aria-hidden="true">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={values.price}
+                placeholder="1,299"
+                onChange={(event) => set("price", event.target.value)}
+                {...invalid("price_cents")}
+              />
+            </span>
+          )}
+          {field(
+            "msrp_cents",
+            <>
+              List price <span className={styles.aside}>MSRP, optional</span>
+            </>,
+            <span className={styles.affix}>
+              <span aria-hidden="true">$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={values.msrp}
+                onChange={(event) => set("msrp", event.target.value)}
+                {...invalid("msrp_cents")}
+              />
+            </span>
+          )}
+          {field(
+            "price_unit",
+            "Sold",
+            <Choice
+              value={values.price_unit}
+              options={UNITS}
+              onChange={(value) => set("price_unit", value as "each" | "pair")}
+              aria-labelledby={`${fieldId("price_unit")}-label`}
+              {...invalid("price_unit")}
+            />
+          )}
+          {field(
+            "description",
+            "Product Description",
+            <div className={styles.markdownField}>
+              <div className={styles.modes}>
+                <button
+                  type="button"
+                  aria-pressed={!showDescription}
+                  onClick={() => setShowDescription(false)}
+                >
+                  Write
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={showDescription}
+                  onClick={() => setShowDescription(true)}
+                >
+                  Preview
+                </button>
+              </div>
+              {showDescription ? (
+                values.description.trim() ? (
+                  <MarkdownText
+                    className={styles.markdownPreview}
+                    text={values.description}
+                  />
+                ) : (
+                  <p className={styles.markdownPreview}>Nothing written yet.</p>
+                )
+              ) : (
+                <textarea
+                  rows={9}
+                  value={values.description}
+                  placeholder={
+                    "What it is, in a line.\n\n- A feature\n- Another feature\n\n**Hand assembled in the USA**"
+                  }
+                  onChange={(event) => set("description", event.target.value)}
+                  {...invalid("description")}
+                />
+              )}
+            </div>,
+            styles.full
+          )}
+          {/* Tune can draft the card line from the current description,
             ready to review or edit before Save. */}
-        <div className={`${styles.field} ${styles.full}`}>
-          <span
-            id={`${fieldId("short_description")}-label`}
-            className={styles.label}
-          >
-            Card line
-            {editingCard && (
-              <span className={styles.aside}>
-                {values.short_description.length}/300
+          <div className={`${styles.field} ${styles.full}`}>
+            <span
+              id={`${fieldId("short_description")}-label`}
+              className={styles.label}
+            >
+              Card line
+              {editingCard && (
+                <span className={styles.aside}>
+                  {values.short_description.length}/300
+                </span>
+              )}
+            </span>
+            {editingCard ? (
+              <textarea
+                rows={2}
+                value={values.short_description}
+                aria-labelledby={`${fieldId("short_description")}-label`}
+                onChange={(event) =>
+                  set("short_description", event.target.value)
+                }
+                {...invalid("short_description")}
+              />
+            ) : (
+              <p
+                className={styles.cardLine}
+                aria-live="polite"
+                aria-busy={writingCard}
+              >
+                {values.short_description}
+              </p>
+            )}
+            {errors.short_description && (
+              <span
+                id={`${fieldId("short_description")}-problem`}
+                className={styles.problem}
+              >
+                {errors.short_description}
               </span>
             )}
-          </span>
-          {editingCard ? (
-            <textarea
-              rows={2}
-              value={values.short_description}
-              aria-labelledby={`${fieldId("short_description")}-label`}
-              onChange={(event) => set("short_description", event.target.value)}
-              {...invalid("short_description")}
-            />
-          ) : (
-            <p
-              className={styles.cardLine}
-              aria-live="polite"
-              aria-busy={writingCard}
-            >
-              {values.short_description}
-            </p>
-          )}
-          {errors.short_description && (
-            <span
-              id={`${fieldId("short_description")}-problem`}
-              className={styles.problem}
-            >
-              {errors.short_description}
-            </span>
-          )}
-          <div className={styles.inlineActions}>
-            {!editingCard && (
-              <button
-                type="button"
-                className={styles.editCard}
-                disabled={disabled || saving || writingCard}
-                onClick={() => setEditingCard(true)}
-              >
-                {values.short_description ? "Edit" : "Write it myself"}
-              </button>
-            )}
-            {(cardLineInput.success || writingCard) && (
-              <button
-                type="button"
-                className={adminStyles.secondary}
-                disabled={disabled || saving || writingCard}
-                onClick={writeCard}
-              >
-                {writingCard ? "Writing…" : "Let Tune write it"}
-              </button>
+            <div className={styles.inlineActions}>
+              {(cardLineInput.success || writingCard) && (
+                <button
+                  type="button"
+                  className={adminStyles.secondary}
+                  disabled={disabled || saving || writingCard}
+                  onClick={writeCard}
+                >
+                  <WandSparkles size={15} aria-hidden="true" />
+                  {writingCard ? "Writing…" : "Let Tune write it"}
+                </button>
+              )}
+              {!editingCard && (
+                <button
+                  type="button"
+                  className={styles.editCard}
+                  disabled={disabled || saving || writingCard}
+                  onClick={() => setEditingCard(true)}
+                >
+                  {values.short_description ? "Edit" : "Write it myself"}
+                </button>
+              )}
+            </div>
+            {cardLineError && (
+              <p className={styles.problem} role="alert">
+                {cardLineError}
+              </p>
             )}
           </div>
-          {cardLineError && (
-            <p className={styles.problem} role="alert">
-              {cardLineError}
-            </p>
+          {field(
+            "manufacturer_url",
+            "Manufacturer page",
+            <input
+              type="url"
+              value={values.manufacturer_url}
+              placeholder="https://"
+              onChange={(event) => set("manufacturer_url", event.target.value)}
+              {...invalid("manufacturer_url")}
+            />,
+            styles.full
           )}
         </div>
-        {field(
-          "manufacturer_url",
-          "Manufacturer page",
-          <input
-            type="url"
-            value={values.manufacturer_url}
-            placeholder="https://"
-            onChange={(event) => set("manufacturer_url", event.target.value)}
-            {...invalid("manufacturer_url")}
-          />,
-          styles.full
-        )}
-      </div>
 
-      <details
-        className={adminStyles.preview}
-        onToggle={(event) => setPreviewOpen(event.currentTarget.open)}
-      >
-        <summary>Preview</summary>
-        {preview && "product" in preview ? (
-          <div className={adminStyles.productPreview} inert>
-            <ProductPageView product={preview.product} />
-          </div>
-        ) : (
-          <p className={adminStyles.hint}>
-            {preview?.problem ??
-              "Add a name, category, brand, and price to see the page."}
+        <details
+          className={adminStyles.preview}
+          onToggle={(event) => setPreviewOpen(event.currentTarget.open)}
+        >
+          <summary>Preview</summary>
+          {preview && "product" in preview ? (
+            <div className={adminStyles.productPreview} inert>
+              <ProductPageView product={preview.product} />
+            </div>
+          ) : (
+            <p className={adminStyles.hint}>
+              {preview?.problem ??
+                "Add a name, category, brand, and price to see the page."}
+            </p>
+          )}
+        </details>
+
+        {message && (
+          <p className={adminStyles.error} role="alert">
+            {message}
           </p>
         )}
-      </details>
-
-      {message && (
-        <p className={adminStyles.error} role="alert">
-          {message}
-        </p>
-      )}
+      </motion.div>
       <div
         className={[styles.actions, stickyActions && styles.stickyActions]
           .filter(Boolean)

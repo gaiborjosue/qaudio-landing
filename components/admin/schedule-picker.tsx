@@ -23,25 +23,36 @@ const fromDay = (day: Date) =>
   `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 
 /**
- * "Schedule" on a news post's approval card: the button morphs into a
- * calendar with one go-live time. Choosing sends the time to the agent as a
- * message, which withdraws this card and brings back the post scheduled for
- * that time, so the owner always approves exactly what will be saved.
+ * "Schedule" on a news or Instagram post's approval card: the button morphs
+ * into a calendar with one go-live time. Choosing sends the time to the
+ * agent as a message, which withdraws this card and brings back the post
+ * scheduled for that time, so the owner always approves exactly what will
+ * be saved. `maxDays` limits how far ahead (Instagram: a week).
  */
 export function SchedulePicker({
   current,
   disabled,
+  maxDays,
   onSchedule,
 }: {
   /** The proposal's store-time published_at, when it has one. */
   current: string | null
   disabled: boolean
+  maxDays?: number
   onSchedule: (local: string) => void
 }) {
   const id = useId()
   const [open, setOpen] = useState(false)
-  const now = toStoreDateTime(new Date())
-  const preset = current && STORE_DATETIME.test(current) && current > now
+  const clock = new Date()
+  const now = toStoreDateTime(clock)
+  const latest = maxDays
+    ? toStoreDateTime(new Date(clock.getTime() + maxDays * 24 * 60 * 60 * 1000))
+    : null
+  const preset =
+    current &&
+    STORE_DATETIME.test(current) &&
+    current > now &&
+    (!latest || current <= latest)
   const [day, setDay] = useState<Date | undefined>(
     preset ? toDay(current.slice(0, 10)) : undefined
   )
@@ -58,7 +69,9 @@ export function SchedulePicker({
 
   const local = day ? `${fromDay(day)}T${time}` : null
   const future = local !== null && STORE_DATETIME.test(local) && local > now
+  const inRange = future && (!latest || local <= latest)
   const today = toDay(now.slice(0, 10))
+  const lastDay = latest ? toDay(latest.slice(0, 10)) : null
 
   if (!open) {
     return (
@@ -113,7 +126,11 @@ export function SchedulePicker({
           selected={day}
           onSelect={setDay}
           defaultMonth={day ?? today}
-          disabled={{ before: today }}
+          disabled={
+            lastDay
+              ? [{ before: today }, { after: lastDay }]
+              : { before: today }
+          }
           className={styles.calendar}
           autoFocus
         />
@@ -130,16 +147,18 @@ export function SchedulePicker({
           <button
             type="button"
             className={styles.primary}
-            disabled={!future || disabled}
+            disabled={!inRange || disabled}
             onClick={() => {
-              if (!local || !future) return
+              if (!local || !inRange) return
               onSchedule(local)
               setOpen(false)
             }}
           >
-            {future
+            {inRange
               ? `Schedule for ${formatStoreDateTime(local)}`
-              : "Pick a future time"}
+              : future
+                ? `Pick a time within ${maxDays} days`
+                : "Pick a future time"}
           </button>
         </div>
       </motion.div>

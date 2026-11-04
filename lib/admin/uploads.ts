@@ -21,7 +21,7 @@ export type Fail = (what: string, error: DatabaseError) => Error
 export async function placeUploads(
   supabase: SupabaseClient<Database>,
   paths: Iterable<string>,
-  folder: "products" | "news",
+  folder: "products" | "news" | "instagram",
   fail: Fail
 ) {
   const placed = new Map<string, string>()

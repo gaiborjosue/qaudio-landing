@@ -50,7 +50,7 @@ export const mainChatModel = auto({
       model: fastModel,
       modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
       description:
-        "Use only for clearly simple, read-only work: greetings, thanks, explanations or summaries of information already in the conversation, and a bounded lookup or listing in one domain (hours, products, news, or deals). Loading the domain skill and discovering its read tool is fine. Do not use for changes, follow-ups supplying details for an unfinished change, image interpretation, research, or complex tool workflows. Read current site data when needed; never rely on memory for it.",
+        "Use only for clearly simple, read-only work: greetings, thanks, explanations or summaries of information already in the conversation, and a bounded lookup or listing in one domain (hours, products, news, deals, or Instagram posts). Loading the domain skill and discovering its read tool is fine. Do not use for changes, follow-ups supplying details for an unfinished change, image interpretation, research, or complex tool workflows. Read current site data when needed; never rely on memory for it.",
     },
   },
 })

@@ -244,7 +244,7 @@ export function ProductsView({
               <X size={18} strokeWidth={2} aria-hidden="true" />
             </SheetClose>
           </div>
-          <motion.div layoutScroll className={styles.sheetBody}>
+          <div className={styles.sheetBody}>
             {shown && (
               <ProductEditor
                 key={editing?.id ?? "new"}
@@ -273,7 +273,7 @@ export function ProductsView({
                 }
               />
             )}
-          </motion.div>
+          </div>
           {sheetOpen && confirmation}
         </SheetContent>
       </Sheet>

@@ -1,7 +1,7 @@
 // Read-only integration check for the pinned eve release. No model or site writes.
 // Run: node scripts/verify-agent-catalog.mjs
 import assert from "node:assert/strict"
-import { execFileSync } from "node:child_process"
+import { execSync } from "node:child_process"
 import { readFileSync, existsSync } from "node:fs"
 import { registerHooks } from "node:module"
 import { dirname, resolve } from "node:path"
@@ -74,10 +74,8 @@ registerHooks({
   },
 })
 
-execFileSync("pnpm", ["exec", "eve", "info", "--json"], {
-  cwd: root,
-  stdio: "pipe",
-})
+// A fixed command through the shell, so pnpm's Windows shim runs too.
+execSync("pnpm exec eve info --json", { cwd: root, stdio: "pipe" })
 const manifest = JSON.parse(
   readFileSync(resolve(root, ".eve/compile/compiled-agent-manifest.json"))
 )
@@ -114,7 +112,7 @@ const catalog = buildStepCatalog({
   session: {},
   endsTurn: true,
 })
-assert.equal(catalog.deferred.size, 14)
+assert.equal(catalog.deferred.size, 19)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -132,6 +130,7 @@ for (const [group, count] of Object.entries({
   products: 3,
   news: 4,
   deals: 3,
+  instagram: 5,
 })) {
   const result = await catalog.advertised
     .get("eve__search")
@@ -218,6 +217,36 @@ const fixtures = {
     },
   ],
   delete_deal: [schemas.deleteDealInputSchema, { id, title: "Sample" }],
+  save_instagram_post: [
+    schemas.instagramPostProposalSchema,
+    {
+      kind: "feed",
+      photos: [
+        {
+          path: "uploads/sample.webp",
+          width: 1600,
+          height: 1200,
+          alt: "Sample",
+        },
+        {
+          path: "products/sample.webp",
+          width: 1200,
+          height: 1200,
+          alt: "Sample",
+        },
+      ],
+      caption: "Sample #hifi",
+      when: "draft",
+    },
+  ],
+  delete_instagram_post: [
+    schemas.deleteInstagramPostInputSchema,
+    { id: "0000000000000000000000a1", summary: "Draft: “Sample”" },
+  ],
+  retry_instagram_post: [
+    schemas.retryInstagramPostInputSchema,
+    { id: "0000000000000000000000a1", summary: "Failed: “Sample”" },
+  ],
 }
 let writes = 0
 for (const [name, definition] of catalog.deferred) {
@@ -253,7 +282,7 @@ for (const [name, definition] of catalog.deferred) {
     "valid"
   )
 }
-assert.equal(writes, 8)
+assert.equal(writes, 11)
 // Products are saved and deleted in the admin's Products tab; the agent has
 // no product writes left, only their names for older chats' cards.
 const retired = ["products__save_product", "products__delete_product"]
@@ -322,7 +351,26 @@ for (const name of [...catalog.deferred.keys(), ...retired]) {
   assert(!render(name).includes("Unknown category"))
   renders += 2
 }
-assert.equal(renders, 20)
+assert.equal(renders, 26)
+// A pending carousel's card adds the reorderable photo row, and the post
+// follows the arranged order.
+const arranged = renderToStaticMarkup(
+  createElement(ChangePreview, {
+    tool: "instagram__save_post",
+    input: fixtures.save_instagram_post[1],
+    data,
+    photoOrder: { order: [1, 0], onOrder() {} },
+  })
+)
+assert(arranged.includes('aria-label="Photo order"'))
+// The post's photos carry their alt text; the row's thumbnails don't.
+const slides = [
+  ...arranged.matchAll(/src="[^"]*\/media\/([^"]+)" alt="Sample"/g),
+]
+assert.deepEqual(
+  slides.map((match) => match[1]),
+  ["products/sample.webp", "uploads/sample.webp"]
+)
 console.log(
-  "Catalog verified: 14 deferred (hours 4, products 3, news 4, deals 3); 3 authored direct helpers; discovery across groups; canonical routing; all 8 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 20 current/historical preview renders. No site data read or written."
+  "Catalog verified: 19 deferred (hours 4, products 3, news 4, deals 3, instagram 5); 3 authored direct helpers; discovery across groups; canonical routing; all 11 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 26 current/historical preview renders, plus an arranged carousel. No site data read or written."
 )

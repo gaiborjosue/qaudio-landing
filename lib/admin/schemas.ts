@@ -1,4 +1,15 @@
 import { z } from "zod"
+import {
+  hashtagCount,
+  INSTAGRAM_CAPTION_MAX,
+  INSTAGRAM_HASHTAGS_MAX,
+  INSTAGRAM_MENTIONS_MAX,
+  INSTAGRAM_PHOTO_SOURCES,
+  INSTAGRAM_PHOTOS_MAX,
+  INSTAGRAM_SCHEDULE_DAYS,
+  instagramScheduleProblem,
+  mentionCount,
+} from "./instagram"
 import { STORE_DATETIME } from "./store-time"
 
 // Inputs of the admin agent's write tools. The agent validates tool calls with
@@ -411,6 +422,128 @@ export const deleteDealInputSchema = z.object({
     .describe("The deal's title, for the approval card."),
 })
 
+// Instagram posts, published through Zernio. Ids are Zernio's.
+const zernioId = z
+  .string()
+  .regex(/^[a-f0-9]{24}$/i, "A Zernio post id from instagram__list_posts.")
+
+export const instagramPhotoSchema = z.object({
+  path: mediaPath
+    .refine(
+      (path) =>
+        INSTAGRAM_PHOTO_SOURCES.some((folder) => path.startsWith(folder)),
+      `Use a photo from ${INSTAGRAM_PHOTO_SOURCES.join(", ")}.`
+    )
+    .describe(
+      "Media bucket path: an attached photo's uploads/ path, or a product's, news post's, or earlier Instagram post's saved photo."
+    ),
+  width: z.int().positive(),
+  height: z.int().positive(),
+  alt: z
+    .string()
+    .trim()
+    .min(1)
+    .max(1000)
+    .describe("What the photo shows; Instagram's alt text."),
+})
+
+/** What the approval card previews; the tool adds the timing check. */
+export const instagramPostInputSchema = z
+  .object({
+    id: zernioId
+      .optional()
+      .describe(
+        "An existing draft or scheduled post's id to change it; omit to add a new one."
+      ),
+    account: z
+      .string()
+      .regex(/^@?[A-Za-z0-9_.]{1,30}$/)
+      .optional()
+      .describe(
+        "The Instagram username to post as, from instagram__get_account."
+      ),
+    kind: z
+      .enum(["feed", "story"])
+      .describe(
+        "feed: one photo, or 2–10 as a carousel. story: one photo, shown for 24 hours, without a caption."
+      ),
+    photos: z
+      .array(instagramPhotoSchema)
+      .min(1)
+      .max(INSTAGRAM_PHOTOS_MAX)
+      .describe("In order; the first sets the post's shape."),
+    fit: z
+      .enum(["cover", "contain"])
+      .optional()
+      .describe(
+        "cover fills the frame, trimming edges; contain shows each whole photo with bars. Omit for the default: cover for feed posts; for a story, cover only when the photo is already tall."
+      ),
+    caption: z
+      .string()
+      .max(INSTAGRAM_CAPTION_MAX)
+      .default("")
+      .describe(
+        `Feed posts only, ${INSTAGRAM_CAPTION_MAX} characters at most; the first 125 show before "more". Hashtags go in the text.`
+      ),
+    when: z
+      .union([
+        z.literal("draft"),
+        z.literal("now"),
+        z.string().regex(STORE_DATETIME),
+      ])
+      .describe(
+        `"draft" keeps it unpublished in Zernio; "now" posts it once approved; a store-time "YYYY-MM-DDTHH:MM" schedules it, at most ${INSTAGRAM_SCHEDULE_DAYS} days ahead.`
+      ),
+  })
+  .superRefine((post, ctx) => {
+    if (post.kind === "story") {
+      if (post.photos.length !== 1) {
+        ctx.addIssue({ code: "custom", message: "A story has one photo." })
+      }
+      if (post.caption.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Stories have no caption; leave it empty.",
+        })
+      }
+    }
+    if (hashtagCount(post.caption) > INSTAGRAM_HASHTAGS_MAX) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Instagram allows ${INSTAGRAM_HASHTAGS_MAX} hashtags at most.`,
+      })
+    }
+    if (mentionCount(post.caption) > INSTAGRAM_MENTIONS_MAX) {
+      ctx.addIssue({
+        code: "custom",
+        message: `Instagram allows ${INSTAGRAM_MENTIONS_MAX} @mentions at most.`,
+      })
+    }
+  })
+
+/** The tool's input: also checks the time is in the next 7 days. */
+export const instagramPostProposalSchema = instagramPostInputSchema.superRefine(
+  (post, ctx) => {
+    if (post.when === "draft" || post.when === "now") return
+    const problem = instagramScheduleProblem(post.when)
+    if (problem) ctx.addIssue({ code: "custom", message: problem })
+  }
+)
+
+const instagramPostReference = {
+  id: zernioId,
+  summary: z
+    .string()
+    .min(1)
+    .max(200)
+    .describe(
+      'Which post, for the approval card, e.g. "Scheduled Nov 7, 6:00 pm: “The Orbit Theory is in…”".'
+    ),
+}
+
+export const deleteInstagramPostInputSchema = z.object(instagramPostReference)
+export const retryInstagramPostInputSchema = z.object(instagramPostReference)
+
 export type DayHoursInput = z.infer<typeof dayHoursSchema>
 export type WeeklyHoursInput = z.infer<typeof weeklyHoursInputSchema>
 export type HoursChangeInput = z.infer<typeof hoursChangeInputSchema>
@@ -427,3 +560,8 @@ export type NewsPostInput = z.infer<typeof newsPostInputSchema>
 export type DeleteNewsPostInput = z.infer<typeof deleteNewsPostInputSchema>
 export type DealInput = z.infer<typeof dealInputSchema>
 export type DeleteDealInput = z.infer<typeof deleteDealInputSchema>
+export type InstagramPhotoInput = z.infer<typeof instagramPhotoSchema>
+export type InstagramPostInput = z.infer<typeof instagramPostInputSchema>
+export type InstagramPostReference = z.infer<
+  typeof deleteInstagramPostInputSchema
+>

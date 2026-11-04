@@ -14,6 +14,10 @@ const PREVIEW_TOOLS = {
   news__delete_news_post: "delete_news_post",
   deals__save_deal: "save_deal",
   deals__delete_deal: "delete_deal",
+  // Instagram, through Zernio; added under these names, with no older ones.
+  instagram__save_post: "save_instagram_post",
+  instagram__delete_post: "delete_instagram_post",
+  instagram__retry_post: "retry_instagram_post",
 } as const
 
 type PreviewTool = (typeof PREVIEW_TOOLS)[keyof typeof PREVIEW_TOOLS]

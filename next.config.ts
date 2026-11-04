@@ -10,6 +10,9 @@ if (!supabaseUrl) {
 // Baseline headers for every response. HTTPS (HSTS) comes from the host.
 const supabaseOrigin = new URL(supabaseUrl).origin
 const isDev = process.env.NODE_ENV === "development"
+const devOrigins = process.env.DEV_ALLOWED_ORIGINS?.split(",")
+  .map((host) => host.trim())
+  .filter(Boolean)
 
 // Content-Security-Policy without nonces: pages are prerendered (Cache
 // Components' static shells), and a per-request nonce would force every page
@@ -46,6 +49,8 @@ const securityHeaders = [
 ]
 
 const nextConfig: NextConfig = {
+  // Optional hostnames for remote development, independent of social login.
+  allowedDevOrigins: devOrigins?.length ? devOrigins : undefined,
   devIndicators: false,
   poweredByHeader: false,
   // Data is cached with `use cache`; pages prerender a static shell, and

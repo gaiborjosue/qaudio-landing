@@ -1949,7 +1949,7 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
 /* ══ Upload dropzone ═══════════════════════════════════════
    From Bencho (bencho.dev), MIT, see bencho.dev/licence. The markup is
    components/ui/upload-dropzone.tsx, whose classes are all `upl-`. It is the
-   admin chat's "Add photos" panel.
+   admin chat's "Add photos" panel and the product sheet's Photos section.
 
    ── BENCHO'S TOKENS, MAPPED ONTO THIS SITE'S ───────────────
    The stylesheet below reads eight custom properties it never defines. Each
@@ -2197,6 +2197,65 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
   outline: 2px solid var(--signal, #2231dd);
   outline-offset: 3px;
   border-radius: 2px;}
+
+/* The product sheet splits the row into matching drop and attach tiles. */
+.upl-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+}
+.upl-split .upl-zone-wrap {
+  min-width: 0;
+}
+.upl-split .upl-zone {
+  max-width: 100%;
+}
+.upl-split .upl-note {
+  grid-column: 1 / -1;
+}
+.upl-separator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #6b6b6b;
+  font-size: 13px;
+}
+.upl-separator::before,
+.upl-separator::after {
+  content: "";
+  width: 1px;
+  height: 36px;
+  background: var(--pane-edge);
+}
+.upl-attach {
+  border: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.upl-attach:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 3px;
+}
+.upl-attach:is(:hover, :focus-visible) .upl-icon {
+  color: var(--fill-on);
+  background: color-mix(in srgb, var(--fill-on) 10%, var(--fill-slab));
+}
+@media (max-width: 640px) {
+  .upl-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .upl-separator {
+    flex-direction: row;
+    justify-content: center;
+  }
+  .upl-separator::before,
+  .upl-separator::after {
+    width: 36px;
+    height: 1px;
+  }
+}
 
 @keyframes upl-gulp {
   0% { scale: 1.02; }

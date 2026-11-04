@@ -7,6 +7,7 @@ import { NewsBody } from "@/components/news-body"
 import { NewsCard } from "@/components/news-card"
 import { ProductCatalog, ProductPageView } from "@/components/product-catalog"
 import { StoreHours } from "@/components/store-hours"
+import { InstagramPreview } from "@/components/admin/instagram-preview"
 import {
   changeFromInput,
   dealFromInput,
@@ -26,13 +27,17 @@ import {
   dealInputSchema,
   deleteDealInputSchema,
   deleteHoursChangeInputSchema,
+  deleteInstagramPostInputSchema,
   deleteNewsPostInputSchema,
   deleteProductInputSchema,
   hoursChangeInputSchema,
+  instagramPostInputSchema,
   newsPostInputSchema,
   productInputSchema,
   reorderProductsInputSchema,
+  retryInstagramPostInputSchema,
   weeklyHoursInputSchema,
+  type InstagramPostInput,
 } from "@/lib/admin/schemas"
 import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
 import { descriptionFromColumns } from "@/lib/catalog"
@@ -102,6 +107,22 @@ function newsTiming(slug: string, status: string, publishedAt: string | null) {
     : `/news/${slug} · Published ${formatStoreDateTime(publishedAt)}`
 }
 
+function instagramTiming(post: InstagramPostInput) {
+  const what =
+    post.kind === "story"
+      ? "Story"
+      : post.photos.length > 1
+        ? `Carousel of ${post.photos.length}`
+        : "Photo post"
+  const when =
+    post.when === "draft"
+      ? "Draft in Zernio, not posted"
+      : post.when === "now"
+        ? "Posts to Instagram when approved"
+        : `Scheduled for ${formatStoreDateTime(post.when)}`
+  return `${post.id ? "Changes a saved post · " : ""}${what} · ${when}`
+}
+
 /**
  * A product proposal from before the description became one Markdown field
  * (an intro, feature bullets, and a closing line), as it reads now, so older
@@ -135,10 +156,13 @@ export function ChangePreview({
   tool,
   input,
   data,
+  photoOrder,
 }: {
   tool: string
   input: unknown
   data: PreviewData
+  /** A pending carousel's photo order, which the owner may rearrange. */
+  photoOrder?: { order: number[] | null; onOrder: (order: number[]) => void }
 }) {
   switch (previewToolName(tool)) {
     case "set_weekly_hours": {
@@ -304,6 +328,35 @@ export function ChangePreview({
         <Note>
           Deletes “{parsed.data.title}” and its products from /qdeal. Saving it
           as a draft hides it instead.
+        </Note>
+      )
+    }
+    case "save_instagram_post": {
+      const parsed = instagramPostInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return (
+        <>
+          <Note>{instagramTiming(parsed.data)}</Note>
+          <InstagramPreview post={parsed.data} arrange={photoOrder} />
+        </>
+      )
+    }
+    case "delete_instagram_post": {
+      const parsed = deleteInstagramPostInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return (
+        <Note>
+          {parsed.data.summary} · Deleted from Zernio, it never goes out on
+          Instagram.
+        </Note>
+      )
+    }
+    case "retry_instagram_post": {
+      const parsed = retryInstagramPostInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return (
+        <Note>
+          {parsed.data.summary} · Sent to Instagram again right away, as it is.
         </Note>
       )
     }
