@@ -196,6 +196,176 @@
   accent-color: #111;
 }
 
+/* Ready for audition with the manufacturer's page beside it, and Prefill
+   with Tune once the page answers. The group keeps its own row, so the
+   link and the audition box stay together. */
+.linkRow {
+  display: flex;
+  flex: 1 1 520px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px 16px;
+  min-width: 0;
+}
+.linkField {
+  flex: 1 1 260px;
+}
+.linkInput {
+  position: relative;
+  display: block;
+}
+.editor .linkInput input {
+  padding-right: 38px;
+}
+.linkState {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  margin-top: -9px;
+  color: #6b6b6b;
+  pointer-events: none;
+}
+.linkInput > svg.spin {
+  margin-top: -8px;
+}
+/* The page answered: the one green cue on the form, a reachable status. */
+.linkInput[data-state="ok"] .linkState {
+  color: #1a9448;
+}
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.prefill {
+  flex: none;
+  height: 40px;
+}
+.prefill[aria-busy="true"] {
+  opacity: 0.6;
+}
+.rowNote {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* Tune's suggestions: a dashed edge on each field Prefill filled in, with
+   Accept and Reject inside it, until the owner decides. Monochrome. */
+.suggestion {
+  position: relative;
+  display: grid;
+  min-width: 0;
+}
+.suggestion[data-suggested]
+  > :is(input, textarea, .affix, .cardLine, .markdownPreview),
+.suggestion[data-suggested] [data-slot="select-trigger"] {
+  border: 1px dashed #8a8a8a;
+  background: #fafafa;
+}
+.suggestion[data-suggested] > :is(input, textarea, .markdownPreview) {
+  padding-right: 72px;
+}
+.suggestion[data-suggested] > .affix,
+.suggestion[data-suggested] [data-slot="select-trigger"] {
+  padding-right: 64px;
+}
+.suggestion[data-suggested] > .cardLine {
+  padding: 9px 72px 9px 11px;
+  border-radius: 10px;
+}
+.reviewButtons {
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+  transform: translateY(-50%);
+}
+/* Text areas: the top corner, clear of a scrollbar. */
+.suggestion[data-multiline] .reviewButtons {
+  top: 6px;
+  right: 14px;
+  transform: none;
+}
+.reviewButtons button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #111;
+  cursor: pointer;
+}
+.reviewButtons button:hover {
+  background: #e8e8e8;
+}
+.reviewButtons button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 0;
+}
+.reviewButtons button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* The footer's count of suggestions waiting, with Accept all and Reject
+   all, in the suggestions' dashed edge. */
+.reviewAll {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  padding: 3px 4px 3px 12px;
+  border: 1px dashed #8a8a8a;
+  border-radius: 999px;
+  background: #fafafa;
+  color: #4a4a4a;
+  font-size: 13px;
+}
+.reviewAll > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 4px;
+}
+.reviewAll button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #111;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.reviewAll button:hover {
+  background: #ececec;
+}
+.reviewAll button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 0;
+}
+.reviewAll button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
 .photos {
   display: grid;
   gap: 10px;
@@ -242,6 +412,15 @@
 .photoList li[data-dragging] .photoDrag {
   box-shadow: 0 4px 12px rgb(0 0 0 / 0.16);
   cursor: grabbing;
+}
+/* A photo Tune suggested, until it's accepted or removed. */
+.photoList li[data-suggested] .photoDrag::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border: 1px dashed #8a8a8a;
+  border-radius: 12px;
+  pointer-events: none;
 }
 .photoGrip {
   position: absolute;

@@ -10,7 +10,14 @@ import {
 } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
-import { Trash2, WandSparkles } from "lucide-react"
+import {
+  Check,
+  CircleCheck,
+  LoaderCircle,
+  Trash2,
+  WandSparkles,
+  X,
+} from "lucide-react"
 import {
   generateProductCardLine,
   saveProductFromEditor,
@@ -27,7 +34,11 @@ import {
 } from "@/lib/admin/photo-upload"
 import {
   inputFromValues,
+  PREFILL_FIELDS,
   slugify,
+  type PrefillField,
+  type ProductPageStatus,
+  type ProductSuggestions,
   type ProductValues,
 } from "@/lib/admin/product-editor"
 import { productFromInput, type CatalogTaxonomy } from "@/lib/admin/preview"
@@ -82,6 +93,72 @@ function restore(key: string | undefined): ProductValues | null {
 }
 
 /**
+ * Tune's suggestions still waiting for the owner: each prefilled field's
+ * value from before, and the suggested photos' paths.
+ */
+type Review = {
+  fields: Partial<Record<PrefillField, string>>
+  photos: string[]
+}
+const NO_REVIEW: Review = { fields: {}, photos: [] }
+const reviewKey = (key: string) => `${key}:tune`
+
+// Kept with the unsaved work, so a reload keeps the marks.
+function restoreReview(key: string | undefined): Review {
+  if (!key || typeof window === "undefined" || !restore(key)) return NO_REVIEW
+  try {
+    const saved = JSON.parse(
+      window.sessionStorage.getItem(reviewKey(key)) ?? "null"
+    ) as Review | null
+    if (!saved || typeof saved.fields !== "object" || !saved.fields) {
+      return NO_REVIEW
+    }
+    const fields: Review["fields"] = {}
+    for (const field of PREFILL_FIELDS) {
+      const previous = saved.fields[field]
+      if (typeof previous === "string") fields[field] = previous
+    }
+    const photos = Array.isArray(saved.photos)
+      ? saved.photos.filter((path) => typeof path === "string")
+      : []
+    return { fields, photos }
+  } catch {
+    return NO_REVIEW
+  }
+}
+
+/** How each field's accept and reject buttons name it. */
+const REVIEW_LABELS: Record<PrefillField, string> = {
+  name: "name",
+  brand_slug: "brand",
+  category_slug: "category",
+  msrp: "list price",
+  price_unit: "unit",
+  description: "description",
+  short_description: "card line",
+}
+
+type LinkState = ProductPageStatus | "checking" | "failed"
+const LINK_STATES = new Set<string>(["ok", "blocked", "missing", "unreachable"])
+// Beside the field's label: why Prefill isn't offered, or can't be sure.
+const LINK_NOTES: Partial<Record<LinkState, string>> = {
+  blocked: "Couldn’t verify this page",
+  missing: "Page not found",
+  unreachable: "Couldn’t reach this page",
+  failed: "Couldn’t check this page",
+}
+const linkAnnouncement = (state: LinkState | null) =>
+  state === "checking"
+    ? "Checking the page…"
+    : state === "ok"
+      ? "Page found."
+      : state
+        ? `${LINK_NOTES[state]}.`
+        : ""
+const manufacturerUrl = productInputSchema.shape.manufacturer_url
+const PREFILL_FAILED = "Couldn’t prefill from this page. Try again."
+
+/**
  * The product form: one product's fields, the shop's own page as a live
  * preview, and Save, which writes it directly as the admin (a Server
  * Action). Unsaved work is kept in sessionStorage under `storageKey`, so
@@ -128,9 +205,37 @@ export function ProductEditor({
   const cardLineRequest = useRef(0)
   const [saving, startSaving] = useTransition()
   const focusError = useRef(false)
+  // Prefill with Tune: the manufacturer page's check, the request, and the
+  // suggestions waiting for the owner's accept or reject.
+  const [review, setReview] = useState(() => restoreReview(storageKey))
+  const [linkCheck, setLinkCheck] = useState<{
+    url: string
+    state: LinkState
+  } | null>(null)
+  const linkResults = useRef(new Map<string, ProductPageStatus>())
+  const [prefilling, setPrefilling] = useState(false)
+  const [prefillError, setPrefillError] = useState<string | null>(null)
+  const [prefillNote, setPrefillNote] = useState("")
+  const prefillRequest = useRef<AbortController | null>(null)
+  const prefillFor = useRef("")
+  const prefillButton = useRef<HTMLButtonElement>(null)
+  const focusAfterReview = useRef<PrefillField | "all" | null>(null)
+  // The latest form, for a Prefill answer that arrives after edits.
+  const latest = useRef({ values, review, slugFollows })
 
   const dirty = JSON.stringify(values) !== JSON.stringify(baseline)
   const uploading = uploads.some((upload) => upload.status === "uploading")
+  const pending = Object.keys(review.fields).length + review.photos.length
+  const link = values.manufacturer_url.trim()
+  const linkReady = !!link && manufacturerUrl.safeParse(link).success
+  const linkState =
+    linkReady && linkCheck?.url === link ? linkCheck.state : null
+  // A page that refused the check may still let Tune read it.
+  const canPrefill = linkState === "ok" || linkState === "blocked"
+
+  useEffect(() => {
+    latest.current = { values, review, slugFollows }
+  })
 
   // Keep unsaved work across a reload; drop it once saved.
   useEffect(() => {
@@ -142,6 +247,19 @@ export function ProductEditor({
     }
   }, [storageKey, values, dirty])
 
+  // Tune's suggestions waiting for review are kept with that work.
+  useEffect(() => {
+    if (!storageKey) return
+    if (dirty && pending > 0) {
+      window.sessionStorage.setItem(
+        reviewKey(storageKey),
+        JSON.stringify(review)
+      )
+    } else {
+      window.sessionStorage.removeItem(reviewKey(storageKey))
+    }
+  }, [storageKey, review, dirty, pending])
+
   // After a failed Save, focus the first marked field.
   useEffect(() => {
     if (!focusError.current) return
@@ -149,13 +267,95 @@ export function ProductEditor({
     form.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus()
   }, [errors])
 
+  // Accepting or rejecting removes the buttons that had focus: hand it to
+  // the field (or, after Accept all or Reject all, to Prefill or the link).
+  useEffect(() => {
+    const target = focusAfterReview.current
+    if (!target) return
+    focusAfterReview.current = null
+    const root = form.current
+    if (!root) return
+    if (target === "all") {
+      ;(
+        prefillButton.current ??
+        root.querySelector<HTMLElement>(`[data-review-link] input`)
+      )?.focus()
+      return
+    }
+    const box = root.querySelector<HTMLElement>(`[data-review="${target}"]`)
+    const control =
+      box?.querySelector<HTMLElement>(
+        "[data-slot='select-trigger'], input:not([aria-hidden='true']):not([tabindex='-1']), textarea"
+      ) ?? box?.parentElement?.querySelector<HTMLElement>("button")
+    control?.focus()
+  }, [review])
+
+  // Check the manufacturer's page once typing pauses: a HEAD request from
+  // the server (see /api/admin/product-page/check), remembered per address.
+  useEffect(() => {
+    // A new address makes a Prefill under way pointless.
+    if (prefillRequest.current && prefillFor.current !== link) {
+      prefillRequest.current.abort()
+    }
+    if (!linkReady) return
+    const controller = new AbortController()
+    const timer = window.setTimeout(async () => {
+      const known = linkResults.current.get(link)
+      if (known) {
+        setLinkCheck({ url: link, state: known })
+        return
+      }
+      setLinkCheck({ url: link, state: "checking" })
+      try {
+        const response = await fetch("/api/admin/product-page/check", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url: link }),
+          signal: controller.signal,
+        })
+        const result: unknown = await response.json().catch(() => null)
+        if (controller.signal.aborted) return
+        const status =
+          response.ok &&
+          result &&
+          typeof result === "object" &&
+          "status" in result &&
+          typeof result.status === "string" &&
+          LINK_STATES.has(result.status)
+            ? (result.status as ProductPageStatus)
+            : null
+        if (status) linkResults.current.set(link, status)
+        setLinkCheck({ url: link, state: status ?? "failed" })
+      } catch {
+        if (!controller.signal.aborted) {
+          setLinkCheck({ url: link, state: "failed" })
+        }
+      }
+    }, 500)
+    return () => {
+      window.clearTimeout(timer)
+      controller.abort()
+    }
+  }, [link, linkReady])
+
   // A request from a closed/hidden editor must not update its draft later.
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const prefillRequests = prefillRequest
+    return () => {
       cardLineRequest.current += 1
-    },
-    []
-  )
+      prefillRequests.current?.abort()
+    }
+  }, [])
+
+  /** The form without a field's review mark: the owner has taken it over. */
+  const settle = (field: string) => {
+    if (!(field in review.fields)) return
+    setReview((current) => {
+      const fields = { ...current.fields }
+      delete fields[field as PrefillField]
+      return { ...current, fields }
+    })
+  }
 
   const set = <K extends keyof ProductValues>(
     key: K,
@@ -174,6 +374,7 @@ export function ProductEditor({
       cardLineRequest.current += 1
       setCardLineError(null)
     }
+    settle(key)
     setValues((current) => ({
       ...current,
       [key]: value,
@@ -230,10 +431,195 @@ export function ProductEditor({
       ...current,
       images: current.images.filter((_, at) => at !== index),
     }))
+    if (photo && review.photos.includes(photo.path)) {
+      setReview((current) => ({
+        ...current,
+        photos: current.photos.filter((path) => path !== photo.path),
+      }))
+    }
     // A staged upload nothing has saved yet; saved photos stay in storage.
     if (photo?.path.startsWith(UPLOADS)) {
       void discardUpload(photo.path).catch(() => {})
     }
+  }
+
+  const discardPhotos = (photos: { path: string }[]) => {
+    for (const { path } of photos) {
+      if (path.startsWith(UPLOADS)) void discardUpload(path).catch(() => {})
+    }
+  }
+
+  /**
+   * Puts Tune's suggestions into the form, each marked for review with the
+   * value it replaced. Fields the owner changed while Tune was reading stay
+   * theirs. New photos replace earlier suggested ones still waiting.
+   */
+  const applySuggestions = (
+    suggestions: ProductSuggestions,
+    before: ProductValues
+  ) => {
+    const {
+      values: current,
+      review: waiting,
+      slugFollows: follows,
+    } = latest.current
+    const next: ProductValues = { ...current }
+    const fields = { ...waiting.fields }
+    const changed: PrefillField[] = []
+    for (const field of PREFILL_FIELDS) {
+      const value = suggestions[field]
+      if (value === undefined || value === current[field]) continue
+      if (current[field] !== before[field]) continue
+      // Rejecting goes back to the owner's value, not an earlier suggestion.
+      fields[field] ??= current[field]
+      ;(next as Record<PrefillField, string>)[field] = value
+      changed.push(field)
+    }
+    if (changed.includes("name") && follows) next.slug = slugify(next.name)
+
+    let photos = waiting.photos
+    const offered = suggestions.images ?? []
+    if (offered.length > 0) {
+      const stale = new Set(waiting.photos)
+      const kept = current.images.filter(({ path }) => !stale.has(path))
+      const room = Math.max(0, 20 - kept.length)
+      const added = offered.slice(0, room)
+      discardPhotos([
+        ...current.images.filter(({ path }) => stale.has(path)),
+        ...offered.slice(room),
+      ])
+      next.images = [...kept, ...added]
+      photos = added.map(({ path }) => path)
+    }
+
+    cardLineRequest.current += 1
+    setCardLineError(null)
+    setValues(next)
+    setReview({ fields, photos })
+    setErrors((current) => {
+      const rest = { ...current }
+      for (const field of changed) {
+        delete rest[field === "msrp" ? "msrp_cents" : field]
+      }
+      return rest
+    })
+    const filled = [
+      changed.length > 0 &&
+        `${changed.length} ${changed.length === 1 ? "field" : "fields"}`,
+      offered.length > 0 &&
+        `${photos.length} ${photos.length === 1 ? "photo" : "photos"}`,
+    ].filter(Boolean)
+    setPrefillNote(
+      filled.length
+        ? `Tune filled in ${filled.join(" and ")}. Accept or reject each one.`
+        : "Tune found nothing new on this page."
+    )
+  }
+
+  /** Prefill with Tune: read the manufacturer's page and suggest fields. */
+  const prefill = async () => {
+    if (!canPrefill || prefilling) return
+    prefillRequest.current?.abort()
+    const controller = new AbortController()
+    prefillRequest.current = controller
+    const before = values
+    const url = link
+    prefillFor.current = url
+    const waiting = new Set(review.photos)
+    setPrefilling(true)
+    setPrefillError(null)
+    setPrefillNote("Tune is reading the page…")
+    try {
+      const response = await fetch("/api/admin/product-page/prefill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url,
+          // Photos waiting for review are replaced, so they don't count.
+          photos: before.images.filter(({ path }) => !waiting.has(path)).length,
+        }),
+        signal: controller.signal,
+      })
+      const result = (await response.json().catch(() => null)) as {
+        suggestions?: ProductSuggestions
+        error?: string
+      } | null
+      const suggestions = response.ok ? result?.suggestions : undefined
+      // Closed, or the address changed, while Tune was reading.
+      if (
+        controller.signal.aborted ||
+        latest.current.values.manufacturer_url.trim() !== url
+      ) {
+        discardPhotos(suggestions?.images ?? [])
+        return
+      }
+      if (!suggestions || typeof suggestions !== "object") {
+        setPrefillNote("")
+        setPrefillError(
+          typeof result?.error === "string" ? result.error : PREFILL_FAILED
+        )
+        return
+      }
+      applySuggestions(suggestions, before)
+    } catch {
+      if (!controller.signal.aborted) {
+        setPrefillNote("")
+        setPrefillError(PREFILL_FAILED)
+      }
+    } finally {
+      if (prefillRequest.current === controller) {
+        prefillRequest.current = null
+        setPrefilling(false)
+      }
+    }
+  }
+
+  const accept = (field: PrefillField) => {
+    focusAfterReview.current = field
+    settle(field)
+  }
+
+  const reject = (field: PrefillField) => {
+    const previous = review.fields[field]
+    if (previous === undefined) return
+    focusAfterReview.current = field
+    set(field, previous as ProductValues[PrefillField])
+  }
+
+  const acceptAll = () => {
+    focusAfterReview.current = "all"
+    setReview(NO_REVIEW)
+    setPrefillNote("Kept Tune’s suggestions.")
+  }
+
+  const rejectAll = () => {
+    const { fields, photos } = review
+    const suggested = new Set(photos)
+    setValues((current) => {
+      const next: ProductValues = { ...current }
+      for (const field of PREFILL_FIELDS) {
+        const previous = fields[field]
+        if (previous !== undefined) {
+          ;(next as Record<PrefillField, string>)[field] = previous
+        }
+      }
+      if ("name" in fields && slugFollows) next.slug = slugify(next.name)
+      next.images = current.images.filter(({ path }) => !suggested.has(path))
+      return next
+    })
+    discardPhotos(values.images.filter(({ path }) => suggested.has(path)))
+    cardLineRequest.current += 1
+    setCardLineError(null)
+    focusAfterReview.current = "all"
+    setReview(NO_REVIEW)
+    setPrefillNote("Removed Tune’s suggestions.")
+  }
+
+  // Unsaved work, and its review marks, once saved or discarded.
+  const forget = () => {
+    if (!storageKey) return
+    window.sessionStorage.removeItem(storageKey)
+    window.sessionStorage.removeItem(reviewKey(storageKey))
   }
 
   const candidate = inputFromValues(values)
@@ -300,8 +686,9 @@ export function ProductEditor({
         setMessage(result.error)
         return
       }
-      if (storageKey) window.sessionStorage.removeItem(storageKey)
+      forget()
       // Saved: the product exists now, and its photos have their final paths.
+      // Suggestions still marked were saved as they stood: accepted.
       const next: ProductValues = {
         ...values,
         id: result.id,
@@ -314,6 +701,7 @@ export function ProductEditor({
       }
       setValues(next)
       setBaseline(next)
+      setReview(NO_REVIEW)
       setSlugFollows(false)
       setErrors({})
       setEditingCard(false)
@@ -356,6 +744,49 @@ export function ProductEditor({
       )}
     </div>
   )
+  // A control Prefill with Tune can fill. While its suggestion waits, a
+  // dashed edge marks it, with Accept and Reject inside. The wrapper is
+  // always there, so the control never remounts (and keeps focus) when the
+  // mark comes or goes.
+  const suggested = (
+    name: PrefillField,
+    control: ReactNode,
+    multiline = false
+  ) => {
+    const waiting = name in review.fields
+    return (
+      <div
+        className={styles.suggestion}
+        data-review={name}
+        data-suggested={waiting || undefined}
+        data-multiline={multiline || undefined}
+      >
+        {control}
+        {waiting && (
+          <span className={styles.reviewButtons}>
+            <button
+              type="button"
+              aria-label={`Accept Tune’s ${REVIEW_LABELS[name]}`}
+              title="Accept"
+              disabled={saving}
+              onClick={() => accept(name)}
+            >
+              <Check size={15} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              aria-label={`Reject Tune’s ${REVIEW_LABELS[name]}`}
+              title="Reject"
+              disabled={saving}
+              onClick={() => reject(name)}
+            >
+              <X size={15} strokeWidth={2.25} aria-hidden="true" />
+            </button>
+          </span>
+        )}
+      </div>
+    )
+  }
 
   const preview =
     previewOpen && parsed.success
@@ -375,34 +806,40 @@ export function ProductEditor({
           {field(
             "category_slug",
             "Category",
-            <Choice
-              value={values.category_slug}
-              openDown
-              placeholder="Choose…"
-              options={taxonomy.categories.map(({ slug, name }) => ({
-                value: slug,
-                label: name,
-              }))}
-              onChange={(value) => set("category_slug", value)}
-              aria-labelledby={`${fieldId("category_slug")}-label`}
-              {...invalid("category_slug")}
-            />
+            suggested(
+              "category_slug",
+              <Choice
+                value={values.category_slug}
+                openDown
+                placeholder="Choose…"
+                options={taxonomy.categories.map(({ slug, name }) => ({
+                  value: slug,
+                  label: name,
+                }))}
+                onChange={(value) => set("category_slug", value)}
+                aria-labelledby={`${fieldId("category_slug")}-label`}
+                {...invalid("category_slug")}
+              />
+            )
           )}
           {field(
             "brand_slug",
             "Brand",
-            <Choice
-              value={values.brand_slug}
-              openDown
-              placeholder="Choose…"
-              options={taxonomy.brands.map(({ slug, name }) => ({
-                value: slug,
-                label: name,
-              }))}
-              onChange={(value) => set("brand_slug", value)}
-              aria-labelledby={`${fieldId("brand_slug")}-label`}
-              {...invalid("brand_slug")}
-            />
+            suggested(
+              "brand_slug",
+              <Choice
+                value={values.brand_slug}
+                openDown
+                placeholder="Choose…"
+                options={taxonomy.brands.map(({ slug, name }) => ({
+                  value: slug,
+                  label: name,
+                }))}
+                onChange={(value) => set("brand_slug", value)}
+                aria-labelledby={`${fieldId("brand_slug")}-label`}
+                {...invalid("brand_slug")}
+              />
+            )
           )}
           <fieldset className={styles.segmented}>
             <legend className={styles.label}>Condition</legend>
@@ -440,16 +877,83 @@ export function ProductEditor({
               ))}
             </div>
           </fieldset>
-          <label className={styles.check}>
-            <input
-              type="checkbox"
-              checked={values.ready_for_audition}
-              onChange={(event) =>
-                set("ready_for_audition", event.target.checked)
-              }
-            />
-            <span>Ready for audition</span>
-          </label>
+          {/* Audition, then the manufacturer's page beside it. Once the page
+            answers, Tune can read it and fill in the form for review. */}
+          <div className={styles.linkRow}>
+            <label className={styles.check}>
+              <input
+                type="checkbox"
+                checked={values.ready_for_audition}
+                onChange={(event) =>
+                  set("ready_for_audition", event.target.checked)
+                }
+              />
+              <span>Ready for audition</span>
+            </label>
+            {field(
+              "manufacturer_url",
+              <>
+                Manufacturer page
+                {linkState && LINK_NOTES[linkState] && (
+                  <span className={styles.aside}>{LINK_NOTES[linkState]}</span>
+                )}
+              </>,
+              <span
+                className={styles.linkInput}
+                data-review-link
+                data-state={linkState ?? undefined}
+              >
+                <input
+                  type="url"
+                  value={values.manufacturer_url}
+                  placeholder="https://"
+                  onChange={(event) =>
+                    set("manufacturer_url", event.target.value)
+                  }
+                  {...invalid("manufacturer_url")}
+                />
+                {linkState === "checking" && (
+                  <LoaderCircle
+                    className={`${styles.linkState} ${styles.spin}`}
+                    size={16}
+                    aria-hidden="true"
+                  />
+                )}
+                {linkState === "ok" && (
+                  <CircleCheck
+                    className={styles.linkState}
+                    size={18}
+                    aria-hidden="true"
+                  />
+                )}
+              </span>,
+              styles.linkField
+            )}
+            {canPrefill && (
+              <button
+                ref={prefillButton}
+                type="button"
+                className={`${adminStyles.secondary} ${styles.prefill}`}
+                disabled={disabled || saving || writingCard || prefilling}
+                aria-busy={prefilling}
+                onClick={prefill}
+              >
+                <WandSparkles size={15} aria-hidden="true" />
+                {prefilling ? "Prefilling…" : "Prefill with Tune"}
+              </button>
+            )}
+            {prefillError && (
+              <p className={`${styles.problem} ${styles.rowNote}`} role="alert">
+                {prefillError}
+              </p>
+            )}
+            <span className="sr-only" role="status">
+              {linkAnnouncement(linkState)}
+            </span>
+            <span className="sr-only" role="status">
+              {prefillNote}
+            </span>
+          </div>
         </div>
 
         <section className={styles.photos} aria-labelledby={fieldId("photos")}>
@@ -462,6 +966,13 @@ export function ProductEditor({
               images={values.images}
               onChange={(images) => set("images", images)}
               onRemove={removePhoto}
+              suggested={review.photos}
+              onAccept={(path) =>
+                setReview((current) => ({
+                  ...current,
+                  photos: current.photos.filter((item) => item !== path),
+                }))
+              }
             />
           )}
           <UploadDropzone
@@ -481,13 +992,16 @@ export function ProductEditor({
           {field(
             "name",
             "Name",
-            <input
-              type="text"
-              value={values.name}
-              maxLength={160}
-              onChange={(event) => set("name", event.target.value)}
-              {...invalid("name")}
-            />,
+            suggested(
+              "name",
+              <input
+                type="text"
+                value={values.name}
+                maxLength={160}
+                onChange={(event) => set("name", event.target.value)}
+                {...invalid("name")}
+              />
+            ),
             styles.wide
           )}
           {field(
@@ -528,27 +1042,35 @@ export function ProductEditor({
             <>
               List price <span className={styles.aside}>MSRP, optional</span>
             </>,
-            <span className={styles.affix}>
-              <span aria-hidden="true">$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={values.msrp}
-                onChange={(event) => set("msrp", event.target.value)}
-                {...invalid("msrp_cents")}
-              />
-            </span>
+            suggested(
+              "msrp",
+              <span className={styles.affix}>
+                <span aria-hidden="true">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={values.msrp}
+                  onChange={(event) => set("msrp", event.target.value)}
+                  {...invalid("msrp_cents")}
+                />
+              </span>
+            )
           )}
           {field(
             "price_unit",
             "Sold",
-            <Choice
-              value={values.price_unit}
-              options={UNITS}
-              onChange={(value) => set("price_unit", value as "each" | "pair")}
-              aria-labelledby={`${fieldId("price_unit")}-label`}
-              {...invalid("price_unit")}
-            />
+            suggested(
+              "price_unit",
+              <Choice
+                value={values.price_unit}
+                options={UNITS}
+                onChange={(value) =>
+                  set("price_unit", value as "each" | "pair")
+                }
+                aria-labelledby={`${fieldId("price_unit")}-label`}
+                {...invalid("price_unit")}
+              />
+            )
           )}
           {field(
             "description",
@@ -570,25 +1092,31 @@ export function ProductEditor({
                   Preview
                 </button>
               </div>
-              {showDescription ? (
-                values.description.trim() ? (
-                  <MarkdownText
-                    className={styles.markdownPreview}
-                    text={values.description}
-                  />
+              {suggested(
+                "description",
+                showDescription ? (
+                  values.description.trim() ? (
+                    <MarkdownText
+                      className={styles.markdownPreview}
+                      text={values.description}
+                    />
+                  ) : (
+                    <p className={styles.markdownPreview}>
+                      Nothing written yet.
+                    </p>
+                  )
                 ) : (
-                  <p className={styles.markdownPreview}>Nothing written yet.</p>
-                )
-              ) : (
-                <textarea
-                  rows={9}
-                  value={values.description}
-                  placeholder={
-                    "What it is, in a line.\n\n- A feature\n- Another feature\n\n**Hand assembled in the USA**"
-                  }
-                  onChange={(event) => set("description", event.target.value)}
-                  {...invalid("description")}
-                />
+                  <textarea
+                    rows={9}
+                    value={values.description}
+                    placeholder={
+                      "What it is, in a line.\n\n- A feature\n- Another feature\n\n**Hand assembled in the USA**"
+                    }
+                    onChange={(event) => set("description", event.target.value)}
+                    {...invalid("description")}
+                  />
+                ),
+                true
               )}
             </div>,
             styles.full
@@ -607,24 +1135,28 @@ export function ProductEditor({
                 </span>
               )}
             </span>
-            {editingCard ? (
-              <textarea
-                rows={2}
-                value={values.short_description}
-                aria-labelledby={`${fieldId("short_description")}-label`}
-                onChange={(event) =>
-                  set("short_description", event.target.value)
-                }
-                {...invalid("short_description")}
-              />
-            ) : (
-              <p
-                className={styles.cardLine}
-                aria-live="polite"
-                aria-busy={writingCard}
-              >
-                {values.short_description}
-              </p>
+            {suggested(
+              "short_description",
+              editingCard ? (
+                <textarea
+                  rows={2}
+                  value={values.short_description}
+                  aria-labelledby={`${fieldId("short_description")}-label`}
+                  onChange={(event) =>
+                    set("short_description", event.target.value)
+                  }
+                  {...invalid("short_description")}
+                />
+              ) : (
+                <p
+                  className={styles.cardLine}
+                  aria-live="polite"
+                  aria-busy={writingCard}
+                >
+                  {values.short_description}
+                </p>
+              ),
+              true
             )}
             {errors.short_description && (
               <span
@@ -639,7 +1171,7 @@ export function ProductEditor({
                 <button
                   type="button"
                   className={adminStyles.secondary}
-                  disabled={disabled || saving || writingCard}
+                  disabled={disabled || saving || writingCard || prefilling}
                   onClick={writeCard}
                 >
                   <WandSparkles size={15} aria-hidden="true" />
@@ -663,18 +1195,6 @@ export function ProductEditor({
               </p>
             )}
           </div>
-          {field(
-            "manufacturer_url",
-            "Manufacturer page",
-            <input
-              type="url"
-              value={values.manufacturer_url}
-              placeholder="https://"
-              onChange={(event) => set("manufacturer_url", event.target.value)}
-              {...invalid("manufacturer_url")}
-            />,
-            styles.full
-          )}
         </div>
 
         <details
@@ -712,6 +1232,7 @@ export function ProductEditor({
             disabled ||
             saving ||
             writingCard ||
+            prefilling ||
             uploading ||
             (!dirty && !!values.id)
           }
@@ -725,13 +1246,37 @@ export function ProductEditor({
             className={adminStyles.quiet}
             disabled={saving}
             onClick={() => {
-              // Discarding drops the work kept for this product.
-              if (storageKey) window.sessionStorage.removeItem(storageKey)
+              // Discarding drops the work kept for this product, and the
+              // photos Tune staged that nobody accepted.
+              forget()
+              discardPhotos(
+                values.images.filter(({ path }) => review.photos.includes(path))
+              )
               onCancel()
             }}
           >
             {dirty ? "Discard" : "Close"}
           </button>
+        )}
+        {pending > 0 && (
+          <div
+            className={styles.reviewAll}
+            role="group"
+            aria-label="Tune’s suggestions"
+          >
+            <span>
+              <WandSparkles size={14} aria-hidden="true" />
+              {pending} to review
+            </span>
+            <button type="button" disabled={saving} onClick={acceptAll}>
+              <Check size={14} strokeWidth={2.25} aria-hidden="true" />
+              Accept all
+            </button>
+            <button type="button" disabled={saving} onClick={rejectAll}>
+              <X size={14} strokeWidth={2.25} aria-hidden="true" />
+              Reject all
+            </button>
+          </div>
         )}
         {uploading && (
           <span className={adminStyles.hint} role="status">

@@ -1,6 +1,7 @@
 import "server-only"
 import { generateText } from "ai"
 import { fastModel } from "@/agent/lib/models"
+import { CARD_LINE_RULES, COPY_RULES, fitCardLine } from "./copy-rules"
 
 // The product card's one line, written by the fast copywriting model (the
 // copywriter subagent's model) when the owner saves a product from the chat's
@@ -8,14 +9,9 @@ import { fastModel } from "@/agent/lib/models"
 
 const SYSTEM = `You write the one-line product card text for Q Audio, an independent hi-fi shop in Cambridge, Massachusetts.
 
-Reply with only that line: one sentence, 300 characters at most, saying what the product is and what sets it apart, from the material you're given.
+Reply with only that line, from the material you're given: ${CARD_LINE_RULES}
 
-- Use only facts in the material. Never invent specs, awards, prices, or availability.
-- Plain, confident, specific. No hype words ("amazing", "game-changing", "unparalleled"), no exclamation marks, no emoji, no quotation marks around it.
-- Keep model names, units, and numbers exactly as given.
-- American English, curly apostrophes.`
-
-const MAX = 300
+${COPY_RULES}`
 
 /** Markdown down to plain words. */
 function plain(markdown: string) {
@@ -27,18 +23,10 @@ function plain(markdown: string) {
     .trim()
 }
 
-/** At most 300 characters, cut at a word. */
-function fit(text: string) {
-  if (text.length <= MAX) return text
-  const cut = text.slice(0, MAX - 1)
-  const space = cut.lastIndexOf(" ")
-  return `${space > 200 ? cut.slice(0, space) : cut}…`
-}
-
 /** The description's first sentence: the line when the model can't help. */
 function opening(description: string) {
   const text = plain(description)
-  return fit(text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text)
+  return fitCardLine(text.match(/^.+?[.!?](?=\s|$)/)?.[0] ?? text)
 }
 
 /**
@@ -70,12 +58,7 @@ export async function writeCardLine(product: {
       maxOutputTokens: 200,
       abortSignal: AbortSignal.timeout(15_000),
     })
-    const line = fit(
-      text
-        .replace(/^["“]|["”]$/g, "")
-        .replace(/\s+/g, " ")
-        .trim()
-    )
+    const line = fitCardLine(text)
     return line || opening(product.description)
   } catch {
     return opening(product.description)

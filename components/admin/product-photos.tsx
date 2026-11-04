@@ -8,20 +8,28 @@ import {
   useDragControls,
   useReducedMotion,
 } from "motion/react"
-import { ChevronLeft, ChevronRight, GripVertical, X } from "lucide-react"
+import { Check, ChevronLeft, ChevronRight, GripVertical, X } from "lucide-react"
 import type { EditorPhoto } from "@/lib/admin/product-editor"
 import { mediaUrl } from "@/lib/media"
 import styles from "./product-editor.module.css"
 
-/** One scrolling row, with thumbnail drags and keyboard controls sharing order. */
+/**
+ * One scrolling row, with thumbnail drags and keyboard controls sharing
+ * order. Photos Prefill with Tune suggested (`suggested` paths) wear a
+ * dashed edge and an Accept button until the owner accepts or removes them.
+ */
 export function ProductPhotos({
   images,
   onChange,
   onRemove,
+  suggested = [],
+  onAccept,
 }: {
   images: EditorPhoto[]
   onChange: (images: EditorPhoto[]) => void
   onRemove: (index: number) => void
+  suggested?: readonly string[]
+  onAccept?: (path: string) => void
 }) {
   const hint = useId()
   const refocus = useRef<HTMLButtonElement | null>(null)
@@ -89,6 +97,8 @@ export function ProductPhotos({
               }
               onMove={(step, button) => move(index, step, button)}
               onRemove={() => onRemove(index)}
+              suggested={suggested.includes(photo.path)}
+              onAccept={() => onAccept?.(photo.path)}
               onDrop={() =>
                 setAnnouncement(`Photo at ${index + 1} of ${images.length}.`)
               }
@@ -115,6 +125,8 @@ function ProductPhoto({
   onMove,
   onRemove,
   onDrop,
+  suggested,
+  onAccept,
 }: {
   photo: EditorPhoto
   index: number
@@ -124,6 +136,8 @@ function ProductPhoto({
   onMove: (step: -1 | 1, button: HTMLButtonElement) => void
   onRemove: () => void
   onDrop: () => void
+  suggested: boolean
+  onAccept: () => void
 }) {
   const controls = useDragControls()
   const still = useReducedMotion()
@@ -144,6 +158,7 @@ function ProductPhoto({
         onDrop()
       }}
       data-dragging={dragging || undefined}
+      data-suggested={suggested || undefined}
       transition={{
         layout: { duration: still ? 0 : 0.32, ease: [0.22, 1, 0.36, 1] },
       }}
@@ -200,9 +215,31 @@ function ProductPhoto({
         >
           <ChevronRight size={14} aria-hidden="true" />
         </button>
+        {suggested && (
+          <button
+            type="button"
+            aria-label={`Accept Tune’s photo ${index + 1}`}
+            title="Accept"
+            onClick={(event) => {
+              // The button goes away; keep focus on this photo.
+              event.currentTarget
+                .closest("li")
+                ?.querySelector<HTMLElement>("[data-photo-drag]")
+                ?.focus()
+              onAccept()
+            }}
+          >
+            <Check size={14} aria-hidden="true" />
+          </button>
+        )}
         <button
           type="button"
-          aria-label={`Remove photo ${index + 1}`}
+          aria-label={
+            suggested
+              ? `Reject Tune’s photo ${index + 1}`
+              : `Remove photo ${index + 1}`
+          }
+          title={suggested ? "Reject" : undefined}
           onClick={onRemove}
         >
           <X size={14} aria-hidden="true" />

@@ -34,6 +34,33 @@ export type ProductValues = {
   images: EditorPhoto[]
 }
 
+/** The form fields Prefill with Tune can suggest, besides photos. */
+export const PREFILL_FIELDS = [
+  "name",
+  "brand_slug",
+  "category_slug",
+  "msrp",
+  "price_unit",
+  "description",
+  "short_description",
+] as const
+export type PrefillField = (typeof PREFILL_FIELDS)[number]
+
+/**
+ * What Prefill with Tune read from a manufacturer's page, as form values for
+ * the owner to accept or reject. Photos are already staged in uploads/.
+ */
+export type ProductSuggestions = Partial<Pick<ProductValues, PrefillField>> & {
+  images?: EditorPhoto[]
+}
+
+/**
+ * The manufacturer page check: `ok` answered, `blocked` answered but refused
+ * the check (Tune may still read it), `missing` isn't there, `unreachable`
+ * didn't answer.
+ */
+export type ProductPageStatus = "ok" | "blocked" | "missing" | "unreachable"
+
 const dollars = (cents: number | null | undefined) =>
   cents ? String(cents / 100) : ""
 
