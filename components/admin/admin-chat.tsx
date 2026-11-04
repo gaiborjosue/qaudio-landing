@@ -68,6 +68,7 @@ import {
   PHOTO_ORDER,
 } from "@/lib/admin/instagram-arrange"
 import { INSTAGRAM_SCHEDULE_DAYS } from "@/lib/admin/instagram"
+import { withUploadedPhotos } from "@/lib/admin/chat-photos"
 import { formatStoreDateTime } from "@/lib/admin/store-time"
 import { mediaUrl } from "@/lib/media"
 import { browserSupabase } from "@/lib/supabase/browser"
@@ -422,10 +423,11 @@ function MessageView({
   modelByPart: ReadonlyMap<string, string | undefined>
   onEdit: (text: string) => void
 }) {
-  const text = messageText(message)
+  const displayed = withUploadedPhotos(message)
+  const text = messageText(displayed)
 
   if (message.role === "user") {
-    const photos = message.parts.flatMap((part) =>
+    const photos = displayed.parts.flatMap((part) =>
       part.type === "file" && part.url && part.mediaType.startsWith("image/")
         ? [part.url]
         : []
@@ -435,14 +437,9 @@ function MessageView({
         <MessageContent>
           {photos.length > 0 && (
             <div className={styles.sentPhotos}>
-              {photos.map((url, index) => (
+              {photos.map((url) => (
                 // eslint-disable-next-line @next/next/no-img-element -- uploaded photo of unknown size
-                <img
-                  key={index}
-                  className={styles.sentPhoto}
-                  src={url}
-                  alt=""
-                />
+                <img key={url} className={styles.sentPhoto} src={url} alt="" />
               ))}
             </div>
           )}
