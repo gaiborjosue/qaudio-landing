@@ -33,6 +33,8 @@ const { instagramPostInputSchema, instagramPostProposalSchema } =
   await import("../lib/admin/schemas.ts")
 const { toStoreDateTime } = await import("../lib/admin/store-time.ts")
 const choice = await import("../lib/admin/approval-choice.ts")
+const { cardHeading, visitableUrl } =
+  await import("../lib/admin/card-heading.ts")
 
 const profileId = "000000000000000000000001"
 const config = { apiKey: "test-only-api-key", profileId }
@@ -1157,4 +1159,185 @@ test("news posts and deals go out the way the owner picks on the card", () => {
     ),
     ["2"]
   )
+})
+
+test("a card's choice is shown until its new card replaces it", () => {
+  const post = {
+    kind: "story",
+    photos: [
+      { path: "instagram/a.webp", width: 1080, height: 1920, alt: "Sale" },
+    ],
+    caption: "",
+    when: "now",
+  }
+  const card = (callId, input) => ({
+    role: "assistant",
+    parts: [{ type: "tool", name: "instagram__save_post", callId, input }],
+  })
+  const owner = (text) => ({ role: "user", parts: [{ type: "text", text }] })
+  const draft = owner(
+    choice.approvedMessage(
+      "save_instagram_post",
+      "draft",
+      { when: "draft" },
+      null
+    )
+  )
+  // Sent: the card stands for the choice, as the post it will be.
+  let result = choice.approvedProposals([card("1", post), draft])
+  assert.deepEqual([...result.chosen.keys()], ["1"])
+  assert.equal(result.chosen.get("1").post.when, "draft")
+  assert.deepEqual([...result.replaced], [])
+  // Proposed again: the new card replaces it.
+  result = choice.approvedProposals([
+    card("1", post),
+    draft,
+    card("2", { ...post, when: "draft" }),
+  ])
+  assert.deepEqual([...result.chosen.keys()], [])
+  assert.deepEqual([...result.replaced], ["1"])
+  // The owner wrote again before anything came: the choice is over.
+  result = choice.approvedProposals([card("1", post), draft, owner("Wait")])
+  assert.deepEqual([...result.chosen.keys()], [])
+})
+
+test("an answered card says what happened instead of asking", () => {
+  const now = "2026-11-05T12:00"
+  const news = {
+    slug: "paradigm-sale",
+    title: "Paradigm Sound for the Season Sale",
+    body: [],
+    cover: {
+      path: "news/c.webp",
+      width: 1600,
+      height: 1000,
+      alt: "Sale",
+      fit: "contain",
+    },
+    status: "published",
+    published_at: "now",
+  }
+  const heading = (phase, input, extra = {}) =>
+    cardHeading({
+      name: "news__save_news_post",
+      input,
+      label: `Add “${input.title}”`,
+      prompt: `Add the post “${input.title}”?`,
+      phase,
+      now,
+      ...extra,
+    })
+  const title = "“Paradigm Sound for the Season Sale”"
+  assert.deepEqual(heading("asking", news), {
+    title: `Add the post ${title}?`,
+    status: "Waiting for approval",
+  })
+  assert.deepEqual(heading("saving", news), {
+    title: `Publishing ${title}`,
+    status: "Saving",
+  })
+  // The owner chose a draft on the card: said as it's saved.
+  assert.equal(
+    heading("saving", news, { chosen: { release: "draft", at: null } }).title,
+    `Saving ${title} as a draft`
+  )
+  const drafted = { ...news, status: "draft" }
+  assert.deepEqual(
+    heading("done", drafted, { output: { status: "draft", live: false } }),
+    { title: `Saved ${title} as a draft`, status: "Saved" }
+  )
+  assert.equal(
+    heading("done", news, { output: { status: "published", live: true } })
+      .title,
+    `Published ${title}`
+  )
+  const later = { ...news, published_at: "2026-11-06T09:00" }
+  assert.equal(
+    heading("done", later, { output: { status: "published", live: false } })
+      .title,
+    `Scheduled ${title} for Nov 6, 2026, 9:00\u00a0am`
+  )
+  assert.deepEqual(heading("denied", news, { note: true }), {
+    title: `News post ${title}`,
+    status: "Changes requested",
+  })
+  assert.equal(heading("withdrawn", news).status, "Not saved")
+
+  // Instagram stories and deals read their own way.
+  const story = {
+    kind: "story",
+    photos: [{ path: "instagram/a.jpg", width: 1080, height: 1920, alt: "x" }],
+    caption: "",
+    when: "now",
+  }
+  const instagram = (phase, input) =>
+    cardHeading({
+      name: "instagram__save_post",
+      input,
+      label: "Saved the Instagram story",
+      prompt: "Add this Instagram story?",
+      phase,
+      now,
+    }).title
+  assert.equal(instagram("done", story), "Posted the story to Instagram")
+  assert.equal(
+    instagram("done", { ...story, when: "draft" }),
+    "Saved the Instagram story as a draft"
+  )
+  assert.equal(
+    instagram("saving", { ...story, when: "2026-11-06T18:30" }),
+    "Scheduling the Instagram story for Nov 6, 2026, 6:30\u00a0pm"
+  )
+  const deal = {
+    title: "Open box week",
+    summary: "",
+    note: "",
+    status: "published",
+    starts_at: "2026-11-10T09:00",
+    ends_at: "2026-11-20T23:59",
+    items: [],
+  }
+  assert.equal(
+    cardHeading({
+      name: "deals__save_deal",
+      input: deal,
+      output: { live: false },
+      label: "Saved “Open box week”",
+      phase: "done",
+      now,
+    }).title,
+    "Scheduled the deal “Open box week” for Nov 10, 2026, 9:00\u00a0am"
+  )
+  // Other changes use their tools' own labels, and deletes say so.
+  assert.deepEqual(
+    cardHeading({
+      name: "news__delete_news_post",
+      input: { id: "x", title: "Old" },
+      label: "Deleted “Old”",
+      prompt: "Delete the post “Old”?",
+      phase: "done",
+      now,
+    }),
+    { title: "Deleted “Old”", status: "Deleted" }
+  )
+  assert.equal(
+    cardHeading({
+      name: "products__reorder_products",
+      input: { product_ids: [] },
+      label: "Reorder products",
+      prompt: "Save this product order?",
+      phase: "withdrawn",
+      now,
+    }).title,
+    "Reorder products"
+  )
+
+  // A draft or scheduled post has no page to visit.
+  assert.equal(visitableUrl({ url: "/news/a", live: false }), null)
+  assert.equal(visitableUrl({ url: "/news/a", live: true }), "/news/a")
+  assert.equal(
+    visitableUrl({ url: "https://www.instagram.com/p/x" }),
+    "https://www.instagram.com/p/x"
+  )
+  assert.equal(visitableUrl({ saved: true }), null)
 })

@@ -27,6 +27,8 @@
    · a row can open a second view inside the panel instead of running
      (`view`): the shape grows to `viewHeight`, a back button returns to
      the rows, and focus moves in and back with it
+   · or the panel holds its own content instead of rows (`panel`, at its
+     own height), such as the Flows menu's switches
 
    Only the Create study is here; the toggle and the list the header
    below mentions stayed behind. */
@@ -180,6 +182,8 @@ export function CreateMenu({
   side = "bottom",
   panelWidth = 212,
   viewHeight = 360,
+  panel: content,
+  pillLabel,
 }: {
   items: CreateMenuItem[]
   label?: string
@@ -194,6 +198,10 @@ export function CreateMenu({
   panelWidth?: number
   /** The open panel's height while a row's view shows. */
   viewHeight?: number
+  /** Added here: the panel's own content in place of rows, at `height`. */
+  panel?: { height: number; render: (close: () => void) => ReactNode }
+  /** Added here: the pill's accessible name, when it says more than `label`. */
+  pillLabel?: string
 }) {
   const [open, setOpen] = useState(false)
   const [sink, setSink] = useState(false)
@@ -202,6 +210,7 @@ export function CreateMenu({
   const [view, setView] = useState<number | null>(null)
   const back = useRef<number | null>(null)
   const still = useReducedMotion()
+  const custom = content !== undefined
 
   const panel = useRef<HTMLDivElement | null>(null)
   const pill = useRef<HTMLButtonElement | null>(null)
@@ -269,13 +278,19 @@ export function CreateMenu({
           ".crt-view-body :is(input, button, [tabindex='0'])"
         )
         ?.focus()
+    } else if (custom) {
+      /* Added here: the panel's own content takes focus at its first
+         control. */
+      panel.current
+        ?.querySelector<HTMLElement>(".crt-content :is(input, button)")
+        ?.focus()
     } else {
       const rows =
         panel.current?.querySelectorAll<HTMLElement>(".crt-item button")
       rows?.[back.current ?? 0]?.focus()
       back.current = null
     }
-  }, [open, view])
+  }, [open, view, custom])
 
   useEffect(() => {
     if (!open) return
@@ -356,7 +371,7 @@ export function CreateMenu({
 
   /* glyph + gap + label + the padding either side */
   const pillW = 18 + 8 + sayW + 34
-  const panelH = panelHeight(items.length)
+  const panelH = content ? content.height : panelHeight(items.length)
   const shown = open && view !== null ? items[view] : null
   const openH = shown?.view ? viewHeight : panelH
 
@@ -429,6 +444,7 @@ export function CreateMenu({
         className="crt-pill"
         onClick={press}
         aria-expanded={open}
+        aria-label={pillLabel}
         disabled={disabled}
         tabIndex={open ? -1 : undefined}
       >
@@ -461,6 +477,11 @@ export function CreateMenu({
             <div className="crt-view-body">
               <ViewBody render={shown.view.render} close={shut} />
             </div>
+          </div>
+        ) : content ? (
+          /* Added here: the panel's own content, arriving like the rows. */
+          <div className="crt-content">
+            <ViewBody render={content.render} close={shut} />
           </div>
         ) : (
           /* each row lights its own wash — see .crt-item button::before;

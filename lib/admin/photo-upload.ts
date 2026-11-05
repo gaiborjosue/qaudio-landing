@@ -9,6 +9,9 @@ import { browserSupabase } from "@/lib/supabase/browser"
 export const PHOTO_MAX_BYTES = 20e6
 const MAX_EDGE = 1600
 
+/** A photo once it's in storage: its media path and its size. */
+export type UploadedPhoto = { path: string; width: number; height: number }
+
 async function encodePhoto(file: File) {
   const bitmap = await createImageBitmap(file)
   const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height))
@@ -41,7 +44,7 @@ export async function uploadPhoto(
     onProgress,
     signal,
   }: { onProgress: (fraction: number) => void; signal?: AbortSignal }
-) {
+): Promise<UploadedPhoto> {
   const cancelled = () => new DOMException("Upload cancelled.", "AbortError")
   const { blob, width, height } = await encodePhoto(file)
   if (signal?.aborted) throw cancelled()

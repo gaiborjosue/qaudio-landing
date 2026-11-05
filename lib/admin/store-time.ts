@@ -55,3 +55,9 @@ export function formatStoreDateTime(local: string) {
   const clock = `${hours % 12 || 12}:${String(minutes).padStart(2, "0")}`
   return `${MONTHS[month - 1]} ${day}, ${year}, ${clock}\u00a0${hours < 12 ? "am" : "pm"}`
 }
+
+/** "Nov 3" from a store-time "YYYY-MM-DD…". */
+export function formatStoreDay(local: string) {
+  const [, month, day] = local.slice(0, 10).split("-").map(Number)
+  return `${MONTHS[month - 1]} ${day}`
+}

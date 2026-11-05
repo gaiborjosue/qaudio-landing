@@ -1,8 +1,9 @@
-import type {
-  CatalogBrand,
-  CatalogCategory,
-  Product,
-  ProductImage,
+import {
+  sellingPrice,
+  type CatalogBrand,
+  type CatalogCategory,
+  type Product,
+  type ProductImage,
 } from "@/lib/catalog"
 import type {
   DayHoursInput,
@@ -10,8 +11,10 @@ import type {
   HoursChangeInput,
   NewsPostInput,
   ProductInput,
+  ProductSaleInput,
   WeeklyHoursInput,
 } from "@/lib/admin/schemas"
+import { fromStoreDateTime } from "@/lib/admin/store-time"
 import type { Deal } from "@/lib/deals-data"
 import { mediaUrl } from "@/lib/media"
 import { newsExcerpt, type NewsBlock, type NewsSummary } from "@/lib/news"
@@ -105,39 +108,68 @@ export function productFromInput(
     return { problem: `Unknown category “${input.category_slug}”.` }
   if (!brand) return { problem: `Unknown brand “${input.brand_slug}”.` }
   return {
-    product: {
-      id: input.id ?? `preview-${input.slug}`,
-      slug: input.slug,
-      name: input.name,
-      short_description: input.short_description,
-      description: input.description,
-      price_cents: input.price_cents,
-      msrp_cents: input.msrp_cents,
-      price_unit: input.price_unit,
-      condition: input.condition,
-      ready_for_audition: input.ready_for_audition,
-      manufacturer_url: input.manufacturer_url,
-      category: {
-        slug: category.slug,
-        name: category.name,
-        artwork_path: category.artwork_path,
+    product: shopProduct(
+      {
+        id: input.id ?? `preview-${input.slug}`,
+        slug: input.slug,
+        name: input.name,
+        short_description: input.short_description,
+        description: input.description,
+        price_cents: input.price_cents,
+        msrp_cents: input.msrp_cents,
+        sale_window: input.sale,
+        price_unit: input.price_unit,
+        condition: input.condition,
+        ready_for_audition: input.ready_for_audition,
+        manufacturer_url: input.manufacturer_url,
+        status: input.status,
+        category: {
+          slug: category.slug,
+          name: category.name,
+          artwork_path: category.artwork_path,
+        },
+        brand,
+        images: input.images.map((image, index) => ({
+          id: `${index}-${image.path}`,
+          src: mediaUrl(image.path),
+          path: image.path,
+          alt: image.alt,
+          width: image.width,
+          height: image.height,
+        })),
       },
-      brand,
-      images: input.images.map((image, index) => ({
-        id: `${index}-${image.path}`,
-        src: mediaUrl(image.path),
-        alt: image.alt,
-        width: image.width,
-        height: image.height,
-      })),
-    },
+      new Date()
+    ),
   }
 }
 
-/** A catalog product with its status and photo paths, for the admin. */
+/**
+ * A catalog product with its status and photo paths, for the admin.
+ * `price_cents` is the regular price; a time-limited sale, live or not, is
+ * `sale_window`, in store time.
+ */
 export type AdminProduct = Omit<Product, "images"> & {
   status: string
   images: (ProductImage & { path: string })[]
+  sale_window?: ProductSaleInput | null
+}
+
+/** The product as the shop shows it at `now`: its sale price if one is live. */
+export function shopProduct<T extends AdminProduct>(product: T, now: Date): T {
+  const sale = product.sale_window
+  if (!sale) return product
+  return {
+    ...product,
+    ...sellingPrice(
+      {
+        price_cents: product.price_cents,
+        sale_price_cents: sale.price_cents,
+        sale_starts_at: sale.starts_at && fromStoreDateTime(sale.starts_at),
+        sale_ends_at: fromStoreDateTime(sale.ends_at),
+      },
+      now.getTime()
+    ),
+  }
 }
 
 /** A news post as the Edit menu lists it; dates are store time. */

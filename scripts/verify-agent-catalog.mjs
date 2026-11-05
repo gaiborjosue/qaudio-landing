@@ -112,13 +112,21 @@ const catalog = buildStepCatalog({
   session: {},
   endsTurn: true,
 })
-assert.equal(catalog.deferred.size, 19)
+assert.equal(catalog.deferred.size, 21)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
     .map((tool) => tool.name)
     .sort(),
-  ["ask_question", "read_file", "web_fetch"]
+  [
+    "ask_dates",
+    "ask_question",
+    "design_story",
+    "edit_story",
+    "flow_progress",
+    "view_photos",
+    "web_fetch",
+  ]
 )
 assert(
   catalog.advertised.has("eve__search") &&
@@ -127,7 +135,7 @@ assert(
 )
 for (const [group, count] of Object.entries({
   hours: 4,
-  products: 3,
+  products: 5,
   news: 4,
   deals: 3,
   instagram: 5,
@@ -189,6 +197,24 @@ const fixtures = {
   ],
   delete_product: [schemas.deleteProductInputSchema, { id, name: "Sample" }],
   reorder_products: [schemas.reorderProductsInputSchema, { product_ids: [id] }],
+  save_sale: [
+    schemas.saleProposalSchema,
+    {
+      title: "Sample",
+      products: [
+        { id, name: "Sample", price_cents: 100000, msrp_cents: 120000 },
+      ],
+      discount: { kind: "percent", percent: 25 },
+      off: "msrp",
+      rounding: "cent",
+      starts_at: "now",
+      ends_at: "2030-01-01T23:59",
+    },
+  ],
+  end_sale: [
+    schemas.endSaleInputSchema,
+    { title: "Sample", products: [{ id, name: "Sample" }] },
+  ],
   save_news_post: [
     schemas.newsPostInputSchema,
     {
@@ -282,7 +308,7 @@ for (const [name, definition] of catalog.deferred) {
     "valid"
   )
 }
-assert.equal(writes, 11)
+assert.equal(writes, 13)
 // Products are saved and deleted in the admin's Products tab; the agent has
 // no product writes left, only their names for older chats' cards.
 const retired = ["products__save_product", "products__delete_product"]
@@ -351,7 +377,48 @@ for (const name of [...catalog.deferred.keys(), ...retired]) {
   assert(!render(name).includes("Unknown category"))
   renders += 2
 }
-assert.equal(renders, 26)
+assert.equal(renders, 30)
+// A sale's card shows the product as the shop will during the sale: 25% off
+// the $1,200 list price is $900, against the crossed-out list price.
+const saleCard = renderToStaticMarkup(
+  createElement(
+    AppRouterContext.Provider,
+    { value: {} },
+    createElement(
+      PathnameContext.Provider,
+      { value: "/admin" },
+      createElement(ChangePreview, {
+        tool: "products__save_sale",
+        input: fixtures.save_sale[1],
+        data: {
+          ...data,
+          products: [
+            {
+              id,
+              slug: "sample",
+              name: "Sample",
+              short_description: "",
+              description: "",
+              price_cents: 100000,
+              msrp_cents: 120000,
+              price_unit: "each",
+              condition: "New",
+              ready_for_audition: false,
+              manufacturer_url: null,
+              status: "published",
+              category: data.taxonomy.categories[0],
+              brand: data.taxonomy.brands[0],
+              images: [],
+            },
+          ],
+        },
+      })
+    )
+  )
+)
+assert(saleCard.includes("25% off MSRP"))
+assert(saleCard.includes("$900"))
+assert(saleCard.includes("<s>$1,200</s>"))
 // A pending carousel's card adds the reorderable photo row, and the post
 // follows the arranged order.
 const arranged = renderToStaticMarkup(
@@ -372,5 +439,5 @@ assert.deepEqual(
   ["products/sample.webp", "uploads/sample.webp"]
 )
 console.log(
-  "Catalog verified: 19 deferred (hours 4, products 3, news 4, deals 3, instagram 5); 3 authored direct helpers; discovery across groups; canonical routing; all 11 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 26 current/historical preview renders, plus an arranged carousel. No site data read or written."
+  "Catalog verified: 21 deferred (hours 4, products 5, news 4, deals 3, instagram 5); 7 authored direct helpers; discovery across groups; canonical routing; all 13 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 30 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
 )

@@ -50,15 +50,26 @@ export function releaseTool(name: string): ReleaseTool | undefined {
     : undefined
 }
 
+/** Parsed proposals, by input object: the chat reads every card again on
+ * each streamed update, and a finished card's input never changes. */
+const parsed = new WeakMap<object, Partial<Record<ReleaseTool, Post | null>>>()
+
 /** A proposal as its tool takes it, or null while it doesn't parse. */
 function parse(tool: ReleaseTool, value: unknown): Post | null {
+  const known =
+    value && typeof value === "object" ? parsed.get(value)?.[tool] : undefined
+  if (known !== undefined) return known
   const result =
     tool === "save_instagram_post"
       ? instagramPostInputSchema.safeParse(value)
       : tool === "save_news_post"
         ? newsPostInputSchema.safeParse(value)
         : dealInputSchema.safeParse(value)
-  return result.success ? result.data : null
+  const post = result.success ? result.data : null
+  if (value && typeof value === "object") {
+    parsed.set(value, { ...parsed.get(value), [tool]: post })
+  }
+  return post
 }
 
 const isTime = (value: unknown): value is string =>
@@ -233,25 +244,36 @@ function expectation(line: string, cards: readonly Card[]) {
       }
     }
     const next = parse(card.tool, { ...card.post, ...fields })
-    if (next)
-      return { tool: card.tool, input: canonical(next), card: card.callId }
+    if (next) {
+      return {
+        tool: card.tool,
+        input: canonical(next),
+        post: next,
+        card: card.callId,
+      }
+    }
   }
   return null
 }
 
 /**
- * Cards the owner approved with a choice on the card before them, and the
- * cards those choices replaced, by tool call id. Only the very next change
- * card can match, and any later word from the owner cancels it.
+ * Cards the owner approved with a choice on the card before them, the cards
+ * those choices replaced, and the cards whose replacement is still on its
+ * way (by tool call id, with the proposal as the owner chose it). Only the
+ * very next change card can match, and any later word from the owner
+ * cancels it.
  */
 export function approvedProposals(messages: readonly Message[]) {
   const approved = new Set<string>()
   const replaced = new Set<string>()
+  const chosen = new Map<string, { tool: ReleaseTool; post: Post }>()
   /** Cards since the owner last wrote: the ones a choice can be about. */
   let cards: Card[] = []
   let expected: ReturnType<typeof expectation> = null
   for (const message of messages) {
     if (message.role === "user") {
+      // A choice nothing answered before the owner wrote again is over.
+      if (expected) chosen.delete(expected.card)
       const text = message.parts
         .map((item) => {
           const part = item as Record<string, unknown>
@@ -262,6 +284,9 @@ export function approvedProposals(messages: readonly Message[]) {
         .join("\n")
       const line = text.match(APPROVED_LINE)?.[1]
       expected = line ? expectation(line, cards) : null
+      if (expected) {
+        chosen.set(expected.card, { tool: expected.tool, post: expected.post })
+      }
       cards = []
       continue
     }
@@ -282,6 +307,7 @@ export function approvedProposals(messages: readonly Message[]) {
       if (expected) {
         if (tool === expected.tool) {
           replaced.add(expected.card)
+          chosen.delete(expected.card)
           if (canonical(post) === expected.input) approved.add(part.callId)
         }
         expected = null
@@ -289,5 +315,5 @@ export function approvedProposals(messages: readonly Message[]) {
       if (tool && post) cards.push({ tool, callId: part.callId, post })
     }
   }
-  return { approved, replaced }
+  return { approved, replaced, chosen }
 }

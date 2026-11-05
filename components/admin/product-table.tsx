@@ -8,7 +8,9 @@ import { saveProductTableEdits } from "@/app/admin/actions"
 import { GridBeam, type GridBeamLines } from "@/components/ui/grid-beam"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import { parseDollars } from "@/lib/admin/product-editor"
+import { saleStatus } from "@/lib/admin/sale"
 import type { ProductQuickEdit } from "@/lib/admin/schemas"
+import { toStoreDateTime } from "@/lib/admin/store-time"
 import { Choice } from "./choice"
 import adminStyles from "./admin.module.css"
 import styles from "./product-table.module.css"
@@ -542,6 +544,12 @@ function ProductRow({
         {priceInvalid && (
           <span id={errorId} className={styles.problem}>
             Enter a price
+          </span>
+        )}
+        {/* The regular price is edited here; a sale, in the product's form. */}
+        {product.sale_window && (
+          <span className={styles.sale}>
+            {saleStatus(product.sale_window, toStoreDateTime(new Date()))}
           </span>
         )}
       </td>

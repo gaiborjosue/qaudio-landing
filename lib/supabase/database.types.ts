@@ -251,6 +251,9 @@ export type Database = {
           price_cents: number
           price_unit: string
           ready_for_audition: boolean
+          sale_ends_at: string | null
+          sale_price_cents: number | null
+          sale_starts_at: string | null
           short_description: string
           slug: string
           sort_order: number
@@ -273,6 +276,9 @@ export type Database = {
           price_cents: number
           price_unit?: string
           ready_for_audition?: boolean
+          sale_ends_at?: string | null
+          sale_price_cents?: number | null
+          sale_starts_at?: string | null
           short_description?: string
           slug: string
           sort_order?: number
@@ -295,6 +301,9 @@ export type Database = {
           price_cents?: number
           price_unit?: string
           ready_for_audition?: boolean
+          sale_ends_at?: string | null
+          sale_price_cents?: number | null
+          sale_starts_at?: string | null
           short_description?: string
           slug?: string
           sort_order?: number

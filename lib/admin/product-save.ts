@@ -1,7 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import { descriptionColumns, descriptionFromColumns } from "../catalog"
 import type { Database } from "../supabase/database.types"
-import type { ProductInput, ProductQuickEdit } from "./schemas"
+import type {
+  ProductInput,
+  ProductQuickEdit,
+  ProductSaleInput,
+} from "./schemas"
+import { fromStoreDateTime, toStoreDateTime } from "./store-time"
 import { placeUploads, type Fail } from "./uploads"
 
 // Reading, saving, and deleting products, shared by the agent's read tool and
@@ -25,6 +30,7 @@ export async function readProduct(
       description_intro, features, description_closing, price_cents,
       msrp_cents, price_unit, condition, ready_for_audition,
       manufacturer_url, status, sort_order,
+      sale_price_cents, sale_starts_at, sale_ends_at,
       product_images(path, alt, width, height, sort_order)`
   )
   const { data, error } = await (
@@ -37,6 +43,9 @@ export async function readProduct(
     description_intro,
     features,
     description_closing,
+    sale_price_cents,
+    sale_starts_at,
+    sale_ends_at,
     ...product
   } = data
   return {
@@ -49,21 +58,40 @@ export async function readProduct(
     price_unit: product.price_unit as ProductInput["price_unit"],
     condition: product.condition as ProductInput["condition"],
     status: product.status as ProductInput["status"],
+    sale:
+      sale_price_cents !== null && sale_ends_at !== null
+        ? {
+            price_cents: sale_price_cents,
+            starts_at: sale_starts_at && toStoreDateTime(sale_starts_at),
+            ends_at: toStoreDateTime(sale_ends_at),
+          }
+        : null,
     images: product_images
       .sort((a, b) => a.sort_order - b.sort_order)
       .map(({ path, alt, width, height }) => ({ path, alt, width, height })),
   }
 }
 
+/** A sale's columns, or cleared ones for null. */
+function saleColumns(sale: ProductSaleInput | null) {
+  return sale
+    ? {
+        sale_price_cents: sale.price_cents,
+        sale_starts_at: sale.starts_at && fromStoreDateTime(sale.starts_at),
+        sale_ends_at: fromStoreDateTime(sale.ends_at),
+      }
+    : { sale_price_cents: null, sale_starts_at: null, sale_ends_at: null }
+}
+
 /**
  * Adds a product, or replaces an existing one's fields and photos by id.
  * New photos (uploads/) are copied into products/ first; the photo list is
- * rewritten in order and trimmed. Returns the id, slug, and saved photo
- * paths.
+ * rewritten in order and trimmed. A sale is written only when given (null
+ * ends it). Returns the id, slug, and saved photo paths.
  */
 export async function saveProduct(
   supabase: Supabase,
-  { id, images, description, ...fields }: ProductInput,
+  { id, images, description, sale, ...fields }: ProductInput,
   fail: Fail
 ) {
   // Move newly uploaded photos into products/ before any row points at them.
@@ -78,6 +106,7 @@ export async function saveProduct(
     name: fields.name.trim(),
     short_description: fields.short_description.trim(),
     ...descriptionColumns(description),
+    ...(sale !== undefined && saleColumns(sale)),
   }
   const result = id
     ? await supabase

@@ -8,6 +8,7 @@ import {
 } from "@/lib/catalog-assets"
 import {
   descriptionFromColumns,
+  sellingPrice,
   type CatalogBrand,
   type CatalogCategory,
   type Product,
@@ -17,6 +18,8 @@ import {
 // for the home page wheel and brand wall, the shop, and product pages. Results
 // are cached under CATALOG_CACHE_TAG with the "content" profile (5 minutes);
 // admin Server Actions will call updateTag(CATALOG_CACHE_TAG) after a save.
+// A time-limited sale's price is chosen when the cache fills, so a sale
+// starts and ends on the site within those 5 minutes.
 export const CATALOG_CACHE_TAG = "catalog"
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
@@ -25,6 +28,7 @@ const PRODUCT_COLUMNS = `
   id, slug, name, short_description, description_intro, features,
   description_closing, price_cents, msrp_cents, price_unit, condition,
   ready_for_audition, manufacturer_url,
+  sale_price_cents, sale_starts_at, sale_ends_at,
   category:catalog_categories!inner(slug, name, artwork_path),
   brand:catalog_brands!inner(slug, name, logo_path),
   product_images(id, path, alt, width, height, sort_order)
@@ -46,15 +50,30 @@ type ProductRow = NonNullable<
   Awaited<ReturnType<typeof productsQuery>>["data"]
 >[number]
 
-function toProduct({
-  product_images,
-  description_intro,
-  features,
-  description_closing,
-  ...product
-}: ProductRow): Product {
+function toProduct(
+  {
+    product_images,
+    description_intro,
+    features,
+    description_closing,
+    sale_price_cents,
+    sale_starts_at,
+    sale_ends_at,
+    ...product
+  }: ProductRow,
+  now: number
+): Product {
   return {
     ...productTaxonomyAssets(product),
+    ...sellingPrice(
+      {
+        price_cents: product.price_cents,
+        sale_price_cents,
+        sale_starts_at,
+        sale_ends_at,
+      },
+      now
+    ),
     description: descriptionFromColumns({
       description_intro,
       features,
@@ -109,7 +128,8 @@ export async function getProducts(
   if (brandSlug) query = query.eq("brand_slug", brandSlug)
   const { data, error } = await query
   if (error) throw new Error(`Catalog: ${error.message}`)
-  return data.map(toProduct)
+  const now = Date.now()
+  return data.map((row) => toProduct(row, now))
 }
 
 /** A published product by slug, or null. */
@@ -119,7 +139,7 @@ export async function getProduct(slug: string): Promise<Product | null> {
   if (!SLUG.test(slug)) return null
   const { data, error } = await productsQuery().eq("slug", slug).maybeSingle()
   if (error) throw new Error(`Product ${slug}: ${error.message}`)
-  return data && toProduct(data)
+  return data && toProduct(data, Date.now())
 }
 
 /** Slugs of published products, for prerendering product pages. */

@@ -28,7 +28,8 @@
    · the progress is a labelled progressbar, and only the box's line is a
      live region, so the rolling percentage isn't read out digit by digit
    · an optional split layout puts the drop target beside an Attach files
-     button with a paperclip icon, separated by "or", in the product sheet */
+     button with a paperclip icon, separated by "or", in the product sheet;
+     that tile lives in file-browse-button.tsx to share with metadata */
 
 import {
   useEffect,
@@ -38,7 +39,8 @@ import {
   useSyncExternalStore,
 } from "react"
 import { motion, useAnimationControls } from "motion/react"
-import { Check, Paperclip, Upload as UpIcon } from "lucide-react"
+import { Check, Upload as UpIcon } from "lucide-react"
+import { FileBrowseButton } from "./file-browse-button"
 
 /* ══ Upload dropzone ══════════════════════════════════════
    A drop box. Carry a file into it: it uploads there — name,
@@ -378,18 +380,7 @@ export function UploadDropzone({
           <span className="upl-separator" aria-hidden="true">
             or
           </span>
-          <button
-            type="button"
-            className="upl-zone upl-attach"
-            onClick={() => input.current?.click()}
-          >
-            <span className="upl-icon" aria-hidden="true">
-              <Paperclip size={18} strokeWidth={2} />
-            </span>
-            <span className="upl-say">
-              <b>Attach files</b>
-            </span>
-          </button>
+          <FileBrowseButton onClick={() => input.current?.click()} />
         </>
       )}
 

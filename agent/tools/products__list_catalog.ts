@@ -1,11 +1,12 @@
 import { defineTool } from "eve/tools"
 import { z } from "zod"
+import { toStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
   deferred: true,
   description:
-    "List the shop's categories and brands (slug and name) and its products, including drafts, in the shop's display order, with optional filters. Use it to find a product's slug or id, valid category and brand slugs, and the current order.",
+    "List the shop's categories and brands (slug and name) and its products, including drafts, in the shop's display order, with optional filters. Use it to find a product's slug or id, valid category and brand slugs, the current order, and prices: price_cents is the regular price, msrp_cents the list price, and sale a time-limited sale (store times), if any.",
   inputSchema: z.object({
     search: z
       .string()
@@ -22,7 +23,7 @@ export default defineTool({
     let products = supabase
       .from("products")
       .select(
-        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, condition, status, sort_order"
+        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, condition, status, sort_order, sale_price_cents, sale_starts_at, sale_ends_at"
       )
       // The shop's own order, so the list reads as the pages show it.
       .order("sort_order")
@@ -52,7 +53,19 @@ export default defineTool({
     return {
       categories: categories.data,
       brands: brands.data,
-      products: list.data,
+      products: list.data.map(
+        ({ sale_price_cents, sale_starts_at, sale_ends_at, ...product }) => ({
+          ...product,
+          sale:
+            sale_price_cents !== null && sale_ends_at !== null
+              ? {
+                  price_cents: sale_price_cents,
+                  starts_at: sale_starts_at && toStoreDateTime(sale_starts_at),
+                  ends_at: toStoreDateTime(sale_ends_at),
+                }
+              : null,
+        })
+      ),
     }
   },
 })

@@ -2679,14 +2679,54 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
 
 .crt-view-body { min-height: 0; }
 
+/* The panel's own content (added here), in place of the rows: it fades
+   and lifts in as they do, once the shape has started to open. */
+.crt-content {
+  height: 100%;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 160ms ease, transform 220ms cubic-bezier(0.22, 1, 0.36, 1);}
+
+.crt-stage[data-open="true"] .crt-content {
+  opacity: 1;
+  transform: none;
+  transition-delay: 30ms;}
+
 @keyframes crt-view-in { from { opacity: 0; transform: translateY(6px); } }
 
 @media (prefers-reduced-motion: reduce) {
-  .crt-body, .crt-pill, .crt-item, .crt-say { transition-duration: 160ms; }
+  .crt-body, .crt-pill, .crt-item, .crt-say, .crt-content { transition-duration: 160ms; }
   .crt-view { animation-name: none; }
+  .crt-content { transform: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .crt-stage[data-sink="true"] .crt-body,
     .crt-stage[data-sink="true"] .crt-pill { scale: 1; }
 }
+
+/* ══ ASCII wake ════════════════════════════════════════════
+   Bencho's ASCII wake (components/ascii-wake.tsx), MIT, see
+   bencho.dev/licence: the admin chat's story placeholders draw it while
+   the designs are made.
+
+   Its design tokens, mapped to the site's own and set here on the
+   component's own root, so nothing leaks into the page:
+
+     --ink       the site's text colour
+     --fill-on   the ink of the dots and glyphs: the same text colour
+   Neither ends in -rgb, so neither needs bare numbers. */
+.asc {
+  --ink: var(--foreground);
+  --fill-on: var(--foreground);
+}
+
+.asc {
+  position: relative;
+  cursor: crosshair;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;}
+
+.asc-canvas { display: block; color: var(--fill-on, var(--ink)); }

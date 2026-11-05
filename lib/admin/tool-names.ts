@@ -10,6 +10,9 @@ const PREVIEW_TOOLS = {
   products__save_product: "save_product",
   products__delete_product: "delete_product",
   products__reorder_products: "reorder_products",
+  // Time-limited sales: the one product change the agent makes.
+  products__save_sale: "save_sale",
+  products__end_sale: "end_sale",
   news__save_news_post: "save_news_post",
   news__delete_news_post: "delete_news_post",
   deals__save_deal: "save_deal",

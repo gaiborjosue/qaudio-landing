@@ -1,6 +1,9 @@
 "use client"
 
 import {
+  Fragment,
+  memo,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -24,7 +27,7 @@ import {
   type Interaction,
   type UseEveAgentReturn,
 } from "eve/react"
-import { parts, runs } from "eve/events"
+import { idle, parts, runs, turn, type SessionView } from "eve/events"
 import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
 import { ApprovalActions } from "@/components/admin/approval-actions"
 import {
@@ -32,6 +35,10 @@ import {
   SAVE_TOOLS,
   type PreviewData,
 } from "@/components/admin/change-preview"
+import type { ChatActions } from "@/components/admin/chat-actions"
+import { DatesPrompt } from "@/components/admin/dates-prompt"
+import { FlowStepper } from "@/components/admin/flow-stepper"
+import { useFlowSettings } from "@/components/admin/flows-menu"
 import {
   CopyAction,
   MessageAction,
@@ -39,8 +46,15 @@ import {
 } from "@/components/admin/message-actions"
 import { orderScope, ProductOrder } from "@/components/admin/product-order"
 import type { ProductRequest } from "@/components/admin/products-view"
-import { QuickMenus, type Ask } from "@/components/admin/quick-menus"
+import {
+  PHOTOS_LIFT,
+  QuickActionsMore,
+  QuickActionsRow,
+  type Ask,
+  type QuickMenusProps,
+} from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
+import { isStoryTool, StoryDesigns } from "@/components/admin/story-designs"
 import { useVoiceInput, VoiceWaveform } from "@/components/admin/voice-input"
 import { ChromaticButton } from "@/components/chromatic-button"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -60,6 +74,7 @@ import {
   discardUpload,
   PHOTO_MAX_BYTES,
   uploadPhoto,
+  type UploadedPhoto,
 } from "@/lib/admin/photo-upload"
 import {
   instagramPostInputSchema,
@@ -70,9 +85,19 @@ import {
   APPROVED_PHOTO_ORDER,
   approvedProposals,
   PHOTO_ORDER,
+  proposedRelease,
+  scheduledAt,
 } from "@/lib/admin/approval-choice"
-import { withUploadedPhotos } from "@/lib/admin/chat-photos"
-import { mediaUrl } from "@/lib/media"
+import {
+  cardHeading,
+  visitableUrl,
+  type CardPhase,
+  type ChosenRelease,
+} from "@/lib/admin/card-heading"
+import { toStoreDateTime } from "@/lib/admin/store-time"
+import { sentPhotos } from "@/lib/admin/chat-photos"
+import { enabledFlows, FLOW_TOOL, flowState } from "@/lib/admin/flows"
+import { photoLine } from "@/lib/admin/photo-lines"
 import { browserSupabase } from "@/lib/supabase/browser"
 import styles from "./admin.module.css"
 
@@ -119,6 +144,7 @@ export function AdminChat({
   const refreshed = useRef(new Set<string>())
   const [ending, setEnding] = useState(false)
   const [voiceReset, setVoiceReset] = useState(0)
+  const [flows, setFlow] = useFlowSettings()
 
   const agent = useEveAgent({
     auth: { bearer: accessToken },
@@ -126,6 +152,17 @@ export function AdminChat({
       initialSession: { sessionId, streamIndex: 0 },
       resume: true,
     }),
+    // One person works in this chat, so nothing starts work here but this
+    // page: the stream stays open only while the agent works, and every
+    // send or answer opens it again. A chat left waiting for an approval,
+    // or idle while the owner is in another tab, holds no connection.
+    followWhile: (view) => !idle(view),
+    // Every message says which flows are on; the eve channel tells the
+    // model and checks them (lib/admin/flows.ts). Answers keep their turn's.
+    prepareSend: (input) =>
+      input.message !== undefined
+        ? { ...input, clientContext: { flows: enabledFlows(flows) } }
+        : input,
     onSessionChange(session) {
       if (session) onSession(session.sessionId)
     },
@@ -155,6 +192,12 @@ export function AdminChat({
 
   const busy = agent.status === "busy"
   const resuming = agent.status === "resuming"
+  const { send, respond, cancel } = agent
+  // Stable while the reply streams, so finished turns don't re-render.
+  const actions = useMemo<ChatActions>(
+    () => ({ send, respond, resuming }),
+    [send, respond, resuming]
+  )
 
   // Chats are disposable: long-term memory keeps what matters, so New chat
   // ends the server session instead of leaving it behind.
@@ -174,17 +217,31 @@ export function AdminChat({
   // Quick actions send the owner's opening line, as if typed, and the agent
   // takes it from there. An Edit choice adds a hidden "Item:" line naming the
   // exact item (the bubble drops it, like "Photo uploaded:").
-  const ask: Ask = (text, item) =>
-    void agent.send(item ? `${text}\nItem: ${item}` : text)
+  const ask = useCallback<Ask>(
+    (text, item) => void send(item ? `${text}\nItem: ${item}` : text),
+    [send]
+  )
 
   // The composer's text lives here so a sent message's Edit can put its
   // words back in the field.
   const [draft, setDraft] = useState("")
   const field = useRef<HTMLTextAreaElement>(null)
-  const edit = (text: string) => {
+  const edit = useCallback((text: string) => {
     setDraft(text)
     field.current?.focus()
-  }
+  }, [])
+
+  // Read again only when the conversation changes, not as the owner types;
+  // the stepper redraws only when the run's steps change.
+  const run = useMemo(() => flowState(agent.messages), [agent.messages])
+
+  // What the quick actions need, kept as one object that changes only when
+  // they do, so the composer doesn't redraw with every streamed update.
+  const disabled = resuming || ending
+  const quick = useMemo<QuickMenusProps>(
+    () => ({ preview, ask, onProduct, flows, onFlow: setFlow, disabled }),
+    [preview, ask, onProduct, flows, setFlow, disabled]
+  )
 
   return (
     // Morphs and other Motion animations go instant under reduced motion.
@@ -206,9 +263,13 @@ export function AdminChat({
             actionsTarget
           )}
         <div className={styles.workspace}>
+          {/* Above the thread, or in the space left of it on wide screens. */}
+          <FlowStepper run={run} />
           <div className={styles.chat}>
             <Conversation
-              agent={agent}
+              messages={agent.messages}
+              view={agent.view}
+              actions={actions}
               preview={preview}
               busy={busy}
               onEdit={edit}
@@ -220,33 +281,20 @@ export function AdminChat({
               </p>
             )}
 
-            {/* Quick actions, at the top left of the message field. Outside
-                the composer's form, so Enter in a list's search can't send
-                the message. Stroke on: the white menus need their hairline
-                on this light grey page. */}
-            <div
-              className={styles.quickActions}
-              role="group"
-              aria-label="Quick actions"
-              data-stroke="on"
-            >
-              <QuickMenus
-                preview={preview}
-                ask={ask}
-                onProduct={onProduct}
-                disabled={resuming || ending}
-              />
-            </div>
-
+            {/* The quick actions, then the message field: the Composer
+                draws both, since the actions fold into the field's own
+                button while it holds a message. */}
             <Composer
-              agent={agent}
+              send={send}
+              cancel={cancel}
               active={active}
               voiceReset={voiceReset}
-              disabled={resuming || ending}
+              disabled={disabled}
               busy={busy}
               text={draft}
               onText={setDraft}
               field={field}
+              quick={quick}
             />
           </div>
         </div>
@@ -255,32 +303,48 @@ export function AdminChat({
   )
 }
 
-function Conversation({
-  agent,
+/**
+ * The thread. Memoized: typing in the composer doesn't redraw it, and while
+ * a reply streams only that reply's message does (eve keeps the other
+ * messages' objects, and MessageView compares what each one shows).
+ */
+const Conversation = memo(function Conversation({
+  messages,
+  view,
+  actions,
   preview,
   busy,
   onEdit,
 }: {
-  agent: Agent
+  messages: readonly EveMessage[]
+  view: SessionView
+  actions: ChatActions
   preview: PreviewData
   busy: boolean
   onEdit: (text: string) => void
 }) {
-  const ownerSaved = ownerSavedOrders(agent.messages)
-  const choices = approvedProposals(agent.messages)
+  const ownerSaved = ownerSavedOrders(messages)
+  const choices = approvedProposals(messages)
+  // Steering can split a turn into several messages. Only its last reply
+  // gets actions, and only after the turn itself has settled.
+  const finalReplies = new Map<string, string>()
+  for (const message of messages) {
+    if (message.role === "assistant")
+      finalReplies.set(message.metadata?.turnId ?? message.id, message.id)
+  }
   // Match each text part to the run that produced it. Session-wide model
   // settings would mislabel older replies after an automatic model switch.
   const modelByPart = useMemo(() => {
     const modelByRun = new Map(
-      runs(agent.view).map((run) => [run.runId, run.modelId])
+      runs(view).map((run) => [run.runId, run.modelId])
     )
     return new Map(
-      parts(agent.view, { kind: "text" }).map((part) => [
+      parts(view, { kind: "text" }).map((part) => [
         part.partId,
         modelByRun.get(part.runId),
       ])
     )
-  }, [agent.view])
+  }, [view])
   return (
     // Each of the owner's messages anchors its turn near the top, the reply
     // streams in below it and is followed while the reader stays at the
@@ -296,23 +360,36 @@ function Conversation({
                 </MessageContent>
               </Message>
             </MessageScrollerItem>
-            {agent.messages.map((message) => (
-              <MessageScrollerItem
-                key={message.id}
-                messageId={message.id}
-                scrollAnchor={message.role === "user"}
-              >
-                <MessageView
-                  message={message}
-                  agent={agent}
-                  preview={preview}
-                  ownerSaved={ownerSaved}
-                  choices={choices}
-                  modelByPart={modelByPart}
-                  onEdit={onEdit}
-                />
-              </MessageScrollerItem>
-            ))}
+            {messages.map((message) => {
+              const cards = cardStates(message, ownerSaved, choices)
+              return (
+                <MessageScrollerItem
+                  key={message.id}
+                  messageId={message.id}
+                  scrollAnchor={message.role === "user"}
+                >
+                  <MessageView
+                    message={message}
+                    actions={actions}
+                    preview={preview}
+                    cards={cards}
+                    cardsKey={JSON.stringify(cards)}
+                    models={modelsOf(message, modelByPart)}
+                    finished={
+                      !actions.resuming &&
+                      message.metadata?.status === "complete" &&
+                      finalReplies.get(
+                        message.metadata.turnId ?? message.id
+                      ) === message.id &&
+                      (!message.metadata.turnId ||
+                        turn(view, message.metadata.turnId)?.status ===
+                          "settled")
+                    }
+                    onEdit={onEdit}
+                  />
+                </MessageScrollerItem>
+              )
+            })}
             {busy && (
               <MessageScrollerItem>
                 <p className={styles.working} role="status">
@@ -326,6 +403,64 @@ function Conversation({
       </MessageScroller>
     </MessageScrollerProvider>
   )
+})
+
+/** What a change card shows besides its call: decided by later messages. */
+type CardState = {
+  /** The order the owner arranged on a reorder card and saved. */
+  ownerSaved?: string[]
+  /** Approved with a choice on the card before it, which it matches. */
+  preapproved?: true
+  /** Withdrawn by a choice on it, and proposed again with that choice:
+   * the new card stands for it, so it's no longer shown. */
+  replaced?: true
+  /** The owner's choice on it, while the agent proposes it that way. */
+  chosen?: ChosenRelease
+}
+
+/** The states of a message's change cards, by call id. */
+function cardStates(
+  message: EveMessage,
+  ownerSaved: Map<string, string[]>,
+  choices: ReturnType<typeof approvedProposals>
+) {
+  const cards: Record<string, CardState> = {}
+  for (const part of message.parts) {
+    if (part.type !== "tool" || !SAVE_TOOLS.has(part.name)) continue
+    const saved = ownerSaved.get(part.callId)
+    const choice = choices.chosen.get(part.callId)
+    const release =
+      choice &&
+      proposedRelease(choice.tool, choice.post, toStoreDateTime(new Date()))
+    const state: CardState = {
+      ...(saved && { ownerSaved: saved }),
+      ...(choices.approved.has(part.callId) && { preapproved: true }),
+      ...(choices.replaced.has(part.callId) && { replaced: true }),
+      ...(choice &&
+        release && {
+          chosen: { release, at: scheduledAt(choice.tool, choice.post) },
+        }),
+    }
+    if (Object.keys(state).length > 0) cards[part.callId] = state
+  }
+  return cards
+}
+
+/** The models that wrote a reply's text, one per line. */
+function modelsOf(
+  message: EveMessage,
+  modelByPart: ReadonlyMap<string, string | undefined>
+) {
+  if (message.role === "user") return ""
+  return [
+    ...new Set(
+      message.parts.flatMap((part) => {
+        if (part.type !== "text" || !part.id || !part.text.trim()) return []
+        const model = modelByPart.get(part.id)
+        return model ? [model] : []
+      })
+    ),
+  ].join("\n")
 }
 
 // Lines meant for the agent, not the bubble: uploaded photos, the item an
@@ -335,7 +470,7 @@ function Conversation({
 // a carousel's photo order). Older chats also carry what the owner saved or
 // asked to draft in the chat's former product editor and table.
 const HIDDEN_LINE = new RegExp(
-  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}|${APPROVED_AS}): .*$`,
+  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|Story edit|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}|${APPROVED_AS}): .*$`,
   "gm"
 )
 const ORDER_SAVED = /^Order saved: (.+)$/m
@@ -386,17 +521,20 @@ function messageText(message: EveMessage) {
 
 type ReplyPart = EveMessage["parts"][number]
 
-/** A working step: a call that's neither a change card nor an open question.
- * Older chats' product editor and table calls read as steps too. */
+/** A working step: a call that's neither a change card, the story designs,
+ * nor an open question. Older chats' product editor and table calls read
+ * as steps too. */
 const isStep = (part: ReplyPart): part is EveToolPart =>
   part.type === "tool" &&
   !SAVE_TOOLS.has(part.name) &&
+  !isStoryTool(part.name) &&
   part.interaction?.status !== "open"
 
 /**
  * A reply's parts in order, with each run of working steps gathered into
- * one. Parts that draw nothing (control calls, reasoning, files) are left
- * out, so they don't split a run.
+ * one. Parts that draw nothing (control calls, a flow's progress calls,
+ * which the stepper shows, reasoning, files) are left out, so they don't
+ * split a run.
  */
 function replyRuns(parts: readonly ReplyPart[]) {
   const runs: (
@@ -405,6 +543,7 @@ function replyRuns(parts: readonly ReplyPart[]) {
   )[] = []
   parts.forEach((part, index) => {
     if (part.type === "tool" && part.kind === "control") return
+    if (part.type === "tool" && part.name === FLOW_TOOL) return
     if (part.type === "reasoning" || part.type === "file") return
     if (isStep(part)) {
       const last = runs.at(-1)
@@ -417,32 +556,52 @@ function replyRuns(parts: readonly ReplyPart[]) {
   return runs
 }
 
-function MessageView({
-  message,
-  agent,
-  preview,
-  ownerSaved,
-  choices,
-  modelByPart,
-  onEdit,
-}: {
+type MessageViewProps = {
   message: EveMessage
-  agent: Agent
+  actions: ChatActions
   preview: PreviewData
-  ownerSaved: Map<string, string[]>
-  choices: ReturnType<typeof approvedProposals>
-  modelByPart: ReadonlyMap<string, string | undefined>
+  cards: Record<string, CardState>
+  /** `cards` as text, so a redraw can be skipped when they're the same. */
+  cardsKey: string
+  models: string
+  finished: boolean
   onEdit: (text: string) => void
-}) {
-  const displayed = withUploadedPhotos(message)
-  const text = messageText(displayed)
+}
+
+/**
+ * The same message with the same card states draws the same. The owner's
+ * own messages come back as new objects on every update, so those compare
+ * by what they say.
+ */
+function sameMessage(a: MessageViewProps, b: MessageViewProps) {
+  return (
+    (a.message === b.message ||
+      (a.message.role === "user" &&
+        a.message.id === b.message.id &&
+        a.message.metadata?.status === b.message.metadata?.status &&
+        JSON.stringify(a.message.parts) === JSON.stringify(b.message.parts))) &&
+    a.actions === b.actions &&
+    a.preview === b.preview &&
+    a.cardsKey === b.cardsKey &&
+    a.models === b.models &&
+    a.finished === b.finished &&
+    a.onEdit === b.onEdit
+  )
+}
+
+const MessageView = memo(function MessageView({
+  message,
+  actions,
+  preview,
+  cards,
+  models,
+  finished,
+  onEdit,
+}: MessageViewProps) {
+  const text = messageText(message)
 
   if (message.role === "user") {
-    const photos = displayed.parts.flatMap((part) =>
-      part.type === "file" && part.url && part.mediaType.startsWith("image/")
-        ? [part.url]
-        : []
-    )
+    const photos = sentPhotos(message)
     return (
       <Message align="end" className={styles.message}>
         <MessageContent>
@@ -472,19 +631,11 @@ function MessageView({
     )
   }
 
-  // Copy waits for the reply's text to finish arriving.
+  // A completed text part may be followed by more tools or an approval.
+  // Actions wait for the whole turn, not just a pause in text streaming.
   const writing = message.parts.some(
     (part) => part.type === "text" && part.state === "streaming"
   )
-  const models = [
-    ...new Set(
-      message.parts.flatMap((part) => {
-        if (part.type !== "text" || !part.id || !part.text.trim()) return []
-        const model = modelByPart.get(part.id)
-        return model ? [model] : []
-      })
-    ),
-  ]
 
   return (
     <Message className={styles.message}>
@@ -515,82 +666,160 @@ function MessageView({
             case "tool":
               if (part.kind === "control") return null
               if (SAVE_TOOLS.has(part.name)) {
+                const card = cards[part.callId]
+                // The card the owner's choice replaced: the new one stands
+                // for it.
+                if (card?.replaced) return null
                 return (
                   <ChangeCard
                     key={key}
                     part={part}
-                    agent={agent}
+                    actions={actions}
                     preview={preview}
-                    ownerSaved={ownerSaved.get(part.callId)}
-                    preapproved={choices.approved.has(part.callId)}
-                    replaced={choices.replaced.has(part.callId)}
+                    ownerSaved={card?.ownerSaved}
+                    preapproved={card?.preapproved}
+                    chosen={card?.chosen}
                   />
                 )
               }
-              // Not a step, so it's a question still waiting for an answer.
+              // The story design: a placeholder while it's made, then the
+              // design. (Older chats asked to pick one of two.)
+              if (isStoryTool(part.name)) {
+                return (
+                  <Fragment key={key}>
+                    <StoryDesigns part={part} actions={actions} />
+                    {part.interaction?.status === "open" && (
+                      <Prompt
+                        interaction={part.interaction}
+                        actions={actions}
+                      />
+                    )}
+                  </Fragment>
+                )
+              }
+              // Not a step, so it's a question still waiting for an answer;
+              // ask_dates asks with a calendar.
+              if (part.name === "ask_dates" && part.interaction) {
+                return part.interaction.status === "open" &&
+                  part.interaction.answer === undefined ? (
+                  <DatesPrompt
+                    key={key}
+                    interaction={part.interaction}
+                    input={part.input}
+                    actions={actions}
+                  />
+                ) : null
+              }
               return part.interaction ? (
                 <Prompt
                   key={key}
                   interaction={part.interaction}
-                  agent={agent}
+                  actions={actions}
                 />
               ) : null
             case "interaction":
-              return <Prompt key={key} interaction={part} agent={agent} />
+              return <Prompt key={key} interaction={part} actions={actions} />
             default:
               return null
           }
         })}
-        {text && !writing && (
+        {text && finished && !writing && (
           <MessageFooter className={styles.replyFooter}>
             <CopyAction text={text} />
-            <ModelInfoAction models={models} />
+            <ModelInfoAction models={models ? models.split("\n") : []} />
           </MessageFooter>
         )}
       </MessageContent>
     </Message>
   )
-}
+}, sameMessage)
 
 const INSTAGRAM_LINK = /^https:\/\/(www\.)?instagram\.com\//
 
-const CHANGE_STATUS: Partial<Record<EveToolPart["state"], string>> = {
-  streaming: "Preparing",
-  requested: "Preparing",
-  approval: "Waiting for approval",
-  running: "Saving",
-  completed: "Saved",
-  rejected: "Not saved",
-  failed: "Failed",
-  cancelled: "Cancelled",
+/** Where a change card stands, from its call and what the owner did. */
+function cardPhase(
+  part: EveToolPart,
+  {
+    ownerSaved,
+    preapproved,
+    chosen,
+  }: { ownerSaved?: string[]; preapproved: boolean; chosen?: ChosenRelease }
+): CardPhase {
+  if (ownerSaved || part.state === "completed") return "done"
+  if (part.state === "failed") return "failed"
+  // The owner picked another way for it to go out: it's being proposed
+  // again that way, and the new card replaces it.
+  if (chosen) return "saving"
+  if (part.state === "streaming") return "preparing"
+  const interaction = part.interaction
+  const answer = interaction?.answer
+  // An answer counts from the moment it's sent, not when eve settles it.
+  if (interaction?.status === "open" && answer === undefined) {
+    return preapproved ? "saving" : "asking"
+  }
+  if (answer?.optionId === "approve" || part.state === "running") {
+    return "saving"
+  }
+  if (answer?.optionId === "deny") return "denied"
+  if (part.state === "rejected" || part.state === "cancelled") {
+    return "withdrawn"
+  }
+  return interaction ? "saving" : "preparing"
+}
+
+// How the card is drawn in each phase (its outline, and dimmed when it
+// didn't go through).
+const PHASE_STATE: Record<CardPhase, string> = {
+  preparing: "streaming",
+  asking: "approval",
+  saving: "running",
+  done: "completed",
+  denied: "rejected",
+  withdrawn: "rejected",
+  failed: "failed",
 }
 
 function ChangeCard({
   part,
-  agent,
+  actions,
   preview,
   ownerSaved,
   preapproved = false,
-  replaced = false,
+  chosen,
 }: {
   part: EveToolPart
-  agent: Agent
+  actions: ChatActions
   preview: PreviewData
   /** The order the owner arranged on this reorder card and saved. */
   ownerSaved?: string[]
   /** Approved with a choice on the card before it, which this matches. */
   preapproved?: boolean
-  /** Withdrawn by a choice on it, and proposed again with that choice. */
-  replaced?: boolean
+  /** The owner's choice on it, while the agent proposes it that way. */
+  chosen?: ChosenRelease
 }) {
   const interaction = part.interaction
-  const pending = !ownerSaved && interaction?.status === "open"
-  const output = part.output as { url?: unknown } | undefined
-  const pageUrl =
-    part.state === "completed" && typeof output?.url === "string"
-      ? output.url
-      : null
-
+  const phase = cardPhase(part, { ownerSaved, preapproved, chosen })
+  const pending = phase === "asking"
+  // What the owner wrote when denying it, without the lines for the agent.
+  const denial =
+    phase === "denied"
+      ? interaction?.answer?.text?.replace(HIDDEN_LINE, "").trim()
+      : undefined
+  // Once answered, the heading says what is happening or happened instead
+  // of asking (lib/admin/card-heading.ts).
+  const heading = cardHeading({
+    name: part.name,
+    input: part.input,
+    output: part.output,
+    label: part.label,
+    prompt: interaction?.request.prompt,
+    phase,
+    chosen,
+    note: !!denial,
+    now: toStoreDateTime(new Date()),
+  })
+  // A draft or scheduled post has no page to visit yet.
+  const pageUrl = part.state === "completed" ? visitableUrl(part.output) : null
   // A proposed product order can be rearranged here. A changed order is the
   // owner's own decision, so "Save this order" saves it directly (a Server
   // Action, as the admin) rather than asking for a second approval, then
@@ -626,7 +855,7 @@ function ChangeCard({
         setSaveError(result.error)
         return
       }
-      await agent.send(
+      await actions.send(
         `I saved ${orderScope(order, preview.taxonomy)} in the order I arranged.\nOrder saved: ${JSON.stringify(input)}`
       )
     })
@@ -654,7 +883,7 @@ function ChangeCard({
 
   // Answer, once, a re-proposal that matches what the owner approved.
   const autoApproved = useRef(false)
-  const resuming = agent.status === "resuming"
+  const { respond, resuming } = actions
   useEffect(() => {
     if (
       !preapproved ||
@@ -666,15 +895,12 @@ function ChangeCard({
     )
       return
     autoApproved.current = true
-    agent
-      .respond([
-        { interactionId: interaction.interactionId, optionId: "approve" },
-      ])
-      .catch(() => {
-        autoApproved.current = false
-      })
-  }, [preapproved, resuming, interaction, agent])
-  const approving = preapproved && pending
+    respond([
+      { interactionId: interaction.interactionId, optionId: "approve" },
+    ]).catch(() => {
+      autoApproved.current = false
+    })
+  }, [preapproved, resuming, interaction, respond])
 
   const approval =
     interaction?.request.options?.some((option) => option.id === "approve") &&
@@ -685,28 +911,17 @@ function ChangeCard({
       : carousel
         ? "Drag the photos to reorder, or type what to change."
         : "Or type what to change."
-  // What the owner wrote when denying it, without the lines for the agent.
-  const denial =
-    !pending && interaction?.answer?.optionId === "deny"
-      ? interaction.answer.text?.replace(HIDDEN_LINE, "").trim()
-      : undefined
 
   return (
     <section
       className={styles.card}
-      data-state={ownerSaved ? "completed" : part.state}
-      aria-label={part.label}
+      data-state={PHASE_STATE[phase]}
+      aria-label={heading.title}
     >
       <header className={styles.cardHeader}>
-        <h2>{interaction?.request.prompt ?? part.label}</h2>
-        <span className={styles.status}>
-          {ownerSaved
-            ? "Saved"
-            : approving
-              ? "Approving"
-              : replaced && part.state === "rejected"
-                ? "Replaced"
-                : (CHANGE_STATUS[part.state] ?? part.state)}
+        <h2>{heading.title}</h2>
+        <span className={styles.status} role="status">
+          {heading.status}
         </span>
       </header>
       {order && sortable && (
@@ -724,7 +939,7 @@ function ChangeCard({
             input={shownInput}
             data={preview}
             photoOrder={
-              carousel && !approving
+              carousel && pending
                 ? { order: photoOrder, onOrder: setPhotoOrder }
                 : undefined
             }
@@ -742,14 +957,13 @@ function ChangeCard({
       {denial && <p className={styles.denialNote}>“{denial}”</p>}
       {pending &&
         interaction &&
-        !approving &&
         (changed ? (
           <>
             <div className={styles.options}>
               <button
                 type="button"
                 className={styles.primary}
-                disabled={saving || agent.status === "resuming"}
+                disabled={saving || actions.resuming}
                 onClick={saveArranged}
               >
                 {saving ? "Saving…" : "Save this order"}
@@ -767,7 +981,7 @@ function ChangeCard({
           </>
         ) : approval ? (
           <ApprovalActions
-            agent={agent}
+            actions={actions}
             interaction={interaction}
             tool={part.name}
             input={part.input}
@@ -777,7 +991,7 @@ function ChangeCard({
           />
         ) : (
           <>
-            <Options interaction={interaction} agent={agent} />
+            <Options interaction={interaction} actions={actions} />
             <p className={styles.hint}>{hint}</p>
           </>
         ))}
@@ -801,10 +1015,10 @@ function ChangeCard({
 /** An approval or question's choices; the first is the primary action. */
 function Options({
   interaction,
-  agent,
+  actions,
 }: {
   interaction: Interaction
-  agent: Agent
+  actions: ChatActions
 }) {
   const [sending, setSending] = useState(false)
   const answered = interaction.answer !== undefined
@@ -823,12 +1037,12 @@ function Options({
                 ? styles.primary
                 : styles.secondary
           }
-          disabled={sending || answered || agent.status === "resuming"}
+          disabled={sending || answered || actions.resuming}
           title={option.description}
           onClick={async () => {
             setSending(true)
             try {
-              await agent.respond([
+              await actions.respond([
                 {
                   interactionId: interaction.interactionId,
                   optionId: option.id,
@@ -849,13 +1063,16 @@ function Options({
 /** A question, budget check, or sign-in that isn't about a save. */
 function Prompt({
   interaction,
-  agent,
+  actions,
 }: {
   interaction: Interaction | EveInteractionPart
-  agent: Agent
+  actions: ChatActions
 }) {
   const { request } = interaction
-  if (interaction.status !== "open") return null
+  // Gone once answered: the reply says what comes of it.
+  if (interaction.status !== "open" || interaction.answer !== undefined) {
+    return null
+  }
   if (request.kind === "sign-in") {
     return (
       <section className={`${styles.card} ${styles.question}`}>
@@ -872,7 +1089,7 @@ function Prompt({
     <section className={`${styles.card} ${styles.question}`}>
       {request.title && <h2 className={styles.promptTitle}>{request.title}</h2>}
       <p>{request.prompt}</p>
-      <Options interaction={interaction} agent={agent} />
+      <Options interaction={interaction} actions={actions} />
       {(request.allowFreeform || !request.options?.length) && (
         <p className={styles.hint}>Type your answer below.</p>
       )}
@@ -895,8 +1112,9 @@ type Photo = {
 
 const MAX_MB = Math.round(PHOTO_MAX_BYTES / 1e6)
 
-function Composer({
-  agent,
+const Composer = memo(function Composer({
+  send,
+  cancel,
   active,
   voiceReset,
   disabled,
@@ -904,8 +1122,10 @@ function Composer({
   text,
   onText: setText,
   field,
+  quick,
 }: {
-  agent: Agent
+  send: Agent["send"]
+  cancel: Agent["cancel"]
   active: boolean
   voiceReset: number
   disabled: boolean
@@ -913,18 +1133,31 @@ function Composer({
   text: string
   onText: Dispatch<SetStateAction<string>>
   field: RefObject<HTMLTextAreaElement | null>
+  /** The quick actions: above the field, or folded into its button. */
+  quick: QuickMenusProps
 }) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  // Send pressed while photos are still uploading: it goes once they land.
+  const [queued, setQueued] = useState(false)
+  const sending = useRef(false)
   const previews = useRef(new Set<string>())
   /** Uploads still on the wire, by photo id, so removing one can stop it. */
   const uploads = useRef(new Map<string, AbortController>())
+  /** Each upload under way, by photo id, settling when it's done either way. */
+  const inFlight = useRef(new Map<string, Promise<void>>())
   /** Where each finished upload landed, by photo id. */
-  const landed = useRef(new Map<string, string>())
+  const landed = useRef(new Map<string, UploadedPhoto>())
+  /** Photos whose upload failed, still in the message. */
+  const failedIds = useRef(new Set<string>())
   const anchor = useRef<HTMLDivElement>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const panel = useRef<HTMLDivElement>(null)
+  const inputRow = useRef<HTMLDivElement>(null)
+  // A message in the field (the same test that enables Send): the quick
+  // actions are shortcuts for starting one, so they fold into a button.
+  const composing = text.trim() !== "" || photos.length > 0
   const voice = useVoiceInput(active && !disabled, voiceReset)
   const dictating = voice.phase !== "idle"
   const wasDictating = useRef(false)
@@ -979,7 +1212,11 @@ function Composer({
       )
     )
 
-  /** Starts uploading checked images; each reports its progress. */
+  /**
+   * Starts uploading checked images; each reports its progress. A failed
+   * upload is tried once more before it shows as failed: most failures are
+   * a dropped connection or a token being refreshed.
+   */
   const upload = (files: File[]) => {
     for (const file of files) {
       const id = crypto.randomUUID()
@@ -998,22 +1235,36 @@ function Composer({
           status: "uploading",
         },
       ])
-      uploadPhoto(file, {
-        onProgress: (progress) => update(id, { progress }),
-        signal: controller.signal,
-      })
+      const attempt = (retries: number): Promise<UploadedPhoto> =>
+        uploadPhoto(file, {
+          onProgress: (progress) => update(id, { progress }),
+          signal: controller.signal,
+        }).catch(async (error: unknown) => {
+          if (controller.signal.aborted || retries === 0) throw error
+          await new Promise((resolve) => window.setTimeout(resolve, 800))
+          if (controller.signal.aborted) throw error
+          update(id, { progress: 0 })
+          return attempt(retries - 1)
+        })
+      const done = attempt(1)
         .then(
           (uploaded) => {
             // Removed while its last bytes were landing: take it back too.
-            if (controller.signal.aborted) return discard(uploaded.path)
-            landed.current.set(id, uploaded.path)
-            update(id, { ...uploaded, status: "ready" })
+            if (controller.signal.aborted) return void discard(uploaded.path)
+            landed.current.set(id, uploaded)
+            update(id, { ...uploaded, status: "ready", progress: 1 })
           },
           () => {
-            if (!controller.signal.aborted) update(id, { status: "failed" })
+            if (controller.signal.aborted) return
+            failedIds.current.add(id)
+            update(id, { status: "failed" })
           }
         )
-        .finally(() => uploads.current.delete(id))
+        .finally(() => {
+          uploads.current.delete(id)
+          inFlight.current.delete(id)
+        })
+      inFlight.current.set(id, done)
     }
   }
 
@@ -1047,288 +1298,362 @@ function Composer({
     previews.current.delete(photo.preview)
     setPhotos((current) => current.filter((item) => item.id !== photo.id))
     uploads.current.get(photo.id)?.abort()
+    failedIds.current.delete(photo.id)
     // The path is read from the ref too: the chip can still show
     // "uploading" for a frame after the upload has landed.
-    const path = photo.path ?? landed.current.get(photo.id)
+    const path = photo.path ?? landed.current.get(photo.id)?.path
     landed.current.delete(photo.id)
     if (path) void discard(path)
   }
 
-  const uploading = photos.some((photo) => photo.status === "uploading")
-  const ready = photos.filter((photo) => photo.status === "ready")
+  const failed = photos.some((photo) => photo.status === "failed")
 
+  /**
+   * Sends the words and the photos, each as a `Photo uploaded:` line (the
+   * agent looks at them by path; lib/admin/photo-lines.ts). Photos still
+   * uploading are waited for, with the field held as it is. What's sent
+   * leaves the composer before the request, so a second Enter can't send it
+   * twice and anything added meanwhile stays; a failed send puts it back.
+   */
   const submit = async () => {
-    const lines = ready.map(
-      (photo) =>
-        `Photo uploaded: ${photo.path} (${photo.width}×${photo.height})`
-    )
-    const message = [text.trim(), ...lines].filter(Boolean).join("\n")
-    if (!message || disabled || busy || uploading || dictating) return
-    const content =
-      ready.length === 0
-        ? message
-        : [
-            { type: "text" as const, text: message },
-            ...ready.map((photo) => ({
-              type: "file" as const,
-              data: mediaUrl(photo.path!),
-              mediaType: photo.path!.endsWith(".webp")
-                ? "image/webp"
-                : "image/jpeg",
-              filename: photo.path!.split("/").pop(),
-            })),
-          ]
-    await agent.send(content)
-    for (const photo of photos) {
-      URL.revokeObjectURL(photo.preview)
-      previews.current.delete(photo.preview)
+    if (disabled || busy || dictating || sending.current) return
+    const typed = text.trim()
+    const queuedPhotos = photos
+    if (!typed && queuedPhotos.length === 0) return
+    if (failed) {
+      setNotice("A photo didn’t upload. Remove it, then add it again.")
+      return
     }
-    // Sent photos belong to the conversation now; they're never discarded.
-    landed.current.clear()
-    setPhotos([])
-    setText("")
-    setPanelOpen(false)
+    sending.current = true
+    try {
+      const waiting = queuedPhotos.flatMap(
+        (photo) => inFlight.current.get(photo.id) ?? []
+      )
+      if (waiting.length > 0) {
+        setQueued(true)
+        await Promise.all(waiting)
+        setQueued(false)
+      }
+      if (queuedPhotos.some((photo) => failedIds.current.has(photo.id))) {
+        setNotice("A photo didn’t upload. Remove it, then add it again.")
+        return
+      }
+      // Photos the owner took back while waiting have no landing.
+      const sent = queuedPhotos.flatMap((photo) => {
+        const uploaded = landed.current.get(photo.id)
+        return uploaded ? [{ ...photo, ...uploaded }] : []
+      })
+      if (!typed && sent.length === 0) return
+      const message = [typed, ...sent.map(photoLine)].filter(Boolean).join("\n")
+
+      const sentIds = new Set(sent.map((photo) => photo.id))
+      for (const id of sentIds) landed.current.delete(id)
+      setPhotos((current) => current.filter((photo) => !sentIds.has(photo.id)))
+      setText((current) => (current.trim() === typed ? "" : current))
+      setPanelOpen(false)
+      try {
+        await send(message)
+      } catch {
+        // Not accepted: put the message back to send again.
+        for (const photo of sent) landed.current.set(photo.id, photo)
+        setPhotos((current) => [
+          ...sent.map((photo) => ({
+            ...photo,
+            status: "ready" as const,
+            progress: 1,
+          })),
+          ...current,
+        ])
+        setText((current) => current || typed)
+        setNotice("Couldn’t send that. Try again.")
+        return
+      }
+      // Sent photos belong to the conversation now; they're never
+      // discarded, and the bubble shows them from storage.
+      for (const photo of sent) {
+        URL.revokeObjectURL(photo.preview)
+        previews.current.delete(photo.preview)
+      }
+    } finally {
+      sending.current = false
+    }
   }
 
   return (
-    <form
-      className={styles.composer}
-      onSubmit={(event) => {
-        event.preventDefault()
-        void submit()
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Escape" && dictating) {
+    <>
+      <QuickActionsRow
+        shown={!composing}
+        lift={photos.length > 0 ? PHOTOS_LIFT : 0}
+        quick={quick}
+      />
+      <form
+        className={styles.composer}
+        onSubmit={(event) => {
           event.preventDefault()
-          voice.cancel()
-        }
-      }}
-      onDragOver={(event) => event.preventDefault()}
-      onDrop={(event) => {
-        event.preventDefault()
-        addFiles(event.dataTransfer.files)
-      }}
-    >
-      {photos.length > 0 && (
-        <ul className={styles.photos} aria-label="Photos to send">
-          {photos.map((photo, index) => (
-            <li key={photo.id} data-status={photo.status}>
-              {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
-              <img src={photo.preview} alt={`Photo ${index + 1}`} />
-              <span className={styles.photoStatus}>
-                {photo.status === "uploading"
-                  ? `${Math.round(photo.progress * 100)}%`
-                  : photo.status === "failed"
-                    ? "Failed"
-                    : ""}
-              </span>
-              <button
-                type="button"
-                aria-label={`Remove photo ${index + 1}`}
-                onClick={() => removePhoto(photo)}
-              >
-                <X size={14} aria-hidden="true" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {notice && (
-        <p className={styles.hint} role="status">
-          {notice}
-        </p>
-      )}
-      {voice.error && (
-        <p className={styles.hint} role="alert">
-          {voice.error}
-        </p>
-      )}
-      <span className="visually-hidden" role="status">
-        {voice.phase === "requesting"
-          ? "Waiting for microphone permission."
-          : voice.phase === "recording"
-            ? "Recording. Press Stop recording to transcribe, or Escape to cancel."
-            : voice.phase === "transcribing"
-              ? "Transcribing to English."
-              : ""}
-      </span>
+          void submit()
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Escape" && dictating) {
+            event.preventDefault()
+            voice.cancel()
+          }
+        }}
+        onDragOver={(event) => event.preventDefault()}
+        onDrop={(event) => {
+          event.preventDefault()
+          addFiles(event.dataTransfer.files)
+        }}
+      >
+        {photos.length > 0 && (
+          <ul className={styles.photos} aria-label="Photos to send">
+            {photos.map((photo, index) => (
+              <li key={photo.id} data-status={photo.status}>
+                {/* eslint-disable-next-line @next/next/no-img-element -- local blob preview */}
+                <img src={photo.preview} alt={`Photo ${index + 1}`} />
+                <span className={styles.photoStatus}>
+                  {photo.status === "uploading"
+                    ? `${Math.round(photo.progress * 100)}%`
+                    : photo.status === "failed"
+                      ? "Failed"
+                      : ""}
+                </span>
+                <button
+                  type="button"
+                  aria-label={`Remove photo ${index + 1}`}
+                  onClick={() => removePhoto(photo)}
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {queued && (
+          <p className={styles.hint} role="status">
+            Sending once the photos finish uploading…
+          </p>
+        )}
+        {notice && (
+          <p className={styles.hint} role="status">
+            {notice}
+          </p>
+        )}
+        {voice.error && (
+          <p className={styles.hint} role="alert">
+            {voice.error}
+          </p>
+        )}
+        <span className="visually-hidden" role="status">
+          {voice.phase === "requesting"
+            ? "Waiting for microphone permission."
+            : voice.phase === "recording"
+              ? "Recording. Press Stop recording to transcribe, or Escape to cancel."
+              : voice.phase === "transcribing"
+                ? "Transcribing to English."
+                : ""}
+        </span>
 
-      <div className={styles.inputRow}>
-        {/* The photo button with its popover, which grows out of the
+        <div ref={inputRow} className={styles.inputRow}>
+          {/* The photo button with its popover, which grows out of the
             button's bubble and points back at it. */}
-        <div ref={anchor} className={styles.photoAnchor}>
-          <button
-            ref={trigger}
-            type="button"
-            className={styles.iconButton}
-            aria-label="Add photos"
-            aria-expanded={panelOpen}
-            aria-controls="add-photos"
-            onClick={() => (panelOpen ? closePanel(true) : setPanelOpen(true))}
-          >
-            <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />
-          </button>
-          <AnimatePresence>
-            {panelOpen && (
-              <motion.div
-                ref={panel}
-                id="add-photos"
-                className={styles.photoPopover}
-                role="dialog"
-                aria-labelledby="add-photos-title"
-                initial={{ opacity: 0, scale: 0.9, y: 8 }}
-                animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.94, y: 6 }}
-                transition={{ type: "spring", stiffness: 520, damping: 36 }}
-                onKeyDown={(event) => {
-                  if (event.key === "Escape") {
-                    event.stopPropagation()
-                    closePanel(true)
-                  }
-                }}
-              >
-                <div className={styles.morphHeader}>
-                  <h3 id="add-photos-title">Add photos</h3>
-                  <button
-                    type="button"
-                    className={styles.iconButton}
-                    aria-label="Close photos"
-                    onClick={() => closePanel(true)}
-                  >
-                    <X size={18} aria-hidden="true" />
-                  </button>
-                </div>
-                <UploadDropzone
-                  maxBytes={PHOTO_MAX_BYTES}
-                  onFiles={upload}
-                  uploads={photos.map((photo) => ({
-                    id: photo.id,
-                    name: photo.name,
-                    size: photo.size,
-                    progress: photo.progress,
-                    status: photo.status === "ready" ? "done" : photo.status,
-                  }))}
-                />
-              </motion.div>
+          <div ref={anchor} className={styles.photoAnchor}>
+            <button
+              ref={trigger}
+              type="button"
+              className={styles.iconButton}
+              aria-label="Add photos"
+              aria-expanded={panelOpen}
+              aria-controls="add-photos"
+              onClick={() =>
+                panelOpen ? closePanel(true) : setPanelOpen(true)
+              }
+            >
+              <ImagePlus size={20} strokeWidth={1.6} aria-hidden="true" />
+            </button>
+            <AnimatePresence>
+              {panelOpen && (
+                <motion.div
+                  ref={panel}
+                  id="add-photos"
+                  className={styles.photoPopover}
+                  role="dialog"
+                  aria-labelledby="add-photos-title"
+                  initial={{ opacity: 0, scale: 0.9, y: 8 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.94, y: 6 }}
+                  transition={{ type: "spring", stiffness: 520, damping: 36 }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.stopPropagation()
+                      closePanel(true)
+                    }
+                  }}
+                >
+                  <div className={styles.morphHeader}>
+                    <h3 id="add-photos-title">Add photos</h3>
+                    <button
+                      type="button"
+                      className={styles.iconButton}
+                      aria-label="Close photos"
+                      onClick={() => closePanel(true)}
+                    >
+                      <X size={18} aria-hidden="true" />
+                    </button>
+                  </div>
+                  <UploadDropzone
+                    maxBytes={PHOTO_MAX_BYTES}
+                    onFiles={upload}
+                    uploads={photos.map((photo) => ({
+                      id: photo.id,
+                      name: photo.name,
+                      size: photo.size,
+                      progress: photo.progress,
+                      status: photo.status === "ready" ? "done" : photo.status,
+                    }))}
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          {/* The quick actions, folded beside the photo button while the
+            field holds a message. */}
+          <AnimatePresence initial={false}>
+            {composing && (
+              <QuickActionsMore
+                key="quick-actions"
+                quick={quick}
+                bounds={inputRow}
+              />
             )}
           </AnimatePresence>
-        </div>
-        <label className="visually-hidden" htmlFor="admin-message">
-          Message
-        </label>
-        <div className={styles.messageField} aria-busy={dictating}>
-          <textarea
-            ref={field}
-            id="admin-message"
-            rows={1}
-            value={text}
-            placeholder={dictating ? "" : "Ask for a change…"}
-            hidden={dictating}
-            readOnly={dictating}
-            onChange={(event) => setText(event.target.value)}
-            onPaste={(event) => {
-              const files = [...event.clipboardData.files]
-              if (files.some((file) => file.type.startsWith("image/"))) {
-                addFiles(files)
-                if (!event.clipboardData.getData("text")) event.preventDefault()
-              }
-            }}
-            onKeyDown={(event) => {
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.nativeEvent.isComposing
-              ) {
-                event.preventDefault()
-                void submit()
-              }
-            }}
-          />
-          {voice.phase !== "idle" && (
-            <VoiceWaveform
-              stream={voice.stream}
-              phase={voice.phase}
-              seconds={voice.seconds}
+          <label className="visually-hidden" htmlFor="admin-message">
+            Message
+          </label>
+          <div className={styles.messageField} aria-busy={dictating}>
+            <textarea
+              ref={field}
+              id="admin-message"
+              rows={1}
+              value={text}
+              placeholder={dictating ? "" : "Ask for a change…"}
+              hidden={dictating}
+              // Held as it is while the message waits for its photos.
+              readOnly={dictating || queued}
+              onChange={(event) => setText(event.target.value)}
+              onPaste={(event) => {
+                // Screenshots and copied images; some browsers list them only
+                // as clipboard items.
+                const data = event.clipboardData
+                const files =
+                  data.files.length > 0
+                    ? [...data.files]
+                    : [...data.items].flatMap((item) => {
+                        const file =
+                          item.kind === "file" ? item.getAsFile() : null
+                        return file ? [file] : []
+                      })
+                if (files.some((file) => file.type.startsWith("image/"))) {
+                  addFiles(files)
+                  if (!data.getData("text")) event.preventDefault()
+                }
+              }}
+              onKeyDown={(event) => {
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.nativeEvent.isComposing
+                ) {
+                  event.preventDefault()
+                  void submit()
+                }
+              }}
             />
-          )}
-        </div>
-        <button
-          type="button"
-          className={`${styles.iconButton} ${styles.microphone}`}
-          aria-label={voiceLabel}
-          title={voiceLabel}
-          data-recording={voice.phase === "recording" || undefined}
-          disabled={disabled || !active}
-          onClick={() => {
-            if (voice.phase === "recording") voice.stop()
-            else if (dictating) voice.cancel()
-            else {
-              closePanel(false)
-              void voice.start((transcript) => {
-                setText((current) =>
-                  current.trimEnd()
-                    ? `${current.trimEnd()} ${transcript}`
-                    : transcript
-                )
-              })
-            }
-          }}
-        >
-          {voice.phase === "recording" ? (
-            <Square size={16} fill="currentColor" aria-hidden="true" />
-          ) : dictating ? (
-            <X size={19} aria-hidden="true" />
-          ) : (
-            <Mic size={20} strokeWidth={1.6} aria-hidden="true" />
-          )}
-        </button>
-        <ChromaticButton
-          type={busy ? "button" : "submit"}
-          className={styles.send}
-          aria-label={busy ? "Stop response" : "Send"}
-          title={busy ? "Stop response" : "Send"}
-          data-responding={busy || undefined}
-          data-active={active || undefined}
-          onClick={busy ? () => void agent.cancel() : undefined}
-          color="#b126ff"
-          colorMode="spectrum"
-          speed={0.7}
-          paused={busy || !active}
-          phase={0}
-          feather={100}
-          projectionScale={174.7}
-          intensity={0.9}
-          grain={0.105}
-          seed={7}
-          borderRadius={50}
-          hoverEffect="brighten"
-          entrance="blur-up"
-          entranceSpeed={1}
-          entranceBlur={10}
-          entranceDistance={20}
-          entranceScale={0.65}
-          disabled={
-            disabled ||
-            (!busy &&
-              (uploading || dictating || (!text.trim() && ready.length === 0)))
-          }
-        >
-          {busy ? (
-            <>
-              <span className={styles.responseVinyl} aria-hidden="true" />
-              <Square
-                className={styles.stopSymbol}
-                size={16}
-                fill="currentColor"
-                strokeWidth={0}
-                aria-hidden="true"
+            {voice.phase !== "idle" && (
+              <VoiceWaveform
+                stream={voice.stream}
+                phase={voice.phase}
+                seconds={voice.seconds}
               />
-            </>
-          ) : (
-            <ArrowUp size={20} aria-hidden="true" />
-          )}
-        </ChromaticButton>
-      </div>
-    </form>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`${styles.iconButton} ${styles.microphone}`}
+            aria-label={voiceLabel}
+            title={voiceLabel}
+            data-recording={voice.phase === "recording" || undefined}
+            disabled={disabled || !active}
+            onClick={() => {
+              if (voice.phase === "recording") voice.stop()
+              else if (dictating) voice.cancel()
+              else {
+                closePanel(false)
+                void voice.start((transcript) => {
+                  setText((current) =>
+                    current.trimEnd()
+                      ? `${current.trimEnd()} ${transcript}`
+                      : transcript
+                  )
+                })
+              }
+            }}
+          >
+            {voice.phase === "recording" ? (
+              <Square size={16} fill="currentColor" aria-hidden="true" />
+            ) : dictating ? (
+              <X size={19} aria-hidden="true" />
+            ) : (
+              <Mic size={20} strokeWidth={1.6} aria-hidden="true" />
+            )}
+          </button>
+          <ChromaticButton
+            type={busy ? "button" : "submit"}
+            className={styles.send}
+            aria-label={busy ? "Stop response" : "Send"}
+            title={busy ? "Stop response" : "Send"}
+            data-responding={busy || undefined}
+            data-active={active || undefined}
+            onClick={busy ? () => void cancel() : undefined}
+            color="#b126ff"
+            colorMode="spectrum"
+            speed={0.7}
+            paused={busy || !active}
+            phase={0}
+            feather={100}
+            projectionScale={174.7}
+            intensity={0.9}
+            grain={0.105}
+            seed={7}
+            borderRadius={50}
+            hoverEffect="brighten"
+            entrance="blur-up"
+            entranceSpeed={1}
+            entranceBlur={10}
+            entranceDistance={20}
+            entranceScale={0.65}
+            disabled={
+              disabled ||
+              (!busy &&
+                (queued || dictating || (!text.trim() && photos.length === 0)))
+            }
+          >
+            {busy ? (
+              <>
+                <span className={styles.responseVinyl} aria-hidden="true" />
+                <Square
+                  className={styles.stopSymbol}
+                  size={16}
+                  fill="currentColor"
+                  strokeWidth={0}
+                  aria-hidden="true"
+                />
+              </>
+            ) : (
+              <ArrowUp size={20} aria-hidden="true" />
+            )}
+          </ChromaticButton>
+        </div>
+      </form>
+    </>
   )
-}
+})

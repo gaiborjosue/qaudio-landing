@@ -43,6 +43,7 @@ import {
   type ProductValues,
 } from "@/lib/admin/product-editor"
 import { productFromInput, type CatalogTaxonomy } from "@/lib/admin/preview"
+import { toStoreDateTime } from "@/lib/admin/store-time"
 import {
   productCardLineInputSchema,
   productInputSchema,
@@ -70,6 +71,7 @@ const PROBLEMS: Record<string, string> = {
   description: "Keep it under 10,000 characters.",
   manufacturer_url: "Use the brand’s page address, starting with https://.",
   images: "Up to 20 photos, each with a description.",
+  sale: "Enter a sale price below the price, and when the sale ends (after it starts).",
 }
 
 const CONDITIONS = ["New", "Demo", "Used"] as const
@@ -86,8 +88,16 @@ function restore(key: string | undefined): ProductValues | null {
   if (!key || typeof window === "undefined") return null
   try {
     const saved = window.sessionStorage.getItem(key)
-    const values = saved ? (JSON.parse(saved) as ProductValues) : null
-    return values && Array.isArray(values.images) ? values : null
+    const values = saved ? (JSON.parse(saved) as Partial<ProductValues>) : null
+    // Drafts kept before the sale fields existed have none.
+    return values && Array.isArray(values.images)
+      ? ({
+          sale_price: "",
+          sale_starts: "",
+          sale_ends: "",
+          ...values,
+        } as ProductValues)
+      : null
   } catch {
     return null
   }
@@ -396,7 +406,13 @@ export function ProductEditor({
       ...(key === "name" && slugFollows && { slug: slugify(String(value)) }),
     }))
     const field =
-      key === "price" ? "price_cents" : key === "msrp" ? "msrp_cents" : key
+      key === "price"
+        ? "price_cents"
+        : key === "msrp"
+          ? "msrp_cents"
+          : key.startsWith("sale_")
+            ? "sale"
+            : key
     if (errors[field]) {
       setErrors((current) => {
         const rest = { ...current }
@@ -644,7 +660,7 @@ export function ProductEditor({
     window.sessionStorage.removeItem(reviewKey(storageKey))
   }
 
-  const candidate = inputFromValues(values)
+  const candidate = inputFromValues(values, baseline)
   const parsed = productInputSchema.safeParse(candidate)
   const cardLineInput = productCardLineInputSchema.safeParse({
     name: candidate.name || undefined,
@@ -678,12 +694,19 @@ export function ProductEditor({
   }
 
   const save = () => {
-    if (!parsed.success) {
+    // A sale must cost less than the regular price (the database checks it
+    // too); a sale left as it was isn't sent, so it isn't checked here.
+    const saleTooHigh =
+      parsed.success &&
+      !!parsed.data.sale &&
+      parsed.data.sale.price_cents >= parsed.data.price_cents
+    if (!parsed.success || saleTooHigh) {
       const marked: Record<string, string> = {}
-      for (const issue of parsed.error.issues) {
+      for (const issue of parsed.error?.issues ?? []) {
         const field = String(issue.path[0] ?? "")
         marked[field] ??= PROBLEMS[field] ?? issue.message
       }
+      if (saleTooHigh) marked.sale = PROBLEMS.sale
       focusError.current = true
       // Show the fields that need fixing.
       if (marked.short_description) setEditingCard(true)
@@ -810,10 +833,35 @@ export function ProductEditor({
     )
   }
 
-  const preview =
-    previewOpen && parsed.success
-      ? productFromInput(parsed.data, taxonomy)
+  // The preview shows the sale too, even one Save leaves as it is.
+  const shown = previewOpen
+    ? productInputSchema.safeParse(inputFromValues(values))
+    : null
+  const preview = shown?.success ? productFromInput(shown.data, taxonomy) : null
+
+  // Where the sale stands, beside its label.
+  const now = toStoreDateTime(new Date())
+  const saleNote =
+    values.sale_price.trim() && values.sale_ends
+      ? values.sale_ends <= now
+        ? "Ended"
+        : values.sale_starts && values.sale_starts > now
+          ? "Upcoming"
+          : "On sale now"
       : null
+  const removeSale = () => {
+    setValues((current) => ({
+      ...current,
+      sale_price: "",
+      sale_starts: "",
+      sale_ends: "",
+    }))
+    setErrors((current) => {
+      const rest = { ...current }
+      delete rest.sale
+      return rest
+    })
+  }
 
   return (
     <div
@@ -1127,6 +1175,63 @@ export function ProductEditor({
                 </span>
               </button>,
               styles.auditionField
+            )}
+          </div>
+          {/* A time-limited sale: the shop shows the sale price only between
+            its start (or now) and its end, then the regular price again. */}
+          <div className={`${styles.pricing} ${styles.full}`}>
+            {field(
+              "sale",
+              <>
+                Sale price
+                <span className={styles.aside}>{saleNote ?? "Optional"}</span>
+              </>,
+              <span className={styles.affix}>
+                <span aria-hidden="true">$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={values.sale_price}
+                  onChange={(event) => set("sale_price", event.target.value)}
+                  {...invalid("sale")}
+                />
+              </span>
+            )}
+            {field(
+              "sale_starts",
+              <>
+                Sale starts <span className={styles.aside}>Empty is now</span>
+              </>,
+              <input
+                type="datetime-local"
+                value={values.sale_starts}
+                disabled={!values.sale_price.trim()}
+                onChange={(event) => set("sale_starts", event.target.value)}
+                id={fieldId("sale_starts")}
+              />
+            )}
+            {field(
+              "sale_ends",
+              <>
+                Sale ends <span className={styles.aside}>Store time</span>
+              </>,
+              <input
+                type="datetime-local"
+                value={values.sale_ends}
+                disabled={!values.sale_price.trim()}
+                onChange={(event) => set("sale_ends", event.target.value)}
+                id={fieldId("sale_ends")}
+              />
+            )}
+            {values.sale_price.trim() && (
+              <button
+                type="button"
+                className={`${styles.editCard} ${styles.endSale}`}
+                disabled={disabled || saving}
+                onClick={removeSale}
+              >
+                Remove sale
+              </button>
             )}
           </div>
           {field(

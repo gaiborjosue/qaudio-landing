@@ -232,17 +232,40 @@
 
 /* Chat */
 
-/* The chat column, centered. */
+/* The chat column, centered, with a flow's stepper above it (flow-stepper
+   .tsx). From 1400px wide there's room beside the column, so the stepper
+   moves into the space at its left (see "A flow under way" below), and the
+   column stays centered between two equal margins. */
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 920px);
+  grid-template-rows: auto minmax(0, 1fr);
   justify-content: center;
   height: 100%;
 }
+@media (min-width: 1400px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 920px) minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .workspace > .chat {
+    grid-area: 1 / 2;
+  }
+}
 
-/* Quick actions: the Create and Edit pills at the top left of the message
-   field, their panels opening upward over the conversation. The composer
-   below brings its own 12px of top padding. */
+/* Quick actions: the Create, Edit, and Flows pills at the top left of the
+   message field, their panels opening upward over the conversation. The
+   composer below brings its own 12px of top padding. While the field holds
+   a message (words or photos) they fold into the composer's quick-actions
+   button (quick-menus.tsx): the row's height closes, and the pills shrink
+   into that button; .quickRow keeps them on its bottom edge, so they don't
+   drift while it closes. */
+.quickRow {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+}
 .quickActions {
   padding: 8px 20px 0;
 }
@@ -254,6 +277,91 @@
 }
 .quickMenus > * {
   flex: none;
+}
+/* The Flows menu's switches (flows-menu.tsx), inside the menu's panel, in
+   its ink (--on-slab): each row is one switch, its track at the right. */
+.flowSwitches {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.flowSwitches button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 52px;
+  padding: 0 14px 0 16px;
+  border: 0;
+  border-radius: var(--crt-row-r, 12px);
+  background: none;
+  color: var(--on-slab);
+  font: inherit;
+  font-family: var(--font-ui);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.flowSwitches button:hover {
+  background: rgba(var(--on-slab-rgb), 0.05);
+}
+.flowSwitches button:focus-visible {
+  outline: 2px solid var(--on-slab);
+  outline-offset: -2px;
+}
+.flowText {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+.flowText > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.flowName {
+  font-size: 13px;
+}
+.flowSummary {
+  color: rgba(var(--on-slab-rgb), 0.6);
+  font-size: 12px;
+}
+/* The track and its thumb: dark and to the right when on. */
+.flowSwitch {
+  position: relative;
+  flex: none;
+  width: 30px;
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(var(--on-slab-rgb), 0.18);
+  transition: background-color 160ms ease;
+}
+.flowSwitch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+[aria-checked="true"] > .flowSwitch {
+  background: var(--on-slab);
+}
+[aria-checked="true"] > .flowSwitch::after {
+  transform: translateX(12px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .flowSwitch,
+  .flowSwitch::after {
+    transition: none;
+  }
 }
 /* The Edit menu's lists (item-picker.tsx), inside the menu's panel, so
    they use its ink (--on-slab). */
@@ -354,12 +462,525 @@
   color: rgba(var(--on-slab-rgb), 0.6);
 }
 
+/* The conversation, an error line, then the quick actions and the
+   composer (both drawn by the Composer). */
 .chat {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto auto auto;
   height: 100%;
   min-width: 0;
   min-height: 0;
+}
+
+/* A flow under way (flow-stepper.tsx): a white strip above the thread, its
+   steps as numbered dots joined by a line that fills as each is done. From
+   1400px wide it's a vertical rail instead (below). */
+.flowBar {
+  min-width: 0;
+}
+.flow {
+  overflow: hidden;
+}
+.flowInner {
+  display: grid;
+  gap: 12px;
+  margin: 12px 20px 0;
+  padding: 12px 16px 14px;
+  border: 1px solid #dcdcdc;
+  border-radius: 16px;
+  background: #fff;
+}
+/* The flows' icon (the Flows pill's), the flow's name, and how far along
+   it is. */
+.flowHeading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.flowIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  color: #111;
+}
+.flowTitle {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.flowProgress {
+  flex: none;
+  margin-left: auto;
+  padding-left: 4px;
+  color: #6b6b6b;
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.flowSteps {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.flowSteps li {
+  position: relative;
+  display: grid;
+  flex: 1 1 0;
+  justify-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.flowDot {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1.5px solid #d4d4d4;
+  border-radius: 50%;
+  background: #fff;
+  color: #8a8a8a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  transition:
+    background-color 200ms ease,
+    border-color 200ms ease,
+    color 200ms ease;
+}
+.flowDotFace {
+  display: grid;
+  place-items: center;
+}
+[data-status="active"] > .flowDot,
+[data-status="waiting"] > .flowDot {
+  border-color: #111;
+  color: #111;
+}
+/* The step under way breathes a ring; it holds still under reduced motion. */
+[data-status="active"] > .flowDot::after,
+[data-status="waiting"] > .flowDot::after {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border: 1.5px solid #111;
+  border-radius: 50%;
+  opacity: 0;
+  animation: flow-ring 1.6s ease-out infinite;
+}
+[data-status="done"] > .flowDot {
+  border-color: #111;
+  background: #111;
+  color: #fff;
+}
+[data-status="skipped"] > .flowDot {
+  border-style: dashed;
+  border-color: #bdbdbd;
+}
+.flowLabel {
+  max-width: 100%;
+  overflow: hidden;
+  color: #8a8a8a;
+  font-size: 12px;
+  text-align: center;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+:is([data-status="active"], [data-status="waiting"], [data-status="done"])
+  > .flowLabel {
+  color: #111;
+}
+[data-status="skipped"] > .flowLabel {
+  text-decoration: line-through;
+}
+/* From this dot's edge to the next one's, under both. */
+.flowLine {
+  position: absolute;
+  top: 12px;
+  right: calc(-50% + 17px);
+  left: calc(50% + 17px);
+  height: 2px;
+  border-radius: 1px;
+  background: #e6e6e6;
+  overflow: hidden;
+}
+.flowLine > span {
+  position: absolute;
+  inset: 0;
+  background: #111;
+  /* It grows from the side of the step it leaves: the left across the
+     strip, the top down the rail. */
+  transform-origin: left top;
+}
+@keyframes flow-ring {
+  0% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-status="active"] > .flowDot::after,
+  [data-status="waiting"] > .flowDot::after {
+    opacity: 0.35;
+    animation: none;
+  }
+}
+
+/* The rail: from 1400px wide the stepper stands in the space left of the
+   chat column (RAIL_QUERY in flow-stepper.tsx is the same width). It keeps
+   to that space's right side, so it stays beside the conversation at any
+   width, with 48px to the column (68px to the messages, which sit inside
+   the column's 20px padding) so the two don't crowd each other. It's level
+   with the thread's first row, holds still while the thread scrolls, and
+   drops the strip's card: just the flow's name and its steps, top to
+   bottom, on the page's ground. The icon and the dots share one column,
+   and the name lines up with the step labels, which wrap rather than cut
+   off. */
+@media (min-width: 1400px) {
+  .flowBar {
+    grid-area: 1 / 1;
+    align-self: start;
+    justify-self: end;
+    width: min(100%, 272px);
+    max-height: 100%;
+    overflow-y: auto;
+  }
+  .flow {
+    overflow: visible;
+  }
+  .flowInner {
+    gap: 20px;
+    margin: 0;
+    padding: 24px 48px 24px 24px;
+    border: 0;
+    border-radius: 0;
+    background: none;
+  }
+  .flowHeading {
+    display: grid;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: start;
+    column-gap: 12px;
+    row-gap: 3px;
+    line-height: 1.3;
+  }
+  /* On the name's first line, should it wrap. */
+  .flowIcon {
+    grid-row: 1;
+    height: 1.3em;
+  }
+  .flowTitle {
+    white-space: normal;
+  }
+  .flowProgress {
+    grid-column: 2;
+    margin: 0;
+    padding: 0;
+    font-size: 11px;
+  }
+  .flowSteps {
+    flex-direction: column;
+  }
+  .flowSteps li {
+    display: grid;
+    flex: none;
+    grid-template-columns: 26px minmax(0, 1fr);
+    align-items: start;
+    justify-items: start;
+    column-gap: 12px;
+    padding-bottom: 18px;
+  }
+  .flowSteps li:last-child {
+    padding-bottom: 0;
+  }
+  .flowDot {
+    justify-self: center;
+  }
+  /* Centered on its dot while it's one line; a longer one wraps below. */
+  .flowLabel {
+    max-width: none;
+    padding-top: 4px;
+    overflow: visible;
+    font-size: 13px;
+    line-height: 18px;
+    text-align: left;
+    white-space: normal;
+  }
+  [data-status="active"] > .flowLabel,
+  [data-status="waiting"] > .flowLabel {
+    font-weight: 500;
+  }
+  /* From under this dot to just above the next one, however tall the
+     label makes the step. */
+  .flowLine {
+    top: 30px;
+    right: auto;
+    bottom: 4px;
+    left: 12px;
+    width: 2px;
+    height: auto;
+  }
+}
+
+/* ask_dates (dates-prompt.tsx): only as wide as its calendar needs, the
+   calendar centered over each end's time and the answer, store time. */
+.datesCard {
+  width: fit-content;
+  max-width: min(100%, 360px);
+}
+.dates {
+  display: grid;
+  gap: 12px;
+}
+.dates .calendar {
+  justify-self: center;
+}
+.dateTimes {
+  display: grid;
+  gap: 8px;
+}
+.dateTimes > p {
+  margin: 0;
+}
+.dates .options > button {
+  flex: 1;
+  justify-content: center;
+}
+
+/* design_story (story-designs.tsx): a 9:16 frame. While the design is made
+   it's a light grey placeholder whose whole ground is Bencho's ASCII wake,
+   softened, with the estimated progress in a pill over it; then the design
+   itself, in color, with a button to see it large. */
+.story {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.storyOptions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.storyFrame,
+.storyChoice {
+  position: relative;
+  width: 180px;
+  aspect-ratio: 9 / 16;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #f2f2f2;
+}
+.storyWake {
+  position: absolute;
+  inset: 0;
+  opacity: 0.4;
+}
+.storyPercent {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  min-width: 52px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.08);
+  color: #111;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  text-align: center;
+  pointer-events: none;
+}
+.storyImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  animation: story-in 320ms ease-out both;
+}
+@keyframes story-in {
+  from {
+    opacity: 0;
+  }
+}
+.storyExpand {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
+  color: #111;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+.storyExpand:hover {
+  background: #fff;
+}
+.storyExpand:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+
+/* The large view (StoryViewer): the design at nearly full height on a dark
+   backdrop, its controls in white pills, and the safe zone on request. */
+.storyViewer {
+  width: min(100vw - 24px, 760px);
+  max-width: none;
+  height: min(100dvh - 24px, 1100px);
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  overflow: visible;
+}
+.storyViewer[open] {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  animation: story-viewer-in 180ms ease-out;
+}
+.storyViewer.storyEditing {
+  width: min(100vw - 24px, 1080px);
+}
+@media (max-width: 480px) {
+  .storyViewerBar {
+    flex-wrap: wrap;
+  }
+  .storyViewerTitle {
+    flex-basis: 100%;
+    justify-content: center;
+    margin-right: 0;
+  }
+}
+.storyViewer::backdrop {
+  background: rgb(0 0 0 / 0.78);
+}
+@keyframes story-viewer-in {
+  from {
+    opacity: 0;
+    scale: 0.98;
+  }
+}
+.storyViewerBar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.storyViewerTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-right: auto;
+  font-size: 15px;
+  font-weight: 500;
+}
+.storyViewerButton {
+  padding: 7px 14px;
+  border: 1px solid rgb(255 255 255 / 0.6);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.storyViewerButton[aria-pressed="true"] {
+  border-color: #fff;
+  background: #fff;
+  color: #111;
+}
+.storyViewerIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.92);
+  color: #111;
+  cursor: pointer;
+}
+:is(.storyViewerButton, .storyViewerIcon):focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.storyViewerStage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 0;
+}
+/* The frame takes the room it has at 9:16, the image filling it. */
+.storyViewerFrame {
+  position: relative;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111;
+}
+.storyViewerFrame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+/* The strips Instagram covers: dimmed, with a dashed edge at the zone. */
+.storyZones {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.storyZones > span {
+  display: block;
+  background: rgb(0 0 0 / 0.45);
+}
+.storyZones > span:first-child {
+  border-bottom: 1px dashed rgb(255 255 255 / 0.9);
+}
+.storyZones > span:last-child {
+  border-top: 1px dashed rgb(255 255 255 / 0.9);
+}
+@media (prefers-reduced-motion: reduce) {
+  .storyImage,
+  .storyViewer[open] {
+    animation: none;
+  }
+  .storyExpand {
+    transition: none;
+  }
 }
 /* The thread's rows (shadcn Message Scroller content; the scroller owns the
    scrolling). */
@@ -806,6 +1427,9 @@
   .log {
     padding: 18px 16px;
   }
+  .flowInner {
+    margin: 10px 16px 0;
+  }
   .composer {
     padding: 10px 12px 14px;
   }
@@ -1003,6 +1627,83 @@
   border-bottom-right-radius: 3px;
   background: #fff;
   transform: rotate(45deg);
+}
+
+/* The quick-actions button (QuickActionsMore in quick-menus.tsx), beside
+   the photo button while the field holds a message: the Create, Edit, and
+   Flows pills fold into it, and it opens them in a tray the way the photo
+   button opens its popover, growing out of the button with a notch
+   pointing back at it. The tray wears the page's light grey, so the pills
+   look as they did above the field, and their panels open upward out of
+   it as they did there. Its anchor's width grows from nothing, so the
+   button is centered on it and spills over while it does. */
+.moreAnchor {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  justify-content: center;
+}
+.moreAnchor > .iconButton:hover:not(:disabled),
+.moreAnchor > .iconButton[aria-expanded="true"] {
+  background: #f0f0f0;
+}
+.moreAnchor > .iconButton:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.quickTray {
+  --notch: 12px;
+  position: absolute;
+  z-index: 20;
+  /* The input row's left edge, where the pills began above it: its 1px
+     border and 6px padding, the 40px photo button, and the 8px gap. */
+  bottom: calc(100% + 16px);
+  left: -55px;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border: 1px solid #dcdcdc;
+  /* concentric with the pills' 19px, 8px in */
+  border-radius: 27px;
+  background: #fafafa;
+  box-shadow: 0 16px 40px rgb(0 0 0 / 0.12);
+  /* the button's center: those 55px plus half its 40px */
+  transform-origin: 75px calc(100% + 16px);
+}
+.quickTray::after {
+  content: "";
+  position: absolute;
+  bottom: calc(var(--notch) / -2 - 1px);
+  left: calc(75px - var(--notch) / 2);
+  width: var(--notch);
+  height: var(--notch);
+  border-right: 1px solid #dcdcdc;
+  border-bottom: 1px solid #dcdcdc;
+  border-bottom-right-radius: 3px;
+  background: #fafafa;
+  transform: rotate(45deg);
+}
+/* The pills arrive one after another, from the button outward. (CSS
+   `translate`, not `transform`: the pills' stages are Motion elements.) */
+.quickTray .quickMenus > * {
+  animation: quick-pill-in 280ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+}
+.quickTray .quickMenus > :nth-child(2) {
+  animation-delay: 35ms;
+}
+.quickTray .quickMenus > :nth-child(3) {
+  animation-delay: 70ms;
+}
+@keyframes quick-pill-in {
+  from {
+    opacity: 0;
+    translate: -8px 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quickTray .quickMenus > * {
+    animation: none;
+  }
 }
 
 /* shadcn's Calendar, sized for the card */

@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useRef, useState, type FormEvent } from "react"
 import { motion } from "motion/react"
-import type { Interaction, UseEveAgentReturn } from "eve/react"
+import type { Interaction } from "eve/react"
+import type { ChatActions } from "@/components/admin/chat-actions"
 import { SchedulePicker } from "@/components/admin/schedule-picker"
 import {
   approvedMessage,
@@ -35,7 +36,7 @@ type Step = "decide" | "release" | "feedback"
  * note with the denial, so the agent can propose again.
  */
 export function ApprovalActions({
-  agent,
+  actions,
   interaction,
   tool,
   input,
@@ -43,7 +44,7 @@ export function ApprovalActions({
   onResetPhotos,
   hint,
 }: {
-  agent: UseEveAgentReturn
+  actions: ChatActions
   interaction: Interaction
   tool: string
   input: unknown
@@ -61,8 +62,7 @@ export function ApprovalActions({
   /** The button a step opened from, which gets focus back. */
   const opener = useRef<"approve" | "deny" | null>(null)
   const release = releaseTool(tool)
-  const busy =
-    sending || interaction.answer !== undefined || agent.status === "resuming"
+  const busy = sending || interaction.answer !== undefined || actions.resuming
 
   // Focus follows the step: its first control, or back to what opened it.
   useEffect(() => {
@@ -86,7 +86,7 @@ export function ApprovalActions({
   const respond = async (optionId: "approve" | "deny", text?: string) => {
     setSending(true)
     try {
-      await agent.respond([
+      await actions.respond([
         {
           interactionId: interaction.interactionId,
           optionId,
@@ -120,7 +120,7 @@ export function ApprovalActions({
     if (!changesProposal(release, input, fields)) return respond("approve")
     setSending(true)
     try {
-      await agent.send(approvedMessage(release, choice, fields, at))
+      await actions.send(approvedMessage(release, choice, fields, at))
     } finally {
       setSending(false)
     }

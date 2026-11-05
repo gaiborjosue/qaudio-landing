@@ -33,6 +33,7 @@ import {
 } from "lucide-react"
 import {
   formatPrice,
+  formatSaleEnd,
   isProductOnSale,
   PRODUCT_PATH,
   productHref,
@@ -63,16 +64,27 @@ function ProductPrice({
     : product.price_cents === product.msrp_cents
       ? "MSRP · "
       : ""
+  // A sale is compared with the list price, or else the regular one.
+  const listed =
+    product.msrp_cents !== null && product.price_cents < product.msrp_cents
   return (
     <p className={detail ? styles.detailPrice : undefined}>
       {formatPrice(product.price_cents)}
       <span>
         {label}USD / {product.price_unit}
       </span>
-      {!detail && onSale && product.msrp_cents !== null && (
+      {!detail && onSale && listed && (
         <span>
-          MSRP <s>{formatPrice(product.msrp_cents)}</s>
+          MSRP <s>{formatPrice(product.msrp_cents!)}</s>
         </span>
+      )}
+      {!detail && product.sale && !listed && (
+        <span>
+          Was <s>{formatPrice(product.sale.regular_price_cents)}</s>
+        </span>
+      )}
+      {!detail && product.sale && (
+        <span>{formatSaleEnd(product.sale.ends_at)}</span>
       )}
     </p>
   )
@@ -363,7 +375,8 @@ function ProductDetails({
                 <div>
                   <dt>MSRP</dt>
                   <dd>
-                    {isProductOnSale(product) ? (
+                    {isProductOnSale(product) &&
+                    product.price_cents < product.msrp_cents ? (
                       <s>{formatPrice(product.msrp_cents)}</s>
                     ) : (
                       formatPrice(product.msrp_cents)
@@ -372,6 +385,24 @@ function ProductDetails({
                       USD / {product.price_unit}
                     </span>
                   </dd>
+                </div>
+              )}
+              {product.sale &&
+                product.sale.regular_price_cents !== product.msrp_cents && (
+                  <div>
+                    <dt>Regular price</dt>
+                    <dd>
+                      <s>{formatPrice(product.sale.regular_price_cents)}</s>
+                      <span className={styles.unit}>
+                        USD / {product.price_unit}
+                      </span>
+                    </dd>
+                  </div>
+                )}
+              {product.sale && (
+                <div>
+                  <dt>Sale</dt>
+                  <dd>{formatSaleEnd(product.sale.ends_at)}</dd>
                 </div>
               )}
             </dl>

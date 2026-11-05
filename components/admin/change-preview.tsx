@@ -14,6 +14,7 @@ import {
   newsFromInput,
   productFromInput,
   productsInOrder,
+  shopProduct,
   withChange,
   withWeek,
   withoutChange,
@@ -30,16 +31,23 @@ import {
   deleteInstagramPostInputSchema,
   deleteNewsPostInputSchema,
   deleteProductInputSchema,
+  endSaleInputSchema,
   hoursChangeInputSchema,
   instagramPostInputSchema,
   newsPostInputSchema,
   productInputSchema,
   reorderProductsInputSchema,
   retryInstagramPostInputSchema,
+  saleInputSchema,
   weeklyHoursInputSchema,
   type InstagramPostInput,
 } from "@/lib/admin/schemas"
-import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
+import { saleDiscountLabel, saleLines, saleWindowLabel } from "@/lib/admin/sale"
+import {
+  formatStoreDateTime,
+  fromStoreDateTime,
+  toStoreDateTime,
+} from "@/lib/admin/store-time"
 import { descriptionFromColumns } from "@/lib/catalog"
 import {
   addDays,
@@ -246,6 +254,7 @@ export function ChangePreview({
               ?.name ?? brand_slug)
           : "All products"
       const drafts = ordered.filter((product) => product.status !== "published")
+      const now = new Date()
       return (
         <>
           <Note>
@@ -259,11 +268,83 @@ export function ChangePreview({
           </Note>
           <div className={styles.listPreview} inert>
             <ProductCatalog
-              products={ordered.filter(
-                (product) => product.status === "published"
-              )}
+              products={ordered
+                .filter((product) => product.status === "published")
+                .map((product) => shopProduct(product, now))}
             />
           </div>
+        </>
+      )
+    }
+    case "save_sale": {
+      const parsed = saleInputSchema.safeParse(input)
+      if (!parsed.success) break
+      const sale = parsed.data
+      const lines = saleLines(sale)
+      const problems = lines.filter((line) => line.problem)
+      const ids = lines.filter((line) => !line.problem).map((line) => line.id)
+      const { ordered, unknown } = productsInOrder(ids, data.products)
+      const prices = new Map(lines.map((line) => [line.id, line]))
+      const endsAt = fromStoreDateTime(sale.ends_at)
+      // Each card as the shop will show it during the sale, from the
+      // prices the tool was given (the ones it saves against).
+      const shown = ordered.map((product) => {
+        const line = prices.get(product.id)!
+        return {
+          ...product,
+          price_cents: line.sale_price_cents,
+          msrp_cents: line.msrp_cents,
+          sale: { regular_price_cents: line.price_cents, ends_at: endsAt },
+        }
+      })
+      return (
+        <>
+          <Note>
+            {saleDiscountLabel(sale)} · {saleWindowLabel(sale)} · {lines.length}{" "}
+            product{lines.length === 1 ? "" : "s"}
+            {unknown > 0 &&
+              ` · ${unknown} not shown (added since this page loaded)`}
+          </Note>
+          {problems.length > 0 && (
+            <Note>
+              Can’t go on sale:{" "}
+              {problems
+                .map((line) => `${line.name} (${line.problem})`)
+                .join(", ")}
+            </Note>
+          )}
+          {shown.length > 0 && (
+            <div className={styles.listPreview} inert>
+              <ProductCatalog products={shown} />
+            </div>
+          )}
+        </>
+      )
+    }
+    case "end_sale": {
+      const parsed = endSaleInputSchema.safeParse(input)
+      if (!parsed.success) break
+      const { ordered, unknown } = productsInOrder(
+        parsed.data.products.map((product) => product.id),
+        data.products
+      )
+      return (
+        <>
+          <Note>
+            {parsed.data.title} · Regular prices show again now
+            {unknown > 0 &&
+              ` · ${unknown} not shown (added since this page loaded)`}
+          </Note>
+          {ordered.length > 0 && (
+            <div className={styles.listPreview} inert>
+              <ProductCatalog
+                products={ordered.map((product) => ({
+                  ...product,
+                  sale: null,
+                }))}
+              />
+            </div>
+          )}
         </>
       )
     }

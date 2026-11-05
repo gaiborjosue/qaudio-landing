@@ -69,6 +69,7 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
       `id, slug, name, short_description, description_intro, features,
       description_closing, price_cents, msrp_cents, price_unit, condition,
       ready_for_audition, manufacturer_url, status,
+      sale_price_cents, sale_starts_at, sale_ends_at,
       category:catalog_categories!inner(slug, name, artwork_path),
       brand:catalog_brands!inner(slug, name, logo_path),
       product_images(id, path, alt, width, height, sort_order)`
@@ -82,6 +83,9 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
       description_intro,
       features,
       description_closing,
+      sale_price_cents,
+      sale_starts_at,
+      sale_ends_at,
       ...product
     }) => ({
       ...productTaxonomyAssets(product),
@@ -90,6 +94,14 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
         features,
         description_closing,
       }),
+      sale_window:
+        sale_price_cents !== null && sale_ends_at !== null
+          ? {
+              price_cents: sale_price_cents,
+              starts_at: sale_starts_at && toStoreDateTime(sale_starts_at),
+              ends_at: toStoreDateTime(sale_ends_at),
+            }
+          : null,
       images: product_images
         .sort((a, b) => a.sort_order - b.sort_order)
         .map(({ id, path, alt, width, height }) => ({

@@ -182,6 +182,12 @@ function ownerFail(what: string, error: { code?: string; message: string }) {
   if (error.code === "42501") {
     return new OwnerError("Only site admins can save products.")
   }
+  if (error.code === "23514" && /sale/.test(error.message)) {
+    return new OwnerError(
+      "A sale must cost less than the regular price and end after it starts. Change or remove the sale first.",
+      "sale"
+    )
+  }
   return new OwnerError(`${what} couldn’t be saved: ${error.message}`)
 }
 

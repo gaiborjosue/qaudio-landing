@@ -1,7 +1,8 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useEffect, useId, useRef, useState, useTransition } from "react"
 import Image from "next/image"
+import { FileBrowseButton } from "@/components/ui/file-browse-button"
 import { saveMetadataFromEditor } from "@/app/admin/metadata/actions"
 import { catalogAssetUrl } from "@/lib/catalog-assets"
 import {
@@ -205,6 +206,8 @@ function MetadataImage({
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dark, setDark] = useState(false)
+  const input = useRef<HTMLInputElement>(null)
+  const hintId = useId()
   const request = useRef<AbortController | null>(null)
   const lastFile = useRef<File | null>(null)
   useEffect(() => () => request.current?.abort(), [])
@@ -307,18 +310,35 @@ function MetadataImage({
           Dark artwork (invert on upload)
         </label>
       )}
-      <input
-        type="file"
-        aria-label={`${path ? "Replace" : "Upload"} ${label.toLowerCase()}`}
-        accept="image/png,image/jpeg,image/webp,image/avif"
-        disabled={uploading}
-        onChange={(event) => {
-          const file = event.target.files?.[0]
-          if (file) void upload(file)
-          event.target.value = ""
-        }}
-      />
-      <span role="status" className={styles.hint}>
+      <div className="upl">
+        <FileBrowseButton
+          className={styles.imageBrowse}
+          disabled={uploading}
+          aria-busy={uploading}
+          aria-label={
+            uploading
+              ? `Uploading ${label.toLowerCase()}`
+              : `${path ? "Replace image" : "Attach files"}: ${label.toLowerCase()}`
+          }
+          aria-describedby={hintId}
+          onClick={() => input.current?.click()}
+        >
+          {uploading ? "Uploading…" : path ? "Replace image" : "Attach files"}
+        </FileBrowseButton>
+        <input
+          ref={input}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/avif"
+          hidden
+          disabled={uploading}
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) void upload(file)
+            event.target.value = ""
+          }}
+        />
+      </div>
+      <span id={hintId} role="status" className={styles.hint}>
         {uploading ? "Uploading…" : "PNG, JPEG, WebP, or AVIF · up to 20 MB"}
       </span>
       {error && (

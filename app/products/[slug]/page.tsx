@@ -6,6 +6,7 @@ import { Suspense } from "react"
 import { ProductPageView } from "@/components/product-catalog"
 import { getProduct, getProductSlugs } from "@/lib/catalog-data"
 import type { Product } from "@/lib/catalog"
+import { storeClock } from "@/lib/store-hours"
 import styles from "@/components/product-catalog.module.css"
 
 type Props = { params: Promise<{ slug: string }> }
@@ -86,6 +87,10 @@ function productJsonLd(product: Product) {
       "@type": "Offer",
       price: (product.price_cents / 100).toFixed(2),
       priceCurrency: "USD",
+      // A sale price holds until its last day (store time).
+      ...(product.sale && {
+        priceValidUntil: storeClock(new Date(product.sale.ends_at)).date,
+      }),
       itemCondition:
         product.condition === "New"
           ? "https://schema.org/NewCondition"

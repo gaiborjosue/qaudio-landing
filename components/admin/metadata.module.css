@@ -214,6 +214,14 @@
   display: flex;
   gap: 10px;
 }
+.imageBrowse.imageBrowse {
+  height: 112px;
+  border-radius: 14px;
+}
+.imageBrowse:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
 .imagePreview,
 .darkPreview {
   position: relative;

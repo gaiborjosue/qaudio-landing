@@ -71,7 +71,13 @@
   font-weight: 600;
 }
 
-.editor :is(input[type="text"], input[type="url"], textarea) {
+.editor
+  :is(
+    input[type="text"],
+    input[type="url"],
+    input[type="datetime-local"],
+    textarea
+  ) {
   width: 100%;
   padding: 9px 11px;
   border: 1px solid #cfcfcf;
@@ -80,6 +86,9 @@
   color: #111;
   font: inherit;
   font-size: 14px;
+}
+.editor input[type="datetime-local"]:disabled {
+  color: #9a9a9a;
 }
 .editor textarea {
   line-height: 1.5;
@@ -721,4 +730,11 @@
 .editCard:disabled {
   opacity: 0.5;
   cursor: default;
+}
+/* Remove sale, in the sale row's last column, level with the fields. */
+.endSale {
+  align-self: end;
+  justify-self: start;
+  padding: 10px 0;
+  white-space: nowrap;
 }

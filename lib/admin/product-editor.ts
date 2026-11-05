@@ -26,6 +26,11 @@ export type ProductValues = {
   price: string
   msrp: string
   price_unit: ProductInput["price_unit"]
+  /** A time-limited sale: dollars as typed, and store-time
+   * "YYYY-MM-DDTHH:MM" (an empty start is now). Empty price: no sale. */
+  sale_price: string
+  sale_starts: string
+  sale_ends: string
   /** The card line; empty means Save has it written from the description. */
   short_description: string
   /** Markdown. */
@@ -80,6 +85,9 @@ export function valuesFrom(
     price: dollars(record.price_cents),
     msrp: dollars(record.msrp_cents),
     price_unit: record.price_unit ?? "each",
+    sale_price: dollars(record.sale?.price_cents),
+    sale_starts: record.sale?.starts_at ?? "",
+    sale_ends: record.sale?.ends_at ?? "",
     short_description: record.short_description ?? "",
     description: record.description ?? "",
     manufacturer_url: record.manufacturer_url ?? "",
@@ -100,6 +108,7 @@ export function valuesFromProduct(product: AdminProduct): ProductValues {
     status: product.status as ProductInput["status"],
     price_cents: product.price_cents,
     msrp_cents: product.msrp_cents,
+    sale: product.sale_window ?? null,
     price_unit: product.price_unit as ProductInput["price_unit"],
     short_description: product.short_description,
     description: product.description,
@@ -132,14 +141,34 @@ export function slugify(text: string) {
     .replace(/-+$/, "")
 }
 
+/** The sale fields as one comparable value (older saved drafts lack them). */
+const saleKey = (values: ProductValues) =>
+  [values.sale_price, values.sale_starts, values.sale_ends]
+    .map((value) => (value ?? "").trim())
+    .join("|")
+
 /**
  * The record Save sends, before validation (productInputSchema checks it on
  * both sides). Empty optional fields become null; a photo without alt text
  * gets the product's name, so a missing description never blocks a save.
+ * The sale is sent only when it differs from `baseline`, so saving other
+ * fields never undoes a sale Tune set meanwhile.
  */
-export function inputFromValues(values: ProductValues) {
+export function inputFromValues(
+  values: ProductValues,
+  baseline?: ProductValues
+) {
   const msrp = values.msrp.trim()
   const name = values.name.trim()
+  const salePrice = (values.sale_price ?? "").trim()
+  const sale = salePrice
+    ? {
+        price_cents: parseDollars(salePrice),
+        starts_at: (values.sale_starts ?? "").trim() || null,
+        ends_at: (values.sale_ends ?? "").trim(),
+      }
+    : null
+  const saleChanged = !baseline || saleKey(values) !== saleKey(baseline)
   return {
     ...(values.id && { id: values.id }),
     slug: values.slug.trim(),
@@ -150,6 +179,7 @@ export function inputFromValues(values: ProductValues) {
     description: values.description.trim(),
     price_cents: parseDollars(values.price),
     msrp_cents: msrp ? parseDollars(msrp) : null,
+    ...(saleChanged && { sale }),
     price_unit: values.price_unit,
     condition: values.condition,
     ready_for_audition: values.ready_for_audition,

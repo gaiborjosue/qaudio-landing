@@ -17,6 +17,9 @@
     "test:speech": "node --test scripts/speech.test.mjs",
     "test:prefill": "node --test scripts/product-prefill.test.mjs",
     "test:metadata": "node --test scripts/metadata.test.mjs",
+    "test:flows": "node --test scripts/flows.test.mjs",
+    "test:photos": "node --test scripts/photos.test.mjs",
+    "test:story": "node --test scripts/story.test.mjs scripts/story-edits.test.mjs",
     "import:news": "node --env-file=.env.local scripts/import-news.mjs",
     "import:catalog": "node --env-file=.env.local scripts/import-catalog.mjs"
   },

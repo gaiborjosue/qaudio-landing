@@ -10,7 +10,7 @@ import {
   instagramScheduleProblem,
   mentionCount,
 } from "./instagram"
-import { STORE_DATETIME } from "./store-time"
+import { STORE_DATETIME, toStoreDateTime } from "./store-time"
 
 // Inputs of the admin agent's write tools. The agent validates tool calls with
 // them, and the admin chat renders previews from the same (validated) input.
@@ -132,6 +132,26 @@ export const productImageInputSchema = z.object({
 
 // Products are saved and deleted in the admin's Products tab (Server Actions
 // validated with these); older chats' product cards still render from them.
+
+/** A time-limited sale on one product, in store time. */
+export const productSaleSchema = z
+  .object({
+    price_cents: z.int().positive().describe("The sale price in US cents."),
+    starts_at: z
+      .string()
+      .regex(STORE_DATETIME)
+      .nullable()
+      .describe('Store-time "YYYY-MM-DDTHH:MM" it starts, or null for now.'),
+    ends_at: z
+      .string()
+      .regex(STORE_DATETIME)
+      .describe('Store-time "YYYY-MM-DDTHH:MM" it ends.'),
+  })
+  .refine(
+    (sale) => !sale.starts_at || sale.starts_at < sale.ends_at,
+    "A sale must start before it ends."
+  )
+
 export const productInputSchema = z.object({
   id: z
     .uuid()
@@ -155,14 +175,20 @@ export const productInputSchema = z.object({
     .int()
     .positive()
     .describe(
-      "Current selling price in US cents: 79900 is $799. For a sale, set this below msrp_cents; restore the regular price to end the sale."
+      "Regular selling price in US cents: 79900 is $799. A time-limited sale goes in sale."
     ),
   msrp_cents: z
     .int()
     .positive()
     .nullable()
     .describe(
-      "Manufacturer list price in US cents, or null when unknown. Keep it when setting a sale price so the shop can show the comparison."
+      "Manufacturer list price in US cents, or null when unknown. A selling price below it shows as a sale."
+    ),
+  sale: productSaleSchema
+    .nullable()
+    .optional()
+    .describe(
+      "A time-limited sale price, null to end one; omit to leave it as it is."
     ),
   price_unit: z.enum(["each", "pair"]),
   condition: z.enum(["New", "Demo", "Used"]),
@@ -227,6 +253,125 @@ export const reorderProductsInputSchema = z
     (input) => !(input.category_slug && input.brand_slug),
     "Reorder one category or one brand at a time."
   )
+
+// Time-limited sales, the one product change the agent makes (lib/admin/
+// sale.ts). The approval card works the prices out from this input itself,
+// so it shows exactly what gets saved.
+const saleProduct = z.object({
+  id: z.uuid(),
+  name: z.string().min(1).max(160).describe("For the approval card."),
+  price_cents: z
+    .int()
+    .positive()
+    .describe("Its regular price, exactly as products__list_catalog gave it."),
+  msrp_cents: z
+    .int()
+    .positive()
+    .nullable()
+    .describe("Its list price, exactly as products__list_catalog gave it."),
+  sale_price_cents: z
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Only when the owner named this product's own sale price; otherwise it's worked out from discount."
+    ),
+})
+
+export const saleInputSchema = z
+  .object({
+    title: z
+      .string()
+      .trim()
+      .min(1)
+      .max(120)
+      .describe(
+        'The sale in a few words, for the approval card, e.g. "Paradigm Monitor SE".'
+      ),
+    products: z
+      .array(saleProduct)
+      .min(1)
+      .max(50)
+      .describe("Every product the sale covers."),
+    discount: z
+      .discriminatedUnion("kind", [
+        z.object({
+          kind: z.literal("percent"),
+          percent: z.number().gt(0).lt(100),
+        }),
+        z.object({ kind: z.literal("amount"), cents: z.int().positive() }),
+      ])
+      .nullable()
+      .describe(
+        "What comes off each product: a percent, or an amount in US cents. null only when every product has its own sale_price_cents."
+      ),
+    off: z
+      .enum(["msrp", "price"])
+      .default("msrp")
+      .describe(
+        "What the discount comes off: msrp (the list price; the regular price for a product without one) or price (the regular price)."
+      ),
+    rounding: z
+      .enum(["cent", "dollar"])
+      .default("cent")
+      .describe("dollar rounds each sale price to the nearest whole dollar."),
+    starts_at: z
+      .union([z.literal("now"), z.string().regex(STORE_DATETIME)])
+      .describe(
+        '"now", or the store-time "YYYY-MM-DDTHH:MM" the sale prices start showing.'
+      ),
+    ends_at: z
+      .string()
+      .regex(STORE_DATETIME)
+      .describe(
+        'Store-time "YYYY-MM-DDTHH:MM" they stop showing; the end of a day is T23:59.'
+      ),
+  })
+  .superRefine((sale, ctx) => {
+    if (
+      !sale.discount &&
+      sale.products.some((product) => !product.sale_price_cents)
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Give a discount, or each product's sale_price_cents.",
+      })
+    }
+    if (sale.starts_at !== "now" && sale.starts_at >= sale.ends_at) {
+      ctx.addIssue({
+        code: "custom",
+        message: "The sale must start before it ends.",
+      })
+    }
+    const ids = sale.products.map((product) => product.id)
+    if (new Set(ids).size !== ids.length) {
+      ctx.addIssue({ code: "custom", message: "List each product once." })
+    }
+  })
+
+/** The tool's input: also checks the sale hasn't ended already. */
+export const saleProposalSchema = saleInputSchema.superRefine((sale, ctx) => {
+  if (sale.ends_at <= toStoreDateTime(new Date())) {
+    ctx.addIssue({
+      code: "custom",
+      message: "That end time has passed; pick a later one.",
+    })
+  }
+})
+
+export const endSaleInputSchema = z.object({
+  title: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe("The sale in a few words, for the approval card."),
+  products: z
+    .array(z.object({ id: z.uuid(), name: z.string().min(1).max(160) }))
+    .min(1)
+    .max(50)
+    .describe("The products whose sale ends now."),
+})
 
 // The admin's Products tab: its product form and table save through Server
 // Actions, validated with productInputSchema and these.
@@ -553,6 +698,9 @@ export type DeleteHoursChangeInput = z.infer<
 export type ProductInput = z.infer<typeof productInputSchema>
 export type DeleteProductInput = z.infer<typeof deleteProductInputSchema>
 export type ReorderProductsInput = z.infer<typeof reorderProductsInputSchema>
+export type ProductSaleInput = z.infer<typeof productSaleSchema>
+export type SaleInput = z.infer<typeof saleInputSchema>
+export type EndSaleInput = z.infer<typeof endSaleInputSchema>
 export type ProductDraft = z.infer<typeof productDraftSchema>
 export type ProductQuickEdit = z.infer<typeof productQuickEditSchema>
 export type NewsBlockInput = z.infer<typeof newsBlockSchema>

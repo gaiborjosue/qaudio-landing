@@ -7,6 +7,16 @@ import {
   type AuthFn,
 } from "eve/channels/auth"
 import { defaultEveAuth, eveChannel } from "eve/channels/eve"
+import type { MessageContent } from "eve/client"
+import {
+  FLOW_ATTRIBUTE,
+  FLOW_IDS,
+  flowContext,
+  flowHint,
+  flowsFromClient,
+} from "../../lib/admin/flows"
+import { photoContext, photoLines } from "../../lib/admin/photo-lines"
+import { readStoryEdit } from "../../lib/admin/story-edits"
 import {
   STORE_TIME_ZONE,
   WEEKDAYS,
@@ -59,10 +69,47 @@ export default eveChannel({
   // localDev() only admits requests while `next dev` runs the agent; tools
   // still need a signed-in admin's token.
   auth: [supabaseAdmin, localDev()],
-  // Photos are uploaded from the browser and sent as public media URLs.
-  uploadPolicy: { maxBytes: 3 * 1024 * 1024, allowedMediaTypes: ["image/*"] },
-  onMessage: (ctx) => ({
-    auth: defaultEveAuth(ctx),
-    clientContext: [storeNow()],
-  }),
+  // Photos go by path, never as attachments (lib/admin/photo-lines.ts): eve
+  // would copy an attachment into the session's sandbox, which would start
+  // one for every chat with a photo (and fail where none can start). The
+  // model looks at photos with view_photos instead.
+  uploadPolicy: "disabled",
+  // The chat sends which flows the owner has on ({ flows: [...] }); they
+  // ride on the caller for flow_progress to check, and the model reads
+  // which are on and when each applies (lib/admin/flows.ts), with a nudge
+  // when the message is about a sale. Photos the message attaches get a
+  // reminder to look at them.
+  onMessage: (ctx, message) => {
+    const auth = defaultEveAuth(ctx)
+    const flows = flowsFromClient(ctx.eve.clientContext) ?? [...FLOW_IDS]
+    const text = messageText(message)
+    const storyEdit = readStoryEdit(text)
+    const hint = storyEdit ? null : flowHint(text, flows)
+    const photos = photoContext(photoLines(text))
+    return {
+      auth: auth && {
+        ...auth,
+        attributes: { ...auth.attributes, [FLOW_ATTRIBUTE]: flows },
+      },
+      clientContext: [
+        storeNow(),
+        flowContext(flows),
+        ...(hint ? [hint] : []),
+        ...(photos ? [photos] : []),
+        ...(storyEdit
+          ? [
+              `The owner selected an existing story and requested image edits, not a new flow or a new design. Call edit_story with this exact validated input: ${JSON.stringify(storyEdit)}. Never call design_story for this revision. Then propose the new image with instagram__save_post for review; preserve the current account, existing post id if editing a saved draft, and timing. Do not automatically approve the new image.`,
+            ]
+          : []),
+      ],
+    }
+  },
 })
+
+/** A message's text, from a string or its text parts. */
+function messageText(message: MessageContent) {
+  if (typeof message === "string") return message
+  return message
+    .flatMap((part) => (part.type === "text" ? [part.text] : []))
+    .join("\n")
+}
