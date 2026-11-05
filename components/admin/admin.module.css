@@ -172,8 +172,11 @@
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 4px;
+  gap: 12px;
   min-width: 0;
+}
+.signOut {
+  padding-left: 0;
 }
 .chatActions {
   display: contents;
@@ -252,56 +255,6 @@
 .quickMenus > * {
   flex: none;
 }
-.instagramConnection {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 10px;
-  max-width: 100%;
-}
-.instagramStatus {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  max-width: 240px;
-  min-height: 32px;
-  padding: 5px 10px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #4a4a4a;
-  font: inherit;
-  font-size: 13px;
-  text-decoration: none;
-  cursor: pointer;
-}
-.instagramStatus:hover {
-  background: #ededed;
-  color: #111;
-}
-.instagramStatus:focus-visible {
-  outline: 2px solid #111;
-  outline-offset: 2px;
-}
-.instagramStatus > svg {
-  flex: none;
-}
-.instagramStatus > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.instagramCheck {
-  color: #15803d;
-}
-.instagramMessage {
-  max-width: 340px;
-  color: #555;
-  font-size: 12px;
-  line-height: 1.5;
-}
-
 /* The Edit menu's lists (item-picker.tsx), inside the menu's panel, so
    they use its ink (--on-slab). */
 .picker {
@@ -836,7 +789,7 @@
   }
 }
 
-@media (max-width: 780px) {
+@media (max-width: 880px) {
   /* The switch drops to its own row under the logo and the account. */
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -934,16 +887,55 @@
   white-space: nowrap;
 }
 
-/* Approval actions, with the news schedule picker beside them. */
+/* Approval actions (approval-actions.tsx): Approve and Deny, then how it
+   goes out (with the schedule picker) or what should change. */
+.approval {
+  display: grid;
+  gap: 12px;
+}
+.approval > p {
+  margin: 0;
+}
+.approval .quiet:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
 .actions {
   display: flex;
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 10px;
 }
+.feedback {
+  display: grid;
+  gap: 10px;
+  max-width: 520px;
+}
+.feedback textarea {
+  min-height: 64px;
+  padding: 10px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 12px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.feedback textarea:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 1px;
+}
+/* The owner's note on a card they denied. */
+.denialNote {
+  color: #4a4a4a;
+  font-size: 14px !important;
+  white-space: pre-wrap;
+}
 
 /* A button that morphs into a panel and back (Motion shared layout): the
-   news schedule picker. */
+   schedule picker. */
 .morphPanel {
   overflow: hidden;
   border: 1px solid #dcdcdc;

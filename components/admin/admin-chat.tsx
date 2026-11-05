@@ -26,12 +26,12 @@ import {
 } from "eve/react"
 import { parts, runs } from "eve/events"
 import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
+import { ApprovalActions } from "@/components/admin/approval-actions"
 import {
   ChangePreview,
   SAVE_TOOLS,
   type PreviewData,
 } from "@/components/admin/change-preview"
-import { SchedulePicker } from "@/components/admin/schedule-picker"
 import {
   CopyAction,
   MessageAction,
@@ -66,14 +66,12 @@ import {
   reorderProductsInputSchema,
 } from "@/lib/admin/schemas"
 import {
+  APPROVED_AS,
   APPROVED_PHOTO_ORDER,
-  approvedOrderMessage,
-  arrangedApprovals,
+  approvedProposals,
   PHOTO_ORDER,
-} from "@/lib/admin/instagram-arrange"
-import { INSTAGRAM_SCHEDULE_DAYS } from "@/lib/admin/instagram"
+} from "@/lib/admin/approval-choice"
 import { withUploadedPhotos } from "@/lib/admin/chat-photos"
-import { formatStoreDateTime } from "@/lib/admin/store-time"
 import { mediaUrl } from "@/lib/media"
 import { browserSupabase } from "@/lib/supabase/browser"
 import styles from "./admin.module.css"
@@ -269,7 +267,7 @@ function Conversation({
   onEdit: (text: string) => void
 }) {
   const ownerSaved = ownerSavedOrders(agent.messages)
-  const preapproved = arrangedApprovals(agent.messages)
+  const choices = approvedProposals(agent.messages)
   // Match each text part to the run that produced it. Session-wide model
   // settings would mislabel older replies after an automatic model switch.
   const modelByPart = useMemo(() => {
@@ -309,7 +307,7 @@ function Conversation({
                   agent={agent}
                   preview={preview}
                   ownerSaved={ownerSaved}
-                  preapproved={preapproved}
+                  choices={choices}
                   modelByPart={modelByPart}
                   onEdit={onEdit}
                 />
@@ -332,12 +330,12 @@ function Conversation({
 
 // Lines meant for the agent, not the bubble: uploaded photos, the item an
 // Edit-menu choice names, a product order the owner arranged and saved on a
-// reorder card ("Order:" is the earlier form), and a carousel's photos in
-// the order the owner arranged them on its card (lib/admin/
-// instagram-arrange.ts). Older chats also carry what the owner saved or
+// reorder card ("Order:" is the earlier form), and what the owner approved
+// on a card ("Approved as:", lib/admin/approval-choice.ts; older chats carry
+// a carousel's photo order). Older chats also carry what the owner saved or
 // asked to draft in the chat's former product editor and table.
 const HIDDEN_LINE = new RegExp(
-  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}): .*$`,
+  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}|${APPROVED_AS}): .*$`,
   "gm"
 )
 const ORDER_SAVED = /^Order saved: (.+)$/m
@@ -424,7 +422,7 @@ function MessageView({
   agent,
   preview,
   ownerSaved,
-  preapproved,
+  choices,
   modelByPart,
   onEdit,
 }: {
@@ -432,7 +430,7 @@ function MessageView({
   agent: Agent
   preview: PreviewData
   ownerSaved: Map<string, string[]>
-  preapproved: Set<string>
+  choices: ReturnType<typeof approvedProposals>
   modelByPart: ReadonlyMap<string, string | undefined>
   onEdit: (text: string) => void
 }) {
@@ -524,7 +522,8 @@ function MessageView({
                     agent={agent}
                     preview={preview}
                     ownerSaved={ownerSaved.get(part.callId)}
-                    preapproved={preapproved.has(part.callId)}
+                    preapproved={choices.approved.has(part.callId)}
+                    replaced={choices.replaced.has(part.callId)}
                   />
                 )
               }
@@ -553,18 +552,6 @@ function MessageView({
   )
 }
 
-// A news proposal's published_at, for the schedule picker's starting point.
-function newsPublishAt(input: unknown) {
-  const value = (input as { published_at?: unknown } | undefined)?.published_at
-  return typeof value === "string" ? value : null
-}
-
-// An Instagram proposal's scheduled time ("draft" and "now" aren't times).
-function instagramWhen(input: unknown) {
-  const value = (input as { when?: unknown } | undefined)?.when
-  return typeof value === "string" && value.includes("T") ? value : null
-}
-
 const INSTAGRAM_LINK = /^https:\/\/(www\.)?instagram\.com\//
 
 const CHANGE_STATUS: Partial<Record<EveToolPart["state"], string>> = {
@@ -584,14 +571,17 @@ function ChangeCard({
   preview,
   ownerSaved,
   preapproved = false,
+  replaced = false,
 }: {
   part: EveToolPart
   agent: Agent
   preview: PreviewData
   /** The order the owner arranged on this reorder card and saved. */
   ownerSaved?: string[]
-  /** An Instagram post the owner approved on the card before, by its order. */
+  /** Approved with a choice on the card before it, which this matches. */
   preapproved?: boolean
+  /** Withdrawn by a choice on it, and proposed again with that choice. */
+  replaced?: boolean
 }) {
   const interaction = part.interaction
   const pending = !ownerSaved && interaction?.status === "open"
@@ -643,11 +633,10 @@ function ChangeCard({
   }
 
   // A carousel's photos can be rearranged on its preview. The tool's input
-  // can't change once proposed, so "Approve in this order" sends the order to
-  // the agent, which proposes the same post with it; that card approves
-  // itself when it matches exactly (lib/admin/instagram-arrange.ts).
+  // can't change once proposed, so approving sends the new order to the
+  // agent with the choice of how it goes out, and the agent proposes the
+  // same post with it (lib/admin/approval-choice.ts).
   const [photoOrder, setPhotoOrder] = useState<number[] | null>(null)
-  const [sendingOrder, setSendingOrder] = useState(false)
   const instagram =
     pending && previewToolName(part.name) === "save_instagram_post"
       ? instagramPostInputSchema.safeParse(part.input).data
@@ -662,21 +651,8 @@ function ChangeCard({
     photoOrder.some((original, position) => original !== position)
       ? photoOrder.map((original) => carousel.photos[original])
       : null
-  const photoOrderLine = arrangedPhotos
-    ? `\n${PHOTO_ORDER}: ${JSON.stringify(arrangedPhotos)}`
-    : ""
 
-  const approveArranged = async () => {
-    if (!arrangedPhotos) return
-    setSendingOrder(true)
-    try {
-      await agent.send(approvedOrderMessage(arrangedPhotos))
-    } finally {
-      setSendingOrder(false)
-    }
-  }
-
-  // Answer the re-proposal of a post approved by its order, once.
+  // Answer, once, a re-proposal that matches what the owner approved.
   const autoApproved = useRef(false)
   const resuming = agent.status === "resuming"
   useEffect(() => {
@@ -700,6 +676,21 @@ function ChangeCard({
   }, [preapproved, resuming, interaction, agent])
   const approving = preapproved && pending
 
+  const approval =
+    interaction?.request.options?.some((option) => option.id === "approve") &&
+    interaction.request.options.some((option) => option.id === "deny")
+  const hint =
+    order && sortable
+      ? "Drag to rearrange, or type what to change."
+      : carousel
+        ? "Drag the photos to reorder, or type what to change."
+        : "Or type what to change."
+  // What the owner wrote when denying it, without the lines for the agent.
+  const denial =
+    !pending && interaction?.answer?.optionId === "deny"
+      ? interaction.answer.text?.replace(HIDDEN_LINE, "").trim()
+      : undefined
+
   return (
     <section
       className={styles.card}
@@ -713,7 +704,9 @@ function ChangeCard({
             ? "Saved"
             : approving
               ? "Approving"
-              : (CHANGE_STATUS[part.state] ?? part.state)}
+              : replaced && part.state === "rejected"
+                ? "Replaced"
+                : (CHANGE_STATUS[part.state] ?? part.state)}
         </span>
       </header>
       {order && sortable && (
@@ -746,9 +739,12 @@ function ChangeCard({
           {saveError}
         </p>
       )}
-      {pending && interaction && !approving && (
-        <div className={styles.actions}>
-          {changed ? (
+      {denial && <p className={styles.denialNote}>“{denial}”</p>}
+      {pending &&
+        interaction &&
+        !approving &&
+        (changed ? (
+          <>
             <div className={styles.options}>
               <button
                 type="button"
@@ -767,64 +763,24 @@ function ChangeCard({
                 Reset
               </button>
             </div>
-          ) : arrangedPhotos ? (
-            <div className={styles.options}>
-              <button
-                type="button"
-                className={styles.primary}
-                disabled={sendingOrder || agent.status === "resuming"}
-                onClick={() => void approveArranged()}
-              >
-                {sendingOrder ? "Approving…" : "Approve in this order"}
-              </button>
-              <button
-                type="button"
-                className={styles.secondary}
-                disabled={sendingOrder}
-                onClick={() => setPhotoOrder(null)}
-              >
-                Reset
-              </button>
-            </div>
-          ) : (
+            <p className={styles.hint}>{hint}</p>
+          </>
+        ) : approval ? (
+          <ApprovalActions
+            agent={agent}
+            interaction={interaction}
+            tool={part.name}
+            input={part.input}
+            arrangedPhotos={arrangedPhotos}
+            onResetPhotos={() => setPhotoOrder(null)}
+            hint={hint}
+          />
+        ) : (
+          <>
             <Options interaction={interaction} agent={agent} />
-          )}
-          {previewToolName(part.name) === "save_news_post" && (
-            <SchedulePicker
-              current={newsPublishAt(part.input)}
-              disabled={agent.status === "resuming"}
-              onSchedule={(local) =>
-                void agent.send(
-                  `Schedule this post to go live ${formatStoreDateTime(local)} store time: status published, published_at "${local}". Keep everything else.`
-                )
-              }
-            />
-          )}
-          {previewToolName(part.name) === "save_instagram_post" && (
-            <SchedulePicker
-              current={instagramWhen(part.input)}
-              disabled={sendingOrder || agent.status === "resuming"}
-              maxDays={INSTAGRAM_SCHEDULE_DAYS}
-              onSchedule={(local) =>
-                void agent.send(
-                  `Schedule this Instagram post for ${formatStoreDateTime(local)} store time: when "${local}". Keep everything else.${photoOrderLine}`
-                )
-              }
-            />
-          )}
-        </div>
-      )}
-      {pending && (
-        <p className={styles.hint}>
-          {approving
-            ? "Approved with the photos in your order."
-            : order && sortable
-              ? "Drag to rearrange, or type what to change."
-              : carousel
-                ? "Drag the photos to reorder, or type what to change."
-                : "Or type what to change."}
-        </p>
-      )}
+            <p className={styles.hint}>{hint}</p>
+          </>
+        ))}
       {pageUrl && (
         <a
           className={styles.link}

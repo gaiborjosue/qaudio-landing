@@ -75,7 +75,21 @@ export async function zernioInstagramStatus(
         username: account.username!.replace(/^@+/, ""),
       }))
 
-    if (accounts.length) return { state: "connected", accounts, connectUrl }
+    if (accounts.length) {
+      const needsAttention = instagram.some(
+        (account) =>
+          !account.isActive || account.needsReconnection || !account.username
+      )
+      return {
+        state: "connected",
+        accounts,
+        connectUrl,
+        ...(needsAttention && {
+          needsAttention: true,
+          message: "Some Instagram accounts need attention in Zernio.",
+        }),
+      }
+    }
     if (
       instagram.some(
         (account) => !account.isActive || account.needsReconnection

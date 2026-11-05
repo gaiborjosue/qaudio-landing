@@ -15,5 +15,6 @@ Steps:
 
 1. Call `deals__list_deals` for every deal (drafts, scheduled, live, and expired) with ids, dates, and products.
 2. Resolve dates ("through Black Friday weekend") against today's store date and say the exact times back. An end date usually means the end of that day: use `T23:59`.
-3. Call `deals__save_deal` with the complete deal, including the whole product list in order (with `id` when editing). The owner previews the card and approves.
-4. To delete, call `deals__delete_deal` with the id and title. Saving as a draft keeps it for next time.
+3. Don't ask whether to publish or keep a draft: approving, the owner picks Publish, Save draft, or Schedule (its start) on the card. Use what the owner said; otherwise propose a new deal as `published`, and keep an edited deal's own `status`.
+4. Call `deals__save_deal` with the complete deal, including the whole product list in order (with `id` when editing). The owner previews the card and approves, or denies with a note on what to change.
+5. To delete, call `deals__delete_deal` with the id and title. Saving as a draft keeps it for next time.

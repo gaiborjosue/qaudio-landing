@@ -25,14 +25,14 @@ registerHooks({
 
 const { readZernioConfig, zernioInstagramStatus } =
   await import("../lib/admin/zernio-api.ts")
+const { connectionHealth } = await import("../lib/admin/connection-health.ts")
 const instagram = await import("../lib/admin/instagram-posts.ts")
 const { instagramFrame, instagramScheduleProblem } =
   await import("../lib/admin/instagram.ts")
 const { instagramPostInputSchema, instagramPostProposalSchema } =
   await import("../lib/admin/schemas.ts")
 const { toStoreDateTime } = await import("../lib/admin/store-time.ts")
-const { arrangedApprovals, approvedOrderMessage } =
-  await import("../lib/admin/instagram-arrange.ts")
+const choice = await import("../lib/admin/approval-choice.ts")
 
 const profileId = "000000000000000000000001"
 const config = { apiKey: "test-only-api-key", profileId }
@@ -137,6 +137,64 @@ test("revoked and inactive accounts never get a green connected status", async (
     )
     assert.equal(status.state, "reconnect")
     assert.deepEqual(status.accounts, [])
+  }
+})
+
+test("one healthy account cannot hide another account needing attention", async () => {
+  for (const change of [
+    { isActive: false },
+    { needsReconnection: true },
+    { username: undefined },
+  ]) {
+    const status = await zernioInstagramStatus(
+      config,
+      reply({
+        accounts: [
+          account,
+          {
+            ...account,
+            _id: "000000000000000000000003",
+            ...change,
+            accessToken: "must-not-leak",
+          },
+        ],
+      })
+    )
+    assert.equal(status.state, "connected")
+    assert.equal(status.needsAttention, true)
+    assert.deepEqual(status.accounts, [
+      { id: account._id, username: account.username },
+    ])
+    assert.equal(connectionHealth([status]), "warning")
+    assert(!JSON.stringify(status).includes("must-not-leak"))
+  }
+})
+
+test("the header is green only after every service is checked and connected", () => {
+  const connected = {
+    state: "connected",
+    accounts: [{ id: account._id, username: account.username }],
+  }
+  assert.equal(connectionHealth([]), "checking")
+  assert.equal(connectionHealth([null]), "checking")
+  assert.equal(connectionHealth([connected, null]), "checking")
+  assert.equal(connectionHealth([connected, connected]), "healthy")
+  assert.equal(connectionHealth([{ ...connected, accounts: [] }]), "warning")
+  assert.equal(
+    connectionHealth([connected, { ...connected, needsAttention: true }]),
+    "warning"
+  )
+  for (const state of [
+    "disconnected",
+    "reconnect",
+    "unavailable",
+    "unconfigured",
+  ]) {
+    assert.equal(
+      connectionHealth([connected, { state, accounts: [] }]),
+      "warning"
+    )
+    assert.equal(connectionHealth([null, { state, accounts: [] }]), "warning")
   }
 })
 
@@ -775,7 +833,7 @@ test("publishing errors are reworded without provider details", async () => {
   assert.deepEqual(leaks(timeout.message), [])
 })
 
-test("a carousel approved by its order approves only that exact post", () => {
+test("a card approved with a choice approves only that exact re-proposal", () => {
   const photos = ["a", "b", "c"].map((name) => ({
     path: `instagram/${name}.webp`,
     width: 1200,
@@ -786,7 +844,7 @@ test("a carousel approved by its order approves only that exact post", () => {
     kind: "feed",
     photos,
     caption: "Three views #hifi",
-    when: "draft",
+    when: "now",
   }
   const arranged = [photos[2], photos[0], photos[1]]
   const card = (callId, input, name = "instagram__save_post") => ({
@@ -794,70 +852,91 @@ test("a carousel approved by its order approves only that exact post", () => {
     parts: [{ type: "tool", name, callId, input }],
   })
   const owner = (text) => ({ role: "user", parts: [{ type: "text", text }] })
-  const approve = owner(approvedOrderMessage(arranged))
-  const run = (...messages) => [...arrangedApprovals(messages)]
+  const approveAs = (fields, release = "draft") =>
+    owner(choice.approvedMessage("save_instagram_post", release, fields, null))
+  const draft = approveAs({ when: "draft" })
+  const order = approveAs({ when: "now", photos: arranged }, "now")
+  const run = (...messages) => [...choice.approvedProposals(messages).approved]
 
-  // The exact post, re-proposed with the arranged photos (key order and the
-  // caption's default don't matter).
+  assert.match(draft.parts[0].text, /^Save it as a draft\.\nApproved as: /)
+  assert.match(order.parts[0].text, /^Post it now, with the photos in the/)
+  // The same post saved as a draft (key order and the caption's default
+  // don't matter), and the card it replaces.
   assert.deepEqual(
-    run(card("1", post), approve, card("2", { ...post, photos: arranged })),
+    run(card("1", post), draft, card("2", { ...post, when: "draft" })),
     ["2"]
   )
   assert.deepEqual(
     run(
       card("1", { ...post, caption: "" }),
-      approve,
-      card("2", { photos: arranged, when: "draft", kind: "feed" })
+      draft,
+      card("2", { photos, when: "draft", kind: "feed" })
     ),
     ["2"]
   )
   assert.deepEqual(
-    run(
-      card("1", post),
-      approve,
-      card("2", {
-        when: "draft",
-        photos: arranged,
-        caption: post.caption,
-        kind: "feed",
-      })
-    ),
+    [
+      ...choice.approvedProposals([
+        card("1", post),
+        draft,
+        card("2", { ...post, when: "draft", caption: "Other" }),
+      ]).replaced,
+    ],
+    ["1"]
+  )
+  // The photos in a new order, with how it goes out.
+  assert.deepEqual(
+    run(card("1", post), order, card("2", { ...post, photos: arranged })),
     ["2"]
   )
   // Anything else waits for the owner.
   for (const next of [
-    { ...post, photos: arranged, caption: "Changed" },
-    { ...post, photos: arranged, when: "now" },
+    { ...post, when: "draft", caption: "Changed" },
+    { ...post, when: "now" },
+    { ...post, when: "2030-01-01T09:00" },
+  ])
+    assert.deepEqual(run(card("1", post), draft, card("2", next)), [])
+  for (const next of [
     { ...post, photos },
     { ...post, photos: [photos[1], photos[0], photos[2]] },
   ])
-    assert.deepEqual(run(card("1", post), approve, card("2", next)), [])
-  // Only the very next card, and only without a newer word from the owner.
+    assert.deepEqual(run(card("1", post), order, card("2", next)), [])
+  // Only the very next change card, and only without a newer word from the
+  // owner.
   assert.deepEqual(
     run(
       card("1", post),
-      approve,
+      draft,
       card("2", { ...post, caption: "Other" }),
-      card("3", { ...post, photos: arranged })
+      card("3", { ...post, when: "draft" })
     ),
     []
   )
   assert.deepEqual(
     run(
       card("1", post),
-      approve,
-      owner("Actually, wait."),
-      card("2", { ...post, photos: arranged })
+      draft,
+      card("h", { week: [] }, "hours__set_weekly_hours"),
+      card("2", { ...post, when: "draft" })
     ),
     []
   )
-  // Another tool's card, an order with photos the card didn't have, and an
-  // order without a card before it approve nothing.
   assert.deepEqual(
     run(
-      card("1", post, "news__save_news_post"),
-      approve,
-      card("2", { ...post, photos: arranged })
+      card("1", post),
+      draft,
+      owner("Actually, wait."),
+      card("2", { ...post, when: "draft" })
+    ),
+    []
+  )
+  // Fields the card can't set, photos it didn't have, another tool's card,
+  // and a choice without a card before it approve nothing.
+  assert.deepEqual(
+    run(
+      card("1", post),
+      owner(`Change it.\nApproved as: {"when":"draft","caption":"New"}`),
+      card("2", { ...post, when: "draft", caption: "New" })
     ),
     []
   )
@@ -869,19 +948,212 @@ test("a carousel approved by its order approves only that exact post", () => {
   assert.deepEqual(
     run(
       card("1", post),
-      owner(approvedOrderMessage(foreign)),
+      approveAs({ when: "now", photos: foreign }, "now"),
       card("2", { ...post, photos: foreign })
     ),
     []
   )
-  assert.deepEqual(run(approve, card("2", { ...post, photos: arranged })), [])
+  assert.deepEqual(
+    run(
+      card("1", post),
+      draft,
+      card("2", { ...post, when: "draft" }, "news__save_news_post")
+    ),
+    []
+  )
+  assert.deepEqual(run(draft, card("2", { ...post, when: "draft" })), [])
   // A card still streaming its input is skipped until it parses.
   assert.deepEqual(
     run(
       card("1", post),
-      approve,
+      draft,
       card("2", { kind: "feed" }),
-      card("2", { ...post, photos: arranged })
+      card("2", { ...post, when: "draft" })
+    ),
+    ["2"]
+  )
+})
+
+test("news posts and deals go out the way the owner picks on the card", () => {
+  const now = "2026-11-04T12:00"
+  const news = {
+    slug: "open-house",
+    title: "Open house",
+    body: [],
+    cover: {
+      path: "news/cover.webp",
+      width: 1600,
+      height: 1000,
+      alt: "The shop",
+      fit: "cover",
+    },
+    status: "published",
+    published_at: "now",
+  }
+  const fields = (tool, input, release, at = null) =>
+    choice.releaseFields(tool, input, release, at, now)
+
+  // Publishing keeps a live post's date; anything else goes live now.
+  assert.deepEqual(fields("save_news_post", news, "now"), {
+    status: "published",
+    published_at: "now",
+  })
+  const live = { ...news, published_at: "2026-10-01T09:00" }
+  assert.deepEqual(fields("save_news_post", live, "now"), {
+    status: "published",
+    published_at: "2026-10-01T09:00",
+  })
+  assert.deepEqual(
+    fields("save_news_post", { ...live, status: "draft" }, "now"),
+    { status: "published", published_at: "now" }
+  )
+  assert.deepEqual(fields("save_news_post", news, "draft"), {
+    status: "draft",
+  })
+  assert.deepEqual(
+    fields("save_news_post", news, "schedule", "2026-11-06T09:00"),
+    { status: "published", published_at: "2026-11-06T09:00" }
+  )
+  assert.equal(fields("save_news_post", news, "schedule"), null)
+  // The proposal's own choice approves it as is; no cover, no publishing.
+  assert.equal(
+    choice.changesProposal("save_news_post", news, {
+      status: "published",
+      published_at: "now",
+    }),
+    false
+  )
+  assert.equal(
+    choice.changesProposal("save_news_post", news, { status: "draft" }),
+    true
+  )
+  assert.equal(
+    choice.withFields(
+      "save_news_post",
+      { ...news, status: "draft", cover: null },
+      { status: "published", published_at: "now" }
+    ),
+    null
+  )
+  assert.equal(choice.proposedRelease("save_news_post", news, now), "now")
+  assert.equal(choice.proposedRelease("save_news_post", live, now), "now")
+  assert.equal(
+    choice.proposedRelease(
+      "save_news_post",
+      { ...news, published_at: "2026-11-06T09:00" },
+      now
+    ),
+    "schedule"
+  )
+
+  // A deal waiting for its start goes live now; Schedule sets the start,
+  // before its end.
+  const deal = {
+    title: "Open box week",
+    summary: "",
+    note: "",
+    status: "published",
+    starts_at: "2026-11-10T09:00",
+    ends_at: "2026-11-20T23:59",
+    items: [],
+  }
+  assert.equal(choice.proposedRelease("save_deal", deal, now), "schedule")
+  assert.deepEqual(fields("save_deal", deal, "now"), {
+    status: "published",
+    starts_at: null,
+  })
+  assert.deepEqual(
+    fields("save_deal", { ...deal, starts_at: "2026-11-01T09:00" }, "now"),
+    { status: "published", starts_at: "2026-11-01T09:00" }
+  )
+  assert.equal(choice.scheduledAt("save_deal", deal), "2026-11-10T09:00")
+  assert.equal(choice.scheduleBefore("save_deal", deal), "2026-11-20T23:59")
+  assert.equal(
+    choice.withFields("save_deal", deal, {
+      status: "published",
+      starts_at: "2026-11-21T09:00",
+    }),
+    null
+  )
+
+  // Their re-proposals approve themselves only when exact.
+  const card = (callId, input, name) => ({
+    role: "assistant",
+    parts: [{ type: "tool", name, callId, input }],
+  })
+  const owner = (text) => ({ role: "user", parts: [{ type: "text", text }] })
+  const run = (...messages) => [...choice.approvedProposals(messages).approved]
+  const publish = owner(
+    choice.approvedMessage(
+      "save_deal",
+      "now",
+      fields("save_deal", deal, "now"),
+      null
+    )
+  )
+  assert.deepEqual(
+    run(
+      card("1", deal, "deals__save_deal"),
+      publish,
+      card("2", { ...deal, starts_at: null }, "deals__save_deal")
+    ),
+    ["2"]
+  )
+  assert.deepEqual(
+    run(
+      card("1", deal, "deals__save_deal"),
+      publish,
+      card(
+        "2",
+        { ...deal, starts_at: null, title: "Other" },
+        "deals__save_deal"
+      )
+    ),
+    []
+  )
+  const at = "2026-11-06T09:00"
+  const scheduled = owner(
+    choice.approvedMessage(
+      "save_news_post",
+      "schedule",
+      fields("save_news_post", news, "schedule", at),
+      at
+    )
+  )
+  assert.match(
+    scheduled.parts[0].text,
+    /^Schedule it for Nov 6, 2026, 9:00\u00a0am\.\nApproved as: /
+  )
+  assert.deepEqual(
+    run(
+      card("1", news, "news__save_news_post"),
+      scheduled,
+      card("2", { ...news, published_at: at }, "news__save_news_post")
+    ),
+    ["2"]
+  )
+  // With two cards before it, a choice goes to the one whose fields it sets.
+  const instagramPost = {
+    kind: "feed",
+    photos: [
+      { path: "instagram/a.webp", width: 1200, height: 1200, alt: "Photo" },
+    ],
+    caption: "",
+    when: "now",
+  }
+  assert.deepEqual(
+    run(
+      card("i", instagramPost, "instagram__save_post"),
+      card("n", news, "news__save_news_post"),
+      owner(
+        choice.approvedMessage(
+          "save_instagram_post",
+          "draft",
+          { when: "draft" },
+          null
+        )
+      ),
+      card("2", { ...instagramPost, when: "draft" }, "instagram__save_post")
     ),
     ["2"]
   )

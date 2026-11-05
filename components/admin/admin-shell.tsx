@@ -6,6 +6,7 @@ import { LayoutGroup, MotionConfig, motion } from "motion/react"
 import { LogOut } from "lucide-react"
 import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
+import { ConnectionsMenu } from "@/components/admin/connections-menu"
 import { MetadataView } from "@/components/admin/metadata-view"
 import type { MetadataData } from "@/lib/admin/metadata"
 import type { PreviewData } from "@/components/admin/change-preview"
@@ -130,8 +131,12 @@ export function AdminShell({
               className={styles.chatActions}
               hidden={view !== "chat"}
             />
+            <ConnectionsMenu />
             <form action={signOut}>
-              <button type="submit" className={styles.quiet}>
+              <button
+                type="submit"
+                className={`${styles.quiet} ${styles.signOut}`}
+              >
                 <LogOut size={15} aria-hidden="true" />
                 Sign out
               </button>

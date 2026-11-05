@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 import type { PreviewData } from "@/components/admin/change-preview"
 import { ItemPicker, type PickerItem } from "@/components/admin/item-picker"
-import { InstagramConnection } from "@/components/admin/instagram-connection"
 import type { ProductRequest } from "@/components/admin/products-view"
 import { CreateMenu, type CreateMenuItem } from "@/components/ui/create-menu"
 import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
@@ -275,7 +274,6 @@ export function QuickMenus({
         disabled={disabled}
         panelWidth={fit(1, 320)}
       />
-      <InstagramConnection />
     </div>
   )
 }

@@ -1,119 +1,108 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
-import { CircleCheck, Link2 } from "lucide-react"
+import { CircleCheck } from "lucide-react"
 import type { InstagramStatus } from "@/lib/admin/instagram-types"
-import styles from "./admin.module.css"
+import styles from "./connections-menu.module.css"
 
 /** The browser receives account summaries, never API keys or provider tokens. */
-export function InstagramConnection() {
-  const root = useRef<HTMLSpanElement>(null)
-  const [status, setStatus] = useState<InstagramStatus | null>(null)
-  const [retry, setRetry] = useState(0)
-
-  useEffect(() => {
-    const node = root.current
-    if (!node) return
-    const controller = new AbortController()
-    let pending = false
-    let lastCheck = 0
-    const check = async () => {
-      if (
-        pending ||
-        document.visibilityState === "hidden" ||
-        node.getBoundingClientRect().width === 0 ||
-        Date.now() - lastCheck < 30_000
-      )
-        return
-      pending = true
-      try {
-        const response = await fetch("/api/instagram/status", {
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        if (!response.ok) throw new Error("Connection check failed.")
-        const next: InstagramStatus = await response.json()
-        if (!controller.signal.aborted) setStatus(next)
-      } catch {
-        if (!controller.signal.aborted)
-          setStatus((previous) => ({
-            state: "unavailable",
-            accounts: [],
-            connectUrl: previous?.connectUrl ?? null,
-            message: "Instagram connection could not be checked. Try again.",
-          }))
-      } finally {
-        pending = false
-        lastCheck = Date.now()
-      }
-    }
-    void check()
-    const resize = new ResizeObserver(() => void check())
-    resize.observe(node)
-    window.addEventListener("focus", check)
-    document.addEventListener("visibilitychange", check)
-    return () => {
-      controller.abort()
-      resize.disconnect()
-      window.removeEventListener("focus", check)
-      document.removeEventListener("visibilitychange", check)
-    }
-  }, [retry])
-
+export function InstagramConnection({
+  status,
+  onCheck,
+}: {
+  status: InstagramStatus | null
+  onCheck: () => void
+}) {
   const connected = status?.state === "connected"
-  const names = status?.accounts.map((account) => `@${account.username}`) ?? []
-  const label = connected
-    ? `${names[0]}${names.length > 1 ? ` +${names.length - 1}` : ""}`
-    : status?.state === "reconnect"
-      ? "Reconnect Instagram"
-      : "Connect Instagram"
-  const title = connected
-    ? `Instagram connected: ${names.join(", ")}. Click to check again.`
-    : status?.message
-  const contents = (
-    <>
-      {connected ? (
-        <CircleCheck
-          size={15}
-          className={styles.instagramCheck}
-          aria-hidden="true"
-        />
-      ) : (
-        <Link2 size={15} aria-hidden="true" />
-      )}
-      <span>{label}</span>
-    </>
-  )
+  const label =
+    status?.state === "reconnect"
+      ? "Reconnect"
+      : status?.connectUrl
+        ? "Connect"
+        : "Check connection"
 
   return (
-    <span ref={root} className={styles.instagramConnection}>
-      {!connected && status?.connectUrl ? (
+    <li className={styles.connection}>
+      {connected ? (
+        status.accounts.map((account) => (
+          <button
+            key={account.id}
+            type="button"
+            className={styles.status}
+            aria-label={`Instagram connected: @${account.username}. Check connection.`}
+            onClick={onCheck}
+          >
+            <InstagramIcon />
+            <span>@{account.username}</span>
+            <CircleCheck
+              size={15}
+              className={styles.check}
+              aria-hidden="true"
+            />
+          </button>
+        ))
+      ) : status?.connectUrl ? (
         <a
           href={status.connectUrl}
-          className={styles.instagramStatus}
-          title={title}
+          className={styles.status}
+          aria-label={`${label} Instagram`}
           target="_blank"
           rel="noopener noreferrer"
         >
-          {contents}
+          <InstagramIcon />
+          <span>{label}</span>
         </a>
       ) : (
         <button
           type="button"
-          className={styles.instagramStatus}
-          title={title}
-          aria-label={title}
+          className={styles.status}
+          aria-label={
+            status
+              ? "Check Instagram connection"
+              : "Checking Instagram connection"
+          }
           disabled={!status}
-          onClick={() => setRetry((value) => value + 1)}
+          onClick={onCheck}
         >
-          {status ? (connected ? contents : "Check Instagram") : "Instagram"}
+          <InstagramIcon />
+          <span>{status ? label : "Checking…"}</span>
         </button>
       )}
+      {status?.needsAttention && status.connectUrl && (
+        <a
+          href={status.connectUrl}
+          className={styles.status}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Manage Instagram connections"
+        >
+          <InstagramIcon />
+          <span>Manage connection</span>
+        </a>
+      )}
       {status?.message && (
-        <span className={styles.instagramMessage} role="status">
+        <span className={styles.message} role="status">
           {status.message}
         </span>
       )}
-    </span>
+    </li>
+  )
+}
+
+/** Lucide no longer includes brand icons; match the site's Instagram glyph. */
+function InstagramIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      aria-hidden="true"
+    >
+      <rect x="3" y="3" width="18" height="18" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.3" cy="6.7" r="0.7" fill="currentColor" stroke="none" />
+    </svg>
   )
 }

@@ -17,10 +17,7 @@ import {
   instagramPostProposalSchema,
   type InstagramPostInput,
 } from "../../lib/admin/schemas"
-import {
-  formatStoreDateTime,
-  fromStoreDateTime,
-} from "../../lib/admin/store-time"
+import { fromStoreDateTime } from "../../lib/admin/store-time"
 import {
   idempotencyKey,
   instagramAccess,
@@ -35,19 +32,15 @@ const noun = ({ kind, photos }: InstagramPostInput) =>
 export default defineTool({
   deferred: true,
   description:
-    "Add an Instagram post (one photo, a carousel of 2–10, or a story), or change a draft or scheduled one by id. Send the complete post. Photos come from the media library (attached uploads/ photos, or a product's or news post's saved photos); each is converted to the JPEG Instagram takes and fitted to the post's frame. The owner sees the post as Instagram will show it and must approve: a draft stays in Zernio, now posts at once, and a store time schedules it up to 7 days ahead.",
+    "Add an Instagram post (one photo, a carousel of 2–10, or a story), or change a draft or scheduled one by id. Send the complete post. Photos come from the media library (attached uploads/ photos, or a product's or news post's saved photos); each is converted to the JPEG Instagram takes and fitted to the post's frame. The owner sees the post as Instagram will show it and must approve: a draft stays in Zernio, now posts at once, and a store time schedules it up to 7 days ahead. Approving, the owner picks which on the card.",
   inputSchema: instagramPostProposalSchema,
   approval: {
     request: always(),
-    prompt: ({ input }) => {
-      if (input.id) return `Save changes to this Instagram ${noun(input)}?`
-      if (input.when === "draft") {
-        return `Save this Instagram ${noun(input)} as a draft?`
-      }
-      if (input.when === "now")
-        return `Post this ${noun(input)} to Instagram now?`
-      return `Schedule this Instagram ${noun(input)} for ${formatStoreDateTime(input.when)}?`
-    },
+    // How it goes out is picked on the card, so the title doesn't say.
+    prompt: ({ input }) =>
+      input.id
+        ? `Save changes to this Instagram ${noun(input)}?`
+        : `Add this Instagram ${noun(input)}?`,
   },
   label: {
     start: (input) =>

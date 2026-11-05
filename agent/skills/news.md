@@ -22,6 +22,6 @@ Steps:
 
 1. For an edit, find the post with `news__list_news`, then `news__get_news_post` for its full record. For a new post, check with `news__list_news` that the slug is free.
 2. Write the post from the owner's words. Keep their wording and facts; fix only typos and obvious formatting. Link products the shop carries to `/products/<slug>` when they exist (load the `products` skill, discover `products__`, and check `products__list_catalog`).
-3. Ask whether to publish now, schedule it, or keep a draft, unless the owner said. The approval card has a Schedule button with a calendar: when the owner picks a time there, their message says "Schedule this post to go live … published_at "YYYY-MM-DDTHH:MM"". Call `news__save_news_post` again at once with the same post, `status` `published`, and that `published_at`, without asking anything.
-4. Call `news__save_news_post` with the complete post (with `id` when editing). The owner previews the card and the article and approves.
+3. Don't ask whether to publish now, schedule it, or keep a draft: approving, the owner picks Publish, Save draft, or Schedule on the card. Use what the owner said; otherwise propose a new post as `published` with `published_at` `"now"` (or a `draft` while it has no cover), and keep an edited post's own `status` and `published_at`.
+4. Call `news__save_news_post` with the complete post (with `id` when editing). The owner previews the card and the article and approves, or denies with a note on what to change.
 5. To delete, call `news__delete_news_post` with the id and title. Saving as a draft hides a post without deleting it.
