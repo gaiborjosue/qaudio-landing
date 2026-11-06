@@ -1,14 +1,15 @@
 // The admin chat's photos travel as lines in the owner's message, never as
 // eve attachments: `Photo uploaded: uploads/<uuid>.webp (1600×1200)`. The
 // chat hides the lines and shows the photos above the bubble; the agent
-// looks at a photo with view_photos, which hands the model its public URL.
+// looks at a photo with view_photos, which projects a fresh signed URL for
+// private uploads. Older public upload paths remain readable.
 // Pure, so the chat, the eve channel, and the agent's tool share it.
 // Relative imports, because the agent imports this too.
 
 export type PhotoLine = { path: string; width: number; height: number }
 
 const LINE =
-  /^Photo uploaded: (uploads\/[0-9a-f-]+\.(?:webp|jpg)) \((\d+)×(\d+)\)$/gm
+  /^Photo uploaded: (uploads\/(?:chat\/[0-9a-f-]{36}\/)?[0-9a-f-]+\.(?:webp|jpg)) \((\d+)×(\d+)\)$/gm
 
 /** The line a photo the owner attached rides on. */
 export const photoLine = ({ path, width, height }: PhotoLine) =>

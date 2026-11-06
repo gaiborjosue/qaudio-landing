@@ -25,6 +25,7 @@ import {
 } from "../lib/instagram"
 import { placeUploads } from "../lib/media"
 import { callerSupabase } from "../lib/supabase"
+import { retainInstagramMedia } from "../../lib/admin/media-lifecycle"
 
 const noun = ({ kind, photos }: InstagramPostInput) =>
   kind === "story" ? "story" : photos.length > 1 ? "carousel" : "post"
@@ -101,6 +102,12 @@ export default defineTool({
       path: place(photo.path),
     }))
     const frame = instagramFrame(input.kind, input.fit, photos[0])
+    const pendingReference = `pending:${ctx.session.id}:${ctx.callId}`
+    await retainInstagramMedia(
+      callerSupabase(ctx),
+      pendingReference,
+      photos.map((photo) => photo.path)
+    )
 
     // An edit that keeps the same photos and fit reuses the uploaded ones.
     const tune = existing?.tune
@@ -128,6 +135,13 @@ export default defineTool({
     const saved = input.id
       ? await updateInstagramPost(config, input.id, draft, accounts)
       : await createInstagramPost(config, draft, accounts, idempotencyKey(ctx))
+
+    await retainInstagramMedia(
+      callerSupabase(ctx),
+      saved.id,
+      photos.map((photo) => photo.path)
+    )
+    await retainInstagramMedia(callerSupabase(ctx), pendingReference, [])
 
     if (
       timing.mode === "now" &&

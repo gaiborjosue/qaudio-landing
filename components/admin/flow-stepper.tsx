@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useSyncExternalStore } from "react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { Check, Minus, Workflow } from "lucide-react"
 import type { FlowStepStatus, FlowView } from "@/lib/admin/flows"
 import styles from "./admin.module.css"
@@ -48,14 +48,15 @@ const runKey = (run: FlowView | null) =>
  * numbered dots and spring transitions), in the chat's monochrome. On wide
  * screens it's a vertical rail in the space left of the conversation, kept
  * clear of it; otherwise a strip above the thread. It follows the run by
- * itself (lib/admin/flows.ts flowState) and goes away once the owner moves
- * on. Motion goes still under reduced motion (the chat's MotionConfig).
+ * itself (lib/admin/flows.ts flowState) and collapses away as soon as the
+ * final step succeeds. Reduced motion dismisses it immediately.
  * It's read again on every update, so it skips redrawing while nothing
  * changed.
  */
 export const FlowStepper = memo(
   function FlowStepper({ run }: { run: FlowView | null }) {
     const rail = useRail()
+    const still = useReducedMotion()
     const current = run?.steps.findIndex((step) =>
       ["active", "waiting"].includes(step.status)
     )
@@ -64,15 +65,15 @@ export const FlowStepper = memo(
     return (
       <div className={styles.flowBar}>
         <AnimatePresence initial={false}>
-          {run && (
+          {run?.status === "active" && (
             <motion.section
               key={run.flow.id}
               className={styles.flow}
               aria-label={`${run.flow.name} flow`}
               initial={hidden}
               animate={{ opacity: 1, x: 0, height: "auto" }}
-              exit={hidden}
-              transition={EASE}
+              exit={{ ...hidden, height: 0 }}
+              transition={still ? { duration: 0 } : EASE}
             >
               <div className={styles.flowInner}>
                 <p className={styles.flowHeading}>
@@ -81,11 +82,9 @@ export const FlowStepper = memo(
                   </span>
                   <span className={styles.flowTitle}>{run.flow.name}</span>
                   <span className={styles.flowProgress} role="status">
-                    {run.status === "done"
-                      ? "Done"
-                      : current !== undefined && current >= 0
-                        ? `Step ${current + 1} of ${run.steps.length}`
-                        : ""}
+                    {current !== undefined && current >= 0
+                      ? `Step ${current + 1} of ${run.steps.length}`
+                      : ""}
                   </span>
                 </p>
                 <ol className={styles.flowSteps}>
@@ -100,39 +99,53 @@ export const FlowStepper = memo(
                         data-status={step.status}
                         aria-current={live ? "step" : undefined}
                       >
-                        <motion.span
-                          className={styles.flowDot}
-                          initial={false}
-                          animate={{ scale: live ? 1 : 0.86 }}
-                          transition={SPRING}
-                        >
-                          <AnimatePresence mode="wait" initial={false}>
-                            <motion.span
-                              key={lit ? step.status : "number"}
-                              className={styles.flowDotFace}
-                              initial={{ opacity: 0, scale: 0.6 }}
-                              animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.6 }}
-                              transition={{ duration: 0.16 }}
+                        <span className={styles.flowMarker}>
+                          {/* Keep the continuous CSS waves outside the dot's
+                              spring transform. They persist between active
+                              and waiting, with no JS work per frame. */}
+                          {live && (
+                            <span
+                              className={styles.flowPulse}
+                              aria-hidden="true"
                             >
-                              {step.status === "done" ? (
-                                <Check
-                                  size={13}
-                                  strokeWidth={2.5}
-                                  aria-hidden="true"
-                                />
-                              ) : step.status === "skipped" ? (
-                                <Minus
-                                  size={13}
-                                  strokeWidth={2.5}
-                                  aria-hidden="true"
-                                />
-                              ) : (
-                                index + 1
-                              )}
-                            </motion.span>
-                          </AnimatePresence>
-                        </motion.span>
+                              <span />
+                              <span />
+                            </span>
+                          )}
+                          <motion.span
+                            className={styles.flowDot}
+                            initial={false}
+                            animate={{ scale: live ? 1 : 0.86 }}
+                            transition={SPRING}
+                          >
+                            <AnimatePresence mode="wait" initial={false}>
+                              <motion.span
+                                key={lit ? step.status : "number"}
+                                className={styles.flowDotFace}
+                                initial={{ opacity: 0, scale: 0.6 }}
+                                animate={{ opacity: 1, scale: 1 }}
+                                exit={{ opacity: 0, scale: 0.6 }}
+                                transition={{ duration: 0.16 }}
+                              >
+                                {step.status === "done" ? (
+                                  <Check
+                                    size={13}
+                                    strokeWidth={2.5}
+                                    aria-hidden="true"
+                                  />
+                                ) : step.status === "skipped" ? (
+                                  <Minus
+                                    size={13}
+                                    strokeWidth={2.5}
+                                    aria-hidden="true"
+                                  />
+                                ) : (
+                                  index + 1
+                                )}
+                              </motion.span>
+                            </AnimatePresence>
+                          </motion.span>
+                        </span>
                         <span className={styles.flowLabel}>
                           {step.label}
                           <span className="visually-hidden">

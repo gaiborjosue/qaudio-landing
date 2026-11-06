@@ -85,7 +85,8 @@ const internal = (path) =>
   import(pathToFileURL(resolve(eveRoot, "dist/src", path)).href)
 const { buildStepCatalog } = await internal("execution/catalog/step-catalog.js")
 const { BundleKey } = await internal("runtime/sessions/runtime-context-keys.js")
-const { toInputSchema } = await internal("tools/schema.js")
+const { toInputSchema, serializeModelInputSchema } =
+  await internal("tools/schema.js")
 const { checkToolCallInput } = await internal("harness/tool-call-io.js")
 const { previewToolName, SAVE_TOOLS } =
   await import("../lib/admin/tool-names.ts")
@@ -106,12 +107,40 @@ const bundle = {
   resolvedAgent: { skills: manifest.skills },
   subagentRegistry: { dynamicResolvers: [] },
 }
+// Private photo results need the current caller when replayed, so this helper
+// is now a dynamic definition. Its schema and advertised name stay the same.
+const { viewPhotosFor } = await import("../agent/tools/view_photos.ts")
+assert(manifest.dynamicTools.some((entry) => entry.slug === "view_photos"))
+const viewPhotos = viewPhotosFor()
+tools.set("view_photos", {
+  ...viewPhotos,
+  name: "view_photos",
+  inputSchema: toInputSchema(viewPhotos.inputSchema),
+})
 const catalog = buildStepCatalog({
   agentTools: tools,
   ctx: { get: (key) => (key === BundleKey ? bundle : undefined) },
   session: {},
   endsTurn: true,
 })
+// Anthropic validates tool schemas as draft 2020-12, even on a greeting.
+// eve rc.1 emits draft-07: its tuple `items: []` is invalid in that dialect.
+function checkArraySchemas(schema, path) {
+  if (!schema || typeof schema !== "object") return
+  assert(
+    !Array.isArray(schema.items),
+    `${path}.items must be a schema, not a draft-07 tuple`
+  )
+  for (const [key, value] of Object.entries(schema)) {
+    if (["default", "const", "enum", "examples"].includes(key)) continue
+    checkArraySchemas(value, `${path}.${key}`)
+  }
+}
+for (const [name, entry] of new Map([
+  ...catalog.advertised,
+  ...catalog.deferred,
+]))
+  checkArraySchemas(serializeModelInputSchema(entry.inputSchema), name)
 assert.equal(catalog.deferred.size, 21)
 assert.deepEqual(
   [...tools.values()]
@@ -439,5 +468,5 @@ assert.deepEqual(
   ["products/sample.webp", "uploads/sample.webp"]
 )
 console.log(
-  "Catalog verified: 21 deferred (hours 4, products 5, news 4, deals 3, instagram 5); 7 authored direct helpers; discovery across groups; canonical routing; all 13 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 30 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
+  "Catalog verified: 21 deferred (hours 4, products 5, news 4, deals 3, instagram 5); 7 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 13 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 30 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
 )

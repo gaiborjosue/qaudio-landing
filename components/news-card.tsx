@@ -4,6 +4,7 @@ import Link from "next/link"
 import { ArrowUpRight } from "lucide-react"
 import { formatNewsDate, type NewsSummary } from "@/lib/news"
 import styles from "./news-feed.module.css"
+import { isPrivateMediaUrl } from "@/lib/media"
 
 // Cult UI's CutoutCard corner: a concave fillet that blends a notch into the
 // photo's edge. Unrotated, it fills the bottom-right of its box.
@@ -33,6 +34,8 @@ type NewsCardProps = {
   priority?: boolean
   /** Order within a freshly loaded page, for the entrance stagger. */
   stagger?: number
+  /** Smaller type and image downloads in the admin's side-by-side preview. */
+  compact?: boolean
 }
 
 /**
@@ -47,11 +50,13 @@ export function NewsCard({
   total,
   priority = false,
   stagger,
+  compact = false,
 }: NewsCardProps) {
   const titleId = `news-${post.slug}`
   return (
     <article
       className={styles.card}
+      data-compact={compact || undefined}
       aria-labelledby={titleId}
       aria-posinset={position}
       aria-setsize={total}
@@ -65,9 +70,14 @@ export function NewsCard({
       <div className={styles.media} data-fit={post.cover.fit}>
         <Image
           src={post.cover.src}
+          unoptimized={isPrivateMediaUrl(post.cover.src)}
           alt=""
           fill
-          sizes={NEWS_CARD_SIZES}
+          sizes={
+            compact
+              ? "(max-width: 520px) calc(100vw - 96px), 240px"
+              : NEWS_CARD_SIZES
+          }
           loading={priority ? "eager" : "lazy"}
           fetchPriority={priority ? "high" : undefined}
         />

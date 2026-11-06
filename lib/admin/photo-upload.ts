@@ -1,9 +1,16 @@
 import { UPLOADS } from "@/lib/admin/schemas"
 import { browserSupabase } from "@/lib/supabase/browser"
+import {
+  CHAT_BUCKET,
+  PRIVATE_CACHE_SECONDS,
+  discardStagedMedia,
+  mediaSessionEvent,
+  registerChatImage,
+} from "./media-lifecycle"
 
 // Photos the owner adds in the admin chat: shrunk in the browser, then
-// uploaded as the admin (RLS) to media/uploads/, where the save tool that
-// uses one copies it into place.
+// uploaded as the admin (RLS). Chat photos are private and tracked; product
+// editor photos retain their existing media/uploads/ staging behavior.
 
 /** Largest original the chat accepts; it's shrunk well below this. */
 export const PHOTO_MAX_BYTES = 20e6
@@ -43,7 +50,12 @@ export async function uploadPhoto(
   {
     onProgress,
     signal,
-  }: { onProgress: (fraction: number) => void; signal?: AbortSignal }
+    mediaSession,
+  }: {
+    onProgress: (fraction: number) => void
+    signal?: AbortSignal
+    mediaSession?: { id: string; eve?: string }
+  }
 ): Promise<UploadedPhoto> {
   const cancelled = () => new DOMException("Upload cancelled.", "AbortError")
   const { blob, width, height } = await encodePhoto(file)
@@ -53,13 +65,29 @@ export async function uploadPhoto(
   if (!token) throw new Error("Sign in again to upload photos.")
 
   const extension = blob.type === "image/webp" ? "webp" : "jpg"
-  const path = `${UPLOADS}${crypto.randomUUID()}.${extension}`
+  const client = browserSupabase()
+  const session =
+    mediaSession &&
+    (await mediaSessionEvent(
+      client,
+      mediaSession.id,
+      mediaSession.eve ?? null,
+      "draft"
+    ))
+  const path = session
+    ? await registerChatImage(client, session, extension)
+    : `${UPLOADS}${crypto.randomUUID()}.${extension}`
+  const bucket = session ? CHAT_BUCKET : "media"
+  if (signal?.aborted) {
+    if (session) await discardStagedMedia(client, path).catch(() => {})
+    throw cancelled()
+  }
   try {
     await new Promise<void>((resolve, reject) => {
       const request = new XMLHttpRequest()
       request.open(
         "POST",
-        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/media/${path}`
+        `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/${bucket}/${path}`
       )
       request.setRequestHeader("Authorization", `Bearer ${token}`)
       request.setRequestHeader(
@@ -67,8 +95,11 @@ export async function uploadPhoto(
         process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!
       )
       request.setRequestHeader("Content-Type", blob.type)
-      // Names never repeat, so a year's cache is safe.
-      request.setRequestHeader("Cache-Control", "max-age=31536000")
+      // Disposable chat images get a short cache; editor uploads keep theirs.
+      request.setRequestHeader(
+        "Cache-Control",
+        `max-age=${session ? PRIVATE_CACHE_SECONDS : "31536000"}`
+      )
       request.setRequestHeader("x-upsert", "false")
       request.upload.onprogress = (event) => {
         if (event.lengthComputable) onProgress(event.loaded / event.total)
@@ -100,7 +131,5 @@ export async function uploadPhoto(
  * from here.
  */
 export async function discardUpload(path: string) {
-  if (!path.startsWith(UPLOADS)) return
-  const { error } = await browserSupabase().storage.from("media").remove([path])
-  if (error) throw error
+  return discardStagedMedia(browserSupabase(), path)
 }

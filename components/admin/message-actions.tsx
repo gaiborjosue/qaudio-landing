@@ -9,6 +9,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
+import { formatCost, type ResponseUsage } from "@/lib/admin/response-usage"
 import styles from "./admin.module.css"
 
 /** A message's icon action: a ghost button with its label as a tooltip. */
@@ -66,14 +67,68 @@ export function CopyAction({ text }: { text: string }) {
 }
 
 /** Shows the models recorded for this reply, including after session replay. */
-export function ModelInfoAction({ models }: { models: readonly string[] }) {
+export function ModelInfoAction({
+  messageId,
+  getUsage,
+}: {
+  messageId: string
+  getUsage: (id: string) => ResponseUsage
+}) {
+  const [usage, setUsage] = useState<ResponseUsage | null>(null)
   return (
-    <MessageAction
-      label={
-        models.length > 0 ? `Model: ${models.join(", ")}` : "Model unavailable"
-      }
+    <Tooltip
+      onOpenChange={(open) => {
+        if (open) setUsage(getUsage(messageId))
+      }}
     >
-      <Info aria-hidden="true" />
-    </MessageAction>
+      <TooltipTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Response info"
+            className={styles.messageAction}
+          />
+        }
+      >
+        <Info aria-hidden="true" />
+      </TooltipTrigger>
+      <TooltipContent
+        className={`${styles.usageTooltip} motion-reduce:animate-none`}
+      >
+        {usage && (
+          <>
+            <p>
+              {usage.scope === "flow" ? "Flow" : "Response"}{" "}
+              {usage.partial ? "recorded cost" : "total cost"}:{" "}
+              <strong>
+                {formatCost(usage.totalUsd)}
+                {usage.partial && usage.totalUsd !== null ? "+" : ""}
+              </strong>
+            </p>
+            {usage.models.length ? (
+              <dl>
+                {usage.models.map((entry) => (
+                  <div key={entry.model}>
+                    <dt>{entry.model}</dt>
+                    <dd>
+                      {formatCost(entry.costUsd)}
+                      {entry.partial && entry.costUsd !== null ? "+" : ""}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            ) : (
+              <p>Model unavailable</p>
+            )}
+            {usage.partial && <p>Some model costs weren’t recorded.</p>}
+            <p>
+              USD · Model and image calls. Routing, memory, and hosting charges
+              aren’t included.
+            </p>
+          </>
+        )}
+      </TooltipContent>
+    </Tooltip>
   )
 }

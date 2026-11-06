@@ -1,7 +1,7 @@
 "use client"
 
 import { memo, useEffect, useRef, useState } from "react"
-import { Maximize2, X } from "lucide-react"
+import { Maximize2, Pencil, X } from "lucide-react"
 import type { EveToolPart } from "eve/react"
 import { AsciiWake } from "@/components/ascii-wake"
 import type { ChatActions } from "./chat-actions"
@@ -31,6 +31,7 @@ type Output = {
   /** Older chats: the design picked from two. */
   chosen?: StoryImage
   problem?: string
+  review?: string
 }
 
 /** The estimated share done, re-read four times a second while designing. */
@@ -50,7 +51,7 @@ function useProgress(startedAt: number | undefined, running: boolean) {
  * placeholder whose whole ground is Bencho's ASCII wake to play with, the
  * estimated progress over it; then the design itself, in color (it's what
  * will be posted), with a button at its top right to see it large. The
- * owner approves it on the story's own card, which follows.
+ * owner can edit it or Continue to the story's separate approval card.
  */
 export const StoryDesigns = memo(function StoryDesigns({
   part,
@@ -61,25 +62,36 @@ export const StoryDesigns = memo(function StoryDesigns({
 }) {
   const editing = part.name === "edit_story"
   const output = (part.output ?? {}) as Output
-  const failed =
-    part.state === "failed" || part.state === "cancelled"
-      ? (part.error?.message ?? "The story couldn’t be designed.")
-      : output.status === "failed"
-        ? (output.problem ?? "The story couldn’t be designed.")
-        : null
   const design =
     output.design ??
     output.chosen ??
     (output.images?.length === 1 ? output.images[0] : undefined)
   // Older chats designed two at once; show them all.
   const images = design ? [design] : (output.images ?? [])
+  // Cancelling a review must not discard an image already made.
+  const failed = images.length
+    ? null
+    : part.state === "failed" || part.state === "cancelled"
+      ? (part.error?.message ?? "The story couldn’t be designed.")
+      : output.status === "failed"
+        ? (output.problem ?? "The story couldn’t be designed.")
+        : null
   const designing =
     !failed &&
     images.length === 0 &&
     !["completed", "rejected"].includes(part.state)
   const progress = useProgress(output.started_at, designing)
-  const [viewing, setViewing] = useState<StoryImage | null>(null)
+  const [viewing, setViewing] = useState<{
+    image: StoryImage
+    editing: boolean
+  } | null>(null)
+  const [continuing, setContinuing] = useState(false)
+  const [problem, setProblem] = useState("")
   const opener = useRef<HTMLButtonElement | null>(null)
+  const reviewing =
+    output.review === "waiting" &&
+    part.interaction?.status === "open" &&
+    !part.interaction.answer
 
   if (failed) {
     return (
@@ -134,30 +146,78 @@ export const StoryDesigns = memo(function StoryDesigns({
               {/* eslint-disable-next-line @next/next/no-img-element -- a generated design in storage, of known size */}
               <img
                 className={styles.storyImage}
+                crossOrigin="anonymous"
                 src={mediaUrl(image.path)}
                 width={image.width}
                 height={image.height}
                 alt={name}
               />
-              <button
-                type="button"
-                className={styles.storyExpand}
-                aria-label={`View ${name.toLowerCase()} larger`}
-                title="View larger"
-                onClick={(event) => {
-                  opener.current = event.currentTarget
-                  setViewing(image)
-                }}
-              >
-                <Maximize2 size={14} strokeWidth={2} aria-hidden="true" />
-              </button>
+              <div className={styles.storyControls}>
+                <button
+                  type="button"
+                  className={styles.storyExpand}
+                  aria-label={`Edit ${name.toLowerCase()}`}
+                  title="Edit image"
+                  disabled={actions.resuming || continuing}
+                  onClick={(event) => {
+                    opener.current = event.currentTarget
+                    setViewing({ image, editing: true })
+                  }}
+                >
+                  <Pencil size={14} strokeWidth={2} aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className={styles.storyExpand}
+                  aria-label={`View ${name.toLowerCase()} larger`}
+                  title="View larger"
+                  onClick={(event) => {
+                    opener.current = event.currentTarget
+                    setViewing({ image, editing: false })
+                  }}
+                >
+                  <Maximize2 size={14} strokeWidth={2} aria-hidden="true" />
+                </button>
+              </div>
             </div>
           )
         })}
       </div>
+      {reviewing && (
+        <button
+          type="button"
+          className={styles.primary}
+          disabled={actions.resuming || continuing}
+          onClick={async () => {
+            if (!part.interaction || continuing) return
+            setContinuing(true)
+            setProblem("")
+            try {
+              await actions.respond([
+                {
+                  interactionId: part.interaction.interactionId,
+                  optionId: "continue",
+                },
+              ])
+            } catch {
+              setProblem("Couldn't continue. Try again.")
+            } finally {
+              setContinuing(false)
+            }
+          }}
+        >
+          {continuing ? "Continuing…" : "Continue"}
+        </button>
+      )}
+      {problem && (
+        <p className={styles.error} role="alert">
+          {problem}
+        </p>
+      )}
       {viewing && (
         <StoryViewer
-          image={viewing}
+          image={viewing.image}
+          initiallyEditing={viewing.editing}
           actions={actions}
           onClose={() => {
             setViewing(null)
@@ -177,16 +237,18 @@ export const StoryDesigns = memo(function StoryDesigns({
  */
 function StoryViewer({
   image,
+  initiallyEditing,
   actions,
   onClose,
 }: {
   image: StoryImage
+  initiallyEditing: boolean
   actions: ChatActions
   onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const [zones, setZones] = useState(false)
-  const [editing, setEditing] = useState(false)
+  const [editing, setEditing] = useState(initiallyEditing)
 
   useEffect(() => {
     const element = dialog.current
@@ -250,6 +312,7 @@ function StoryViewer({
           <figure className={styles.storyViewerFrame}>
             {/* eslint-disable-next-line @next/next/no-img-element -- a generated design in storage, of known size */}
             <img
+              crossOrigin="anonymous"
               src={mediaUrl(image.path)}
               width={image.width}
               height={image.height}

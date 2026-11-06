@@ -3,11 +3,13 @@ import { z } from "zod"
 import { isViewablePath } from "../../lib/admin/photo-lines"
 import { STORY_PHOTOS_MAX, type StoryImage } from "../../lib/admin/story-images"
 import { designStory } from "../lib/story"
+import { reviewStory } from "../lib/story-review"
+import type { ModelCost } from "../../lib/admin/model-cost"
 
 // Designs an Instagram story with the image model (lib/admin/story-images.ts):
 // one design, fitted to Instagram's 1080 × 1920 frame, which the chat shows
-// as it's made. The owner approves it on the story's own card, or denies it
-// with what to change. A workflow tool, so the paid request runs once, in a
+// as it's made, then pauses for Continue or edit feedback. Posting still
+// needs its own approval. The paid request runs once, in a
 // step that never throws, and progress reaches the chat as it goes.
 
 export type StoryOutput =
@@ -19,12 +21,15 @@ export type StoryOutput =
       images: StoryImage[]
       /** The design, for the story: its path and size. */
       design: StoryImage
+      usage: ModelCost[]
+      review: "waiting" | "continued" | "changes_requested" | "interrupted"
+      feedback?: string
     }
-  | { status: "failed"; problem: string }
+  | { status: "failed"; problem: string; usage?: ModelCost[] }
 
 export default defineWorkflowTool({
   description:
-    "Create the FIRST Instagram story image with GPT Image: one vertical 1080 × 1920 design with the Q Audio logo, from your brief and the owner's photos. Returns the design (path, width, height): propose it right away with instagram__save_post as a story. For ALL changes to an existing story design use edit_story (FLUX Klein) with that image, never call this again for feedback or revisions. Takes about half a minute and costs money: use it only for a sale story or when the owner asks for a new designed story. Never automatically retry a failed or uncertain request.",
+    "Create the FIRST Instagram story image with GPT Image: one vertical 1080 × 1920 design with the Q Audio logo, from your brief and the owner's photos. Pauses on the design for the owner's Continue or edit feedback. Only review continued means propose it with instagram__save_post as a story; changes_requested means edit_story with that image and feedback instead, and interrupted means stop. For ALL changes use edit_story (FLUX Klein), never call this again for revisions. Takes about half a minute and costs money: use it only for a sale story or when the owner asks for a new designed story. Never automatically retry a failed or uncertain request.",
   inputSchema: z.object({
     brief: z
       .string()
@@ -66,15 +71,20 @@ export default defineWorkflowTool({
     yield { status: "designing", started_at: started, count: 1 }
     const result = await design(input, ctx)
     if ("problem" in result)
-      return { status: "failed", problem: result.problem }
+      return { status: "failed", problem: result.problem, usage: result.usage }
     const [image] = result.images
-    return {
-      status: "ready",
+    const output: StoryOutput = {
+      status: "ready" as const,
       started_at: started,
       count: 1,
       images: [image],
       design: image,
+      usage: result.usage,
+      review: "waiting" as const,
     }
+    yield output
+    const review = await reviewStory(ctx)
+    return { ...output, ...review }
   },
 })
 

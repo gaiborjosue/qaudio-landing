@@ -263,6 +263,35 @@
   line-clamp: 2;
 }
 
+/* The same feed card at the admin preview's smaller scale. */
+.card[data-compact] {
+  border-radius: 16px;
+}
+.card[data-compact] .body {
+  padding: 12px;
+}
+.card[data-compact] .title {
+  font-size: 17px;
+}
+.card[data-compact] .excerpt {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.card[data-compact] .date {
+  padding: 10px 12px 6px;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+}
+.card[data-compact] .icon {
+  width: 28px;
+  height: 28px;
+  margin: 6px 6px 0 0;
+}
+.card[data-compact] .media[data-fit="contain"] img {
+  padding: 12px;
+}
+
 @media (hover: hover) and (pointer: fine) {
   .card:hover {
     box-shadow:

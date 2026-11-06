@@ -145,6 +145,118 @@ export type Database = {
         }
         Relationships: []
       }
+      media_assets: {
+        Row: {
+          attempts: number
+          bucket_id: string
+          created_at: string
+          expires_at: string
+          last_error: string | null
+          lease_until: string
+          managed: boolean
+          owner_id: string | null
+          path: string
+          sent_at: string | null
+          session_id: string | null
+          state: string
+        }
+        Insert: {
+          attempts?: number
+          bucket_id: string
+          created_at?: string
+          expires_at?: string
+          last_error?: string | null
+          lease_until?: string
+          managed?: boolean
+          owner_id?: string | null
+          path: string
+          sent_at?: string | null
+          session_id?: string | null
+          state?: string
+        }
+        Update: {
+          attempts?: number
+          bucket_id?: string
+          created_at?: string
+          expires_at?: string
+          last_error?: string | null
+          lease_until?: string
+          managed?: boolean
+          owner_id?: string | null
+          path?: string
+          sent_at?: string | null
+          session_id?: string | null
+          state?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "media_upload_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_references: {
+        Row: {
+          bucket_id: string
+          path: string
+          record_id: string
+          source: string
+        }
+        Insert: {
+          bucket_id: string
+          path: string
+          record_id: string
+          source: string
+        }
+        Update: {
+          bucket_id?: string
+          path?: string
+          record_id?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_references_bucket_id_path_fkey"
+            columns: ["bucket_id", "path"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["bucket_id", "path"]
+          },
+        ]
+      }
+      media_upload_sessions: {
+        Row: {
+          active_turn: boolean
+          ended_at: string | null
+          eve_session_id: string | null
+          id: string
+          last_active_at: string
+          owner_id: string
+          started_at: string | null
+        }
+        Insert: {
+          active_turn?: boolean
+          ended_at?: string | null
+          eve_session_id?: string | null
+          id?: string
+          last_active_at?: string
+          owner_id: string
+          started_at?: string | null
+        }
+        Update: {
+          active_turn?: boolean
+          ended_at?: string | null
+          eve_session_id?: string | null
+          id?: string
+          last_active_at?: string
+          owner_id?: string
+          started_at?: string | null
+        }
+        Relationships: []
+      }
       news_posts: {
         Row: {
           body: Json
@@ -392,7 +504,35 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      attach_media_uploads: {
+        Args: { p_paths: string[]; p_session: string }
+        Returns: undefined
+      }
+      claim_media_cleanup: {
+        Args: { p_dry_run?: boolean; p_limit?: number; p_token: string }
+        Returns: {
+          bucket_id: string
+          path: string
+        }[]
+      }
+      complete_media_cleanup: {
+        Args: {
+          p_bucket: string
+          p_path: string
+          p_success: boolean
+          p_token: string
+        }
+        Returns: undefined
+      }
+      discard_media_upload: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
+      media_session_event: {
+        Args: { p_eve?: string; p_event?: string; p_id: string }
+        Returns: string
+      }
       news_feed: {
         Args: {
           after_id?: string
@@ -412,8 +552,24 @@ export type Database = {
           title: string
         }[]
       }
+      pin_media_asset: {
+        Args: { p_bucket: string; p_path: string }
+        Returns: undefined
+      }
+      prepare_media_copy: {
+        Args: { p_bucket: string; p_destination: string; p_path: string }
+        Returns: undefined
+      }
+      register_media_upload: {
+        Args: { p_bucket: string; p_path: string; p_session?: string }
+        Returns: undefined
+      }
       reorder_catalog_metadata: {
         Args: { expected: string[]; kind: string; ordered: string[] }
+        Returns: undefined
+      }
+      set_instagram_media: {
+        Args: { p_id: string; p_paths: string[] }
         Returns: undefined
       }
     }

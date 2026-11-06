@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import Image from "next/image"
 import { previewToolName } from "@/lib/admin/tool-names"
 import { DealCard } from "@/components/deal-card"
@@ -160,7 +161,7 @@ function withDescription(input: unknown) {
  * doesn't parse shows as a note instead of a broken preview. Listings and
  * cards are inert, so their links can't leave the chat.
  */
-export function ChangePreview({
+export const ChangePreview = memo(function ChangePreview({
   tool,
   input,
   data,
@@ -362,14 +363,29 @@ export function ChangePreview({
             )}
             {!card && " · Needs a cover photo to publish"}
           </Note>
-          {card && (
-            <div className={styles.cardPreview} inert>
-              <NewsCard post={card} position={1} total={1} />
-            </div>
-          )}
-          <div className={styles.articlePreview}>
-            <p className={styles.articleTitle}>{parsed.data.title}</p>
-            <NewsBody blocks={body} />
+          <div className={styles.newsPreview}>
+            {card && (
+              <section
+                aria-label="News feed preview"
+                className={styles.newsGridPreview}
+              >
+                <p className={styles.newsPreviewLabel}>Feed</p>
+                <div inert>
+                  <NewsCard post={card} position={1} total={1} compact />
+                </div>
+              </section>
+            )}
+            <section
+              aria-label="News article preview"
+              className={styles.newsArticlePreview}
+              tabIndex={0}
+            >
+              <p className={styles.newsPreviewLabel}>Article</p>
+              <div>
+                <p className={styles.articleTitle}>{parsed.data.title}</p>
+                <NewsBody blocks={body} compact />
+              </div>
+            </section>
           </div>
         </>
       )
@@ -443,4 +459,4 @@ export function ChangePreview({
     }
   }
   return <Note>No preview for this change.</Note>
-}
+})

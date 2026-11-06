@@ -12,11 +12,20 @@ export const STORY_REGIONS_MAX = 12
 
 /** BFL's axis order: top, left, bottom, right; each axis runs 0–1000. */
 const coordinate = z.number().int().min(0).max(1000)
+// A homogeneous array stays valid in draft 2020-12 when eve emits draft-07.
+// A Zod tuple would emit `items: []`, which Anthropic rejects for every turn.
 export const storyBox = z
-  .tuple([coordinate, coordinate, coordinate, coordinate])
+  .array(coordinate)
+  .length(4)
   .refine(([top, left, bottom, right]) => bottom > top && right > left, {
     message: "Give the region a width and height.",
   })
+  .transform(([top, left, bottom, right]): [number, number, number, number] => [
+    top,
+    left,
+    bottom,
+    right,
+  ])
 export type StoryBox = z.infer<typeof storyBox>
 
 export const storyRegion = z

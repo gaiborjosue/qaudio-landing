@@ -26,7 +26,8 @@ registerHooks({
 process.env.NEXT_PUBLIC_SUPABASE_URL = "https://project.supabase.co"
 const lines = await import("../lib/admin/photo-lines.ts")
 const { sentPhotos } = await import("../lib/admin/chat-photos.ts")
-const { default: viewPhotos } = await import("../agent/tools/view_photos.ts")
+const { viewPhotosFor } = await import("../agent/tools/view_photos.ts")
+const viewPhotos = viewPhotosFor()
 
 const upload = "uploads/0b6f5a5e-1c2d-4e3f-8a9b-0c1d2e3f4a5b.webp"
 const media = (path) =>
@@ -139,7 +140,7 @@ test("view_photos hands the model public URLs, checked first", async (t) => {
     output.missing.map((item) => item.path),
     ["products/missing.webp", "news/text.webp"]
   )
-  const model = viewPhotos.toModelOutput(output)
+  const model = await viewPhotos.toModelOutput(output)
   assert.equal(model.type, "content")
   assert.deepEqual(model.value[1], {
     type: "file",

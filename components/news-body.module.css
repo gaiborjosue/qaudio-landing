@@ -14,7 +14,8 @@
   font-weight: 600;
 }
 
-.body a {
+.body a,
+.body .previewLink {
   color: #111;
   text-decoration: underline;
   text-decoration-color: rgb(0 0 0 / 0.35);
@@ -101,6 +102,24 @@
 
 .body > :last-child {
   margin-bottom: 0;
+}
+
+.body[data-compact] {
+  font-size: 13px;
+  line-height: 1.65;
+}
+.body[data-compact] h2 {
+  font-size: 18px;
+}
+.body[data-compact] blockquote {
+  padding-left: 12px;
+  font-size: 19px;
+}
+.body[data-compact] figure {
+  margin-block: 1.2em;
+}
+.body[data-compact] img {
+  border-radius: 10px;
 }
 
 @media (max-width: 640px) {

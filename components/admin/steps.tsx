@@ -1,5 +1,6 @@
 "use client"
 
+import { memo } from "react"
 import type { EveToolPart } from "eve/react"
 import {
   Trace,
@@ -31,7 +32,7 @@ function status(part: EveToolPart) {
   return undefined
 }
 
-function Step({ part }: { part: EveToolPart }) {
+const Step = memo(function Step({ part }: { part: EveToolPart }) {
   const state = status(part)
   return (
     <TraceLine status={state} className={styles.step}>
@@ -39,7 +40,7 @@ function Step({ part }: { part: EveToolPart }) {
       {state === "error" && <TraceDescription>Failed</TraceDescription>}
     </TraceLine>
   )
-}
+})
 
 /**
  * A run of the agent's working steps (reads, lookups) between its words and
@@ -47,50 +48,55 @@ function Step({ part }: { part: EveToolPart }) {
  * Trace): it names the step under way, or the last real one, and expands
  * into the whole trail.
  */
-export function Steps({ parts }: { parts: EveToolPart[] }) {
-  const active = parts.findLast((part) => RUNNING.has(part.state))
-  const lead = active ?? parts.findLast((part) => !isPrep(part))
-  const running = active !== undefined
-  const title =
-    lead && !isPrep(lead)
-      ? lead.label
-      : running
-        ? "Checking the details"
-        : "Checked the details"
-  const summary = (
-    <TraceLine
-      status={running ? "running" : lead && status(lead)}
-      className={styles.step}
-    >
-      <TraceTitle>{title}</TraceTitle>
-      {parts.length > 1 && (
-        <TraceDescription>{parts.length} steps</TraceDescription>
-      )}
-    </TraceLine>
-  )
+export const Steps = memo(
+  function Steps({ parts }: { parts: EveToolPart[] }) {
+    const active = parts.findLast((part) => RUNNING.has(part.state))
+    const lead = active ?? parts.findLast((part) => !isPrep(part))
+    const running = active !== undefined
+    const title =
+      lead && !isPrep(lead)
+        ? lead.label
+        : running
+          ? "Checking the details"
+          : "Checked the details"
+    const summary = (
+      <TraceLine
+        status={running ? "running" : lead && status(lead)}
+        className={styles.step}
+      >
+        <TraceTitle>{title}</TraceTitle>
+        {parts.length > 1 && (
+          <TraceDescription>{parts.length} steps</TraceDescription>
+        )}
+      </TraceLine>
+    )
 
-  if (parts.length === 1 && !isPrep(parts[0])) {
+    if (parts.length === 1 && !isPrep(parts[0])) {
+      return (
+        <Trace>
+          <Step part={parts[0]} />
+        </Trace>
+      )
+    }
+
     return (
       <Trace>
-        <Step part={parts[0]} />
+        <TraceCollapsible>
+          <TraceCollapsibleTrigger className={styles.stepsTrigger}>
+            {summary}
+          </TraceCollapsibleTrigger>
+          <TraceCollapsibleContent className={styles.stepsTrail}>
+            <Trace>
+              {parts.map((part) => (
+                <Step key={part.callId} part={part} />
+              ))}
+            </Trace>
+          </TraceCollapsibleContent>
+        </TraceCollapsible>
       </Trace>
     )
-  }
-
-  return (
-    <Trace>
-      <TraceCollapsible>
-        <TraceCollapsibleTrigger className={styles.stepsTrigger}>
-          {summary}
-        </TraceCollapsibleTrigger>
-        <TraceCollapsibleContent keepMounted className={styles.stepsTrail}>
-          <Trace>
-            {parts.map((part) => (
-              <Step key={part.callId} part={part} />
-            ))}
-          </Trace>
-        </TraceCollapsibleContent>
-      </TraceCollapsible>
-    </Trace>
-  )
-}
+  },
+  (a, b) =>
+    a.parts.length === b.parts.length &&
+    a.parts.every((part, index) => part === b.parts[index])
+)

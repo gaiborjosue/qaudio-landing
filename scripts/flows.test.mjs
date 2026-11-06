@@ -391,13 +391,28 @@ test("the stepper follows a flow run through the conversation", () => {
   assert.deepEqual(
     view(
       owner(),
+      progress({ flow: "product-sale", step: "instagram" }),
+      call("design_story", {}, "completed"),
+      call("instagram__save_post", {}, "rejected"),
+      owner("Make the text smaller"),
+      call("edit_story", {}, "blocked")
+    ),
+    {
+      status: "active",
+      steps: ["done", "done", "done", "done", "waiting", "pending"],
+    }
+  )
+  assert.deepEqual(
+    view(
+      owner(),
       progress({ flow: "news-instagram" }),
       call("news__save_news_post", {}, "rejected"),
       owner("Shorter title")
     ),
     { status: "active", steps: ["active", "pending"] }
   )
-  // The last step saved finishes it; it stays until the owner moves on.
+  // The last successful save completes the run immediately. Its metadata
+  // remains available even though the stepper dismisses completed runs.
   const finished = [
     owner(),
     progress({ flow: "news-instagram" }),

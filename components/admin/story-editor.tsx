@@ -115,6 +115,7 @@ export function StoryEditor({
         <div className={styles.canvas} style={{ width }}>
           {/* eslint-disable-next-line @next/next/no-img-element -- the stored story, at its exact frame */}
           <img
+            crossOrigin="anonymous"
             src={mediaUrl(image.path)}
             alt="Story image to edit"
             width={image.width}

@@ -18,6 +18,13 @@ import {
 import { photoContext, photoLines } from "../../lib/admin/photo-lines"
 import { readStoryEdit } from "../../lib/admin/story-edits"
 import {
+  MEDIA_SESSION_ATTRIBUTE,
+  UUID,
+  attachChatImages,
+  isPrivateUpload,
+  mediaSessionEvent,
+} from "../../lib/admin/media-lifecycle"
+import {
   STORE_TIME_ZONE,
   WEEKDAYS,
   storeClock,
@@ -27,6 +34,7 @@ import {
   ACCESS_TOKEN_ATTRIBUTE,
   supabaseIssuer,
   verifyAdminToken,
+  callerSupabase,
 } from "../lib/supabase"
 
 // The admin chat (/admin) sends the signed-in admin's Supabase access token as
@@ -79,17 +87,51 @@ export default eveChannel({
   // which are on and when each applies (lib/admin/flows.ts), with a nudge
   // when the message is about a sale. Photos the message attaches get a
   // reminder to look at them.
-  onMessage: (ctx, message) => {
+  onMessage: async (ctx, message) => {
     const auth = defaultEveAuth(ctx)
+    const clientContext = ctx.eve.clientContext
+    const mediaSession =
+      clientContext &&
+      typeof clientContext === "object" &&
+      !Array.isArray(clientContext)
+        ? (clientContext as Record<string, unknown>).mediaSession
+        : undefined
     const flows = flowsFromClient(ctx.eve.clientContext) ?? [...FLOW_IDS]
     const text = messageText(message)
+    const attached = photoLines(text)
+    if (
+      auth?.principalType === "user" &&
+      attached.some((photo) => isPrivateUpload(photo.path))
+    ) {
+      const client = callerSupabase({ session: { auth: { current: auth } } })
+      const session = await mediaSessionEvent(
+        client,
+        typeof mediaSession === "string" && UUID.test(mediaSession)
+          ? mediaSession
+          : null,
+        ctx.eve.sessionId ?? null,
+        "draft"
+      )
+      await attachChatImages(
+        client,
+        session,
+        attached.map((photo) => photo.path)
+      )
+    }
     const storyEdit = readStoryEdit(text)
     const hint = storyEdit ? null : flowHint(text, flows)
-    const photos = photoContext(photoLines(text))
+    const photos = photoContext(attached)
     return {
       auth: auth && {
         ...auth,
-        attributes: { ...auth.attributes, [FLOW_ATTRIBUTE]: flows },
+        attributes: {
+          ...auth.attributes,
+          [FLOW_ATTRIBUTE]: flows,
+          ...(typeof mediaSession === "string" &&
+            UUID.test(mediaSession) && {
+              [MEDIA_SESSION_ATTRIBUTE]: mediaSession,
+            }),
+        },
       },
       clientContext: [
         storeNow(),

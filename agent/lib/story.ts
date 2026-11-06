@@ -1,4 +1,3 @@
-import { mediaUrl } from "../../lib/media"
 import { UPLOADS } from "../../lib/admin/schemas"
 import {
   imageSize,
@@ -11,7 +10,18 @@ import {
   type StoryInput,
 } from "../../lib/admin/story-images"
 import { BRAND_LOGO_PNG } from "./brand-logo"
+import type { ModelCost } from "../../lib/admin/model-cost"
 import { fitStoryFrame } from "./story-frame"
+import {
+  CHAT_BUCKET,
+  PRIVATE_CACHE_SECONDS,
+  mediaBucket,
+  readableMediaUrl,
+  registerChatImage,
+  discardStagedMedia,
+  attachChatImages,
+} from "../../lib/admin/media-lifecycle"
+import { sessionMedia } from "./media-session"
 import {
   storyEditInput,
   storyEditRequest,
@@ -27,7 +37,7 @@ import {
 
 /**
  * Makes the story design, fits it to Instagram's 1080 × 1920 frame, and
- * stages it in media/uploads/ as the admin (RLS), like photos pasted in
+ * stages it in private chat-uploads as the admin (RLS), like photos pasted in
  * the chat: the Instagram save copies it into instagram/.
  * Never throws; a failure is a `problem` for the owner, so the workflow
  * step running it never repeats a paid request.
@@ -36,12 +46,23 @@ export async function designStory(
   input: StoryInput,
   ctx: CallerContext
 ): Promise<
-  { images: StoryImage[]; cost: number | null } | { problem: string }
+  | { images: StoryImage[]; cost: number | null; usage: ModelCost[] }
+  | { problem: string; usage?: ModelCost[] }
 > {
   const photos = storyPhotos(input.photos)
-  return runStory(ctx, () =>
-    storyRequest({ ...input, photos }, BRAND_LOGO_PNG, mediaUrl)
-  )
+  return runStory(ctx, async (supabase) => {
+    const urls = new Map(
+      await Promise.all(
+        photos.map(
+          async (path) =>
+            [path, await readableMediaUrl(supabase, path)] as const
+        )
+      )
+    )
+    return storyRequest({ ...input, photos }, BRAND_LOGO_PNG, (path) =>
+      urls.get(path)!
+    )
+  })
 }
 
 /** Edits always send the selected current image first, never GPT Image. */
@@ -51,7 +72,7 @@ export async function editStory(input: StoryEditInput, ctx: CallerContext) {
     return { problem: "Choose a story image and describe valid edits." }
   return runStory(ctx, async (supabase) => {
     const { data, error } = await supabase.storage
-      .from("media")
+      .from(mediaBucket(parsed.data.image))
       .download(parsed.data.image)
     if (error || !data || data.size > 30 * 1024 * 1024)
       throw new Error("source unavailable")
@@ -66,12 +87,21 @@ export async function editStory(input: StoryEditInput, ctx: CallerContext) {
     )
       throw new Error("not a story frame")
     const source = `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}`
-    return storyEditRequest(parsed.data, source, mediaUrl)
+    const urls = new Map(
+      await Promise.all(
+        parsed.data.photos.map(
+          async (path) =>
+            [path, await readableMediaUrl(supabase, path)] as const
+        )
+      )
+    )
+    return storyEditRequest(parsed.data, source, (path) => urls.get(path)!)
   })
 }
 
 type StoryResult =
-  { images: StoryImage[]; cost: number | null } | { problem: string }
+  | { images: StoryImage[]; cost: number | null; usage: ModelCost[] }
+  | { problem: string; usage?: ModelCost[] }
 
 /** Auth precedes paid work; catch every step error so paid calls never retry. */
 async function runStory(
@@ -81,8 +111,11 @@ async function runStory(
   ) =>
     | ReturnType<typeof storyRequest>
     | ReturnType<typeof storyEditRequest>
-    | Promise<ReturnType<typeof storyEditRequest>>
+    | Promise<
+        ReturnType<typeof storyRequest> | ReturnType<typeof storyEditRequest>
+      >
 ): Promise<StoryResult> {
+  const usage: ModelCost[] = []
   try {
     const caller = ctx.session.auth.current
     const token = caller?.attributes[ACCESS_TOKEN_ATTRIBUTE]
@@ -93,11 +126,12 @@ async function runStory(
       return {
         problem: "The admin session is unavailable; sign in again and retry.",
       }
-    return await makeStory(callerSupabase(ctx), request, ctx)
+    return await makeStory(callerSupabase(ctx), request, ctx, usage)
   } catch {
     return {
       problem:
         "Couldn't finish the story image. The request won't be repeated automatically; try again when ready.",
+      usage,
     }
   }
 }
@@ -105,7 +139,8 @@ async function runStory(
 async function makeStory(
   supabase: ReturnType<typeof callerSupabase>,
   request: Parameters<typeof runStory>[1],
-  ctx: CallerContext
+  ctx: CallerContext,
+  usage: ModelCost[]
 ): Promise<StoryResult> {
   let body
   try {
@@ -117,26 +152,32 @@ async function makeStory(
     }
   }
   const result = await requestStoryImages(body, process.env.OPENROUTER_API_KEY)
-  if ("problem" in result) return result
+  if ("problem" in result)
+    return { ...result, usage: [{ model: body.model, costUsd: null }] }
+  usage.push({ model: body.model, costUsd: result.cost })
   const images: StoryImage[] = []
   let cost = result.cost
   for (let image of result.images.slice(0, 1)) {
     if (storyNeedsBackground(image.width, image.height)) {
       // One bounded Klein edit completes a wrong-aspect result. Never loop
       // or resubmit the GPT generation if extension fails or times out.
+      const extension = storyBackgroundRequest(image)
       const extended = await requestStoryImages(
-        storyBackgroundRequest(image),
+        extension,
         process.env.OPENROUTER_API_KEY
       )
       if ("problem" in extended)
         return {
           problem: `Couldn't extend the story background. ${extended.problem}`,
+          usage: [...usage, { model: extension.model, costUsd: null }],
         }
+      usage.push({ model: extension.model, costUsd: extended.cost })
       const complete = extended.images[0]
       if (storyNeedsBackground(complete.width, complete.height))
         return {
           problem:
             "The image service couldn't complete a full-screen story. No automatic retry was made.",
+          usage,
         }
       cost =
         cost === null || extended.cost === null ? null : cost + extended.cost
@@ -149,12 +190,13 @@ async function makeStory(
     } catch {
       continue
     }
-    const path = `${UPLOADS}${crypto.randomUUID()}.jpg`
+    const session = await sessionMedia(ctx)
+    const path = await registerChatImage(supabase, session, "jpg")
     const { error } = await supabase.storage
-      .from("media")
+      .from(CHAT_BUCKET)
       .upload(path, fitted.bytes, {
         contentType: "image/jpeg",
-        cacheControl: "31536000",
+        cacheControl: PRIVATE_CACHE_SECONDS,
         upsert: false,
       })
     if (error) {
@@ -168,17 +210,20 @@ async function makeStory(
         problem: /jwt|token/i.test(error.message)
           ? "The admin session expired; send any message and try again."
           : "Couldn't save the designs to the media library; try again.",
+        usage,
       }
     }
+    await attachChatImages(supabase, session, [path])
     images.push({ path, width: fitted.width, height: fitted.height })
   }
   if (images.length === 0) {
     return {
       problem:
         "The image service sent back designs Tune couldn't read; try again.",
+      usage,
     }
   }
-  return { images, cost }
+  return { images, cost, usage }
 }
 
 /** Deletes staged designs nothing will show; only uploads/ files. */
@@ -189,7 +234,8 @@ export async function discardStory(
   const staged = paths.filter((path) => path.startsWith(UPLOADS))
   if (staged.length === 0) return
   try {
-    await callerSupabase(ctx).storage.from("media").remove(staged)
+    for (const path of staged)
+      await discardStagedMedia(callerSupabase(ctx), path)
   } catch {
     // Left in uploads/, like other photos nothing used.
   }

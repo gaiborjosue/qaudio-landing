@@ -81,6 +81,7 @@ export async function verifyAdminToken(
 
 export type CallerContext = {
   readonly session: {
+    readonly id?: string
     readonly auth: {
       readonly current: {
         readonly principalType: string

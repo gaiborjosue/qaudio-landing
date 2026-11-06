@@ -20,6 +20,8 @@
     "test:flows": "node --test scripts/flows.test.mjs",
     "test:photos": "node --test scripts/photos.test.mjs",
     "test:story": "node --test scripts/story.test.mjs scripts/story-edits.test.mjs",
+    "test:chat": "node --test scripts/chat-usage.test.mjs",
+    "test:media": "node --test scripts/media-lifecycle.test.mjs",
     "import:news": "node --env-file=.env.local scripts/import-news.mjs",
     "import:catalog": "node --env-file=.env.local scripts/import-catalog.mjs"
   },

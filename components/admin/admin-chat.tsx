@@ -6,6 +6,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useLayoutEffect,
   useRef,
   useState,
   useTransition,
@@ -27,7 +28,7 @@ import {
   type Interaction,
   type UseEveAgentReturn,
 } from "eve/react"
-import { idle, parts, runs, turn, type SessionView } from "eve/events"
+import { idle, turn, type SessionView } from "eve/events"
 import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
 import { ApprovalActions } from "@/components/admin/approval-actions"
 import {
@@ -67,6 +68,8 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
+  useMessageScroller,
+  useMessageScrollerScrollable,
 } from "@/components/ui/message-scroller"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { UploadDropzone } from "@/components/ui/upload-dropzone"
@@ -98,6 +101,9 @@ import { toStoreDateTime } from "@/lib/admin/store-time"
 import { sentPhotos } from "@/lib/admin/chat-photos"
 import { enabledFlows, FLOW_TOOL, flowState } from "@/lib/admin/flows"
 import { photoLine } from "@/lib/admin/photo-lines"
+import { mediaUrl } from "@/lib/media"
+import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
+import { responseUsage } from "@/lib/admin/response-usage"
 import { browserSupabase } from "@/lib/supabase/browser"
 import styles from "./admin.module.css"
 
@@ -106,7 +112,7 @@ type Agent = UseEveAgentReturn
 // Shown at the top of every chat, as if the assistant opened it. The owner is
 // the only admin; the agent's instructions know not to greet a second time.
 const WELCOME =
-  "Hello Dariusz! This is Tune, your Q-Audio assistant. I can help you with anything in your website or even post on Instagram, just ask me 😊!"
+  "Hello Dariusz! This is Tune, your Q-Audio assistant. I can help you with anything in your website or even post on Instagram, just ask me!"
 
 // The agent verifies the admin's Supabase access token on every request;
 // getSession() refreshes it when it's about to expire.
@@ -144,6 +150,12 @@ export function AdminChat({
   const refreshed = useRef(new Set<string>())
   const [ending, setEnding] = useState(false)
   const [voiceReset, setVoiceReset] = useState(0)
+  const mediaDraft = useRef<string>("")
+  // Created on interaction, so hydration never invents a different draft id.
+  const mediaDraftId = useCallback(
+    () => (mediaDraft.current ||= crypto.randomUUID()),
+    []
+  )
   const [flows, setFlow] = useFlowSettings()
 
   const agent = useEveAgent({
@@ -161,7 +173,13 @@ export function AdminChat({
     // model and checks them (lib/admin/flows.ts). Answers keep their turn's.
     prepareSend: (input) =>
       input.message !== undefined
-        ? { ...input, clientContext: { flows: enabledFlows(flows) } }
+        ? {
+            ...input,
+            clientContext: {
+              flows: enabledFlows(flows),
+              mediaSession: mediaDraftId(),
+            },
+          }
         : input,
     onSessionChange(session) {
       if (session) onSession(session.sessionId)
@@ -205,11 +223,22 @@ export function AdminChat({
     setVoiceReset((current) => current + 1)
     setEnding(true)
     try {
-      if (agent.session) await agent.end()
+      if (agent.session) {
+        const receipt = await agent.end()
+        await receipt.result()
+      }
+      if (mediaDraft.current)
+        await mediaSessionEvent(
+          browserSupabase(),
+          mediaDraft.current,
+          agent.session?.sessionId ?? null,
+          "ended"
+        )
     } catch {
       // Already ended or unreachable; start fresh either way.
     }
     agent.newSession()
+    mediaDraft.current = ""
     onSession(undefined)
     setEnding(false)
   }
@@ -267,6 +296,7 @@ export function AdminChat({
           <FlowStepper run={run} />
           <div className={styles.chat}>
             <Conversation
+              active={active}
               messages={agent.messages}
               view={agent.view}
               actions={actions}
@@ -285,6 +315,7 @@ export function AdminChat({
                 draws both, since the actions fold into the field's own
                 button while it holds a message. */}
             <Composer
+              key={voiceReset}
               send={send}
               cancel={cancel}
               active={active}
@@ -295,6 +326,8 @@ export function AdminChat({
               onText={setDraft}
               field={field}
               quick={quick}
+              mediaDraftId={mediaDraftId}
+              eveSessionId={agent.session?.sessionId}
             />
           </div>
         </div>
@@ -309,6 +342,7 @@ export function AdminChat({
  * messages' objects, and MessageView compares what each one shows).
  */
 const Conversation = memo(function Conversation({
+  active,
   messages,
   view,
   actions,
@@ -316,6 +350,7 @@ const Conversation = memo(function Conversation({
   busy,
   onEdit,
 }: {
+  active: boolean
   messages: readonly EveMessage[]
   view: SessionView
   actions: ChatActions
@@ -323,6 +358,8 @@ const Conversation = memo(function Conversation({
   busy: boolean
   onEdit: (text: string) => void
 }) {
+  const viewport = useRef<HTMLDivElement>(null)
+  const lastRow = useRef<HTMLDivElement>(null)
   const ownerSaved = ownerSavedOrders(messages)
   const choices = approvedProposals(messages)
   // Steering can split a turn into several messages. Only its last reply
@@ -332,26 +369,23 @@ const Conversation = memo(function Conversation({
     if (message.role === "assistant")
       finalReplies.set(message.metadata?.turnId ?? message.id, message.id)
   }
-  // Match each text part to the run that produced it. Session-wide model
-  // settings would mislabel older replies after an automatic model switch.
-  const modelByPart = useMemo(() => {
-    const modelByRun = new Map(
-      runs(view).map((run) => [run.runId, run.modelId])
-    )
-    return new Map(
-      parts(view, { kind: "text" }).map((part) => [
-        part.partId,
-        modelByRun.get(part.runId),
-      ])
-    )
-  }, [view])
+  // Usage is read only on hover/focus. Keep the callback stable so old
+  // replies don't redraw, or scan every model/content row, as tokens arrive.
+  const usageSource = useRef({ messages, view })
+  useLayoutEffect(() => {
+    usageSource.current = { messages, view }
+  }, [messages, view])
+  const getUsage = useCallback((id: string) => {
+    const source = usageSource.current
+    return responseUsage(id, source.messages, source.view)
+  }, [])
   return (
     // Each of the owner's messages anchors its turn near the top, the reply
     // streams in below it and is followed while the reader stays at the
     // live edge, and a reopened chat opens at its last turn.
     <MessageScrollerProvider autoScroll defaultScrollPosition="last-anchor">
       <MessageScroller>
-        <MessageScrollerViewport aria-label="Conversation">
+        <MessageScrollerViewport ref={viewport} aria-label="Conversation">
           <MessageScrollerContent className={styles.log} aria-busy={busy}>
             <MessageScrollerItem>
               <Message className={styles.message}>
@@ -360,11 +394,12 @@ const Conversation = memo(function Conversation({
                 </MessageContent>
               </Message>
             </MessageScrollerItem>
-            {messages.map((message) => {
+            {messages.map((message, index) => {
               const cards = cardStates(message, ownerSaved, choices)
               return (
                 <MessageScrollerItem
                   key={message.id}
+                  ref={index === messages.length - 1 ? lastRow : undefined}
                   messageId={message.id}
                   scrollAnchor={message.role === "user"}
                 >
@@ -374,7 +409,7 @@ const Conversation = memo(function Conversation({
                     preview={preview}
                     cards={cards}
                     cardsKey={JSON.stringify(cards)}
-                    models={modelsOf(message, modelByPart)}
+                    getUsage={getUsage}
                     finished={
                       !actions.resuming &&
                       message.metadata?.status === "complete" &&
@@ -399,11 +434,44 @@ const Conversation = memo(function Conversation({
             )}
           </MessageScrollerContent>
         </MessageScrollerViewport>
+        <ReleaseScrollSpace
+          pending={busy || actions.resuming || !active}
+          viewport={viewport}
+          lastRow={lastRow}
+        />
         <MessageScrollerButton className="motion-reduce:transition-none" />
       </MessageScroller>
     </MessageScrollerProvider>
   )
 })
+
+/** Release the turn's reserved space once idle, without pulling scrollback. */
+function ReleaseScrollSpace({
+  pending,
+  viewport,
+  lastRow,
+}: {
+  pending: boolean
+  viewport: RefObject<HTMLDivElement | null>
+  lastRow: RefObject<HTMLDivElement | null>
+}) {
+  const { scrollToEnd } = useMessageScroller()
+  // This reports the real transcript end, excluding the anchor spacer.
+  const { end: moreBelow } = useMessageScrollerScrollable()
+  useLayoutEffect(() => {
+    if (pending || moreBelow) return
+    const frame = viewport.current
+    const row = lastRow.current
+    if (!frame?.clientHeight || !frame.clientWidth || !row) return
+    // A hidden tab can leave the scroller's snapshot stale. Recheck the
+    // visible tail before releasing its anchor, with no document queries.
+    if (
+      row.getBoundingClientRect().bottom <= frame.getBoundingClientRect().bottom
+    )
+      scrollToEnd()
+  }, [pending, moreBelow, scrollToEnd, viewport, lastRow])
+  return null
+}
 
 /** What a change card shows besides its call: decided by later messages. */
 type CardState = {
@@ -444,23 +512,6 @@ function cardStates(
     if (Object.keys(state).length > 0) cards[part.callId] = state
   }
   return cards
-}
-
-/** The models that wrote a reply's text, one per line. */
-function modelsOf(
-  message: EveMessage,
-  modelByPart: ReadonlyMap<string, string | undefined>
-) {
-  if (message.role === "user") return ""
-  return [
-    ...new Set(
-      message.parts.flatMap((part) => {
-        if (part.type !== "text" || !part.id || !part.text.trim()) return []
-        const model = modelByPart.get(part.id)
-        return model ? [model] : []
-      })
-    ),
-  ].join("\n")
 }
 
 // Lines meant for the agent, not the bubble: uploaded photos, the item an
@@ -563,7 +614,7 @@ type MessageViewProps = {
   cards: Record<string, CardState>
   /** `cards` as text, so a redraw can be skipped when they're the same. */
   cardsKey: string
-  models: string
+  getUsage: (id: string) => ReturnType<typeof responseUsage>
   finished: boolean
   onEdit: (text: string) => void
 }
@@ -583,7 +634,7 @@ function sameMessage(a: MessageViewProps, b: MessageViewProps) {
     a.actions === b.actions &&
     a.preview === b.preview &&
     a.cardsKey === b.cardsKey &&
-    a.models === b.models &&
+    a.getUsage === b.getUsage &&
     a.finished === b.finished &&
     a.onEdit === b.onEdit
   )
@@ -594,7 +645,7 @@ const MessageView = memo(function MessageView({
   actions,
   preview,
   cards,
-  models,
+  getUsage,
   finished,
   onEdit,
 }: MessageViewProps) {
@@ -609,7 +660,15 @@ const MessageView = memo(function MessageView({
             <div className={styles.sentPhotos}>
               {photos.map((url) => (
                 // eslint-disable-next-line @next/next/no-img-element -- uploaded photo of unknown size
-                <img key={url} className={styles.sentPhoto} src={url} alt="" />
+                <img
+                  key={url}
+                  className={styles.sentPhoto}
+                  crossOrigin={
+                    url.startsWith(mediaUrl("")) ? "anonymous" : undefined
+                  }
+                  src={url}
+                  alt=""
+                />
               ))}
             </div>
           )}
@@ -688,12 +747,17 @@ const MessageView = memo(function MessageView({
                 return (
                   <Fragment key={key}>
                     <StoryDesigns part={part} actions={actions} />
-                    {part.interaction?.status === "open" && (
-                      <Prompt
-                        interaction={part.interaction}
-                        actions={actions}
-                      />
-                    )}
+                    {part.interaction?.status === "open" &&
+                      !(
+                        part.output &&
+                        typeof part.output === "object" &&
+                        "review" in part.output
+                      ) && (
+                        <Prompt
+                          interaction={part.interaction}
+                          actions={actions}
+                        />
+                      )}
                   </Fragment>
                 )
               }
@@ -726,7 +790,7 @@ const MessageView = memo(function MessageView({
         {text && finished && !writing && (
           <MessageFooter className={styles.replyFooter}>
             <CopyAction text={text} />
-            <ModelInfoAction models={models ? models.split("\n") : []} />
+            <ModelInfoAction messageId={message.id} getUsage={getUsage} />
           </MessageFooter>
         )}
       </MessageContent>
@@ -779,7 +843,7 @@ const PHASE_STATE: Record<CardPhase, string> = {
   failed: "failed",
 }
 
-function ChangeCard({
+const ChangeCard = memo(function ChangeCard({
   part,
   actions,
   preview,
@@ -1010,7 +1074,7 @@ function ChangeCard({
       )}
     </section>
   )
-}
+})
 
 /** An approval or question's choices; the first is the primary action. */
 function Options({
@@ -1123,6 +1187,8 @@ const Composer = memo(function Composer({
   onText: setText,
   field,
   quick,
+  mediaDraftId,
+  eveSessionId,
 }: {
   send: Agent["send"]
   cancel: Agent["cancel"]
@@ -1135,6 +1201,8 @@ const Composer = memo(function Composer({
   field: RefObject<HTMLTextAreaElement | null>
   /** The quick actions: above the field, or folded into its button. */
   quick: QuickMenusProps
+  mediaDraftId: () => string
+  eveSessionId?: string
 }) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
@@ -1237,6 +1305,7 @@ const Composer = memo(function Composer({
       ])
       const attempt = (retries: number): Promise<UploadedPhoto> =>
         uploadPhoto(file, {
+          mediaSession: { id: mediaDraftId(), eve: eveSessionId },
           onProgress: (progress) => update(id, { progress }),
           signal: controller.signal,
         }).catch(async (error: unknown) => {

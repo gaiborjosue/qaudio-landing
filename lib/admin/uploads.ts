@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
 import type { Database } from "../supabase/database.types"
 import { UPLOADS } from "./schemas"
+import { isPrivateUpload, mediaBucket } from "./media-lifecycle"
 
 // Shared by the agent's save tools and the admin chat's own Save buttons
 // (Server Actions). Both pass a client signed in as the admin, so RLS
@@ -36,10 +37,23 @@ export async function placeUploads(
       placed.set(path, path)
       continue
     }
-    const destination = `${folder}/${path.slice(UPLOADS.length)}`
+    const destination = `${folder}/${path.split("/").pop()}`
+    const { error: trackingError } = await supabase.rpc("prepare_media_copy", {
+      p_bucket: mediaBucket(path),
+      p_path: path,
+      p_destination: destination,
+    })
+    if (trackingError)
+      throw fail("Photo", {
+        message: "Couldn't retain that photo before saving.",
+      })
     const { error } = await supabase.storage
-      .from("media")
-      .copy(path, destination)
+      .from(mediaBucket(path))
+      .copy(
+        path,
+        destination,
+        isPrivateUpload(path) ? { destinationBucket: "media" } : undefined
+      )
     if (error && !/already exists|duplicate/i.test(error.message)) {
       throw fail("Photo", { message: error.message })
     }

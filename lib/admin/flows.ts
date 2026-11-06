@@ -71,14 +71,14 @@ export const FLOWS = [
         label: "Story design",
         tool: "design_story",
         instructions:
-          "Design the sale's Instagram story with design_story (always a story, never a feed post, in this flow). The brief: a short headline and the offer (how much off, on which line or products) and until when, in the owner's words and the graphic's, exact and few; the look follows the graphic. Photos: the promotion graphic, or the saved news post's cover, and up to 3 of the matched products' photos (products__get_product). It makes one design, shown in the chat as it's made; go straight on to the next step with it.",
+          "Design the sale's Instagram story with design_story (always a story, never a feed post, in this flow). The brief: a short headline and the offer (how much off, on which line or products) and until when, in the owner's words and the graphic's, exact and few; the look follows the graphic. Photos: the promotion graphic, or the saved news post's cover, and up to 3 of the matched products' photos (products__get_product). The tool pauses on the design for Continue or edit feedback. Stay on this step until review is continued. For changes_requested call edit_story on the returned design with that feedback (copy any Story edit payload exactly); it pauses again. For interrupted stop. Only after Continue move to the Instagram step; Continue never approves posting.",
       },
       {
         id: "instagram",
         label: "Instagram story",
         tool: "instagram__save_post",
         instructions:
-          'Load the instagram skill and discover instagram__. Propose the design as a story with instagram__save_post: kind story, the design\'s path, width, and height as its one photo, fit cover, alt text from what it shows, no caption. Its when matches the news post: "now" if it went live now, its time if that\'s within 7 days, otherwise "draft". If the owner requests changes to the design, use edit_story (FLUX Klein) with the current design and that feedback, copying any Story edit regions exactly, then propose the edited one for fresh approval. Never call design_story for revisions or restart this flow for feedback.',
+          'After the design review returns continued, load the instagram skill and discover instagram__. Propose the design as a story with instagram__save_post: kind story, the design\'s path, width, and height as its one photo, fit cover, alt text from what it shows, no caption. Its when matches the news post: "now" if it went live now, its time if that\'s within 7 days, otherwise "draft". If the owner requests changes to the design, use edit_story (FLUX Klein) with the current design and that feedback, copying any Story edit regions exactly, wait for its Continue, then propose the edited one for fresh approval. Never call design_story for revisions or restart this flow for feedback.',
       },
     ],
   },
@@ -288,9 +288,10 @@ function progressInput(value: unknown) {
 }
 
 /**
- * The latest flow run in the conversation, as the stepper shows it, or null
+ * The latest flow run in the conversation, or null
  * when there's none to show (none started, stopped, or finished before the
- * owner's latest message). Steps follow flow_progress calls, and also the
+ * owner's latest message). Completed metadata remains available; the stepper
+ * displays only active runs. Steps follow flow_progress calls, and also the
  * step tools' own calls, so the stepper keeps up even when the model skips
  * a progress call. Pure; tested in scripts/flows.test.mjs.
  */
@@ -339,13 +340,21 @@ export function flowState(messages: readonly Message[]): FlowView | null {
       // original names older calls carry.
       const index = run.flow.steps.findIndex((step: FlowStep) => {
         if (!step.tool) return false
-        if (step.tool === name) return true
+        if (
+          step.tool === name ||
+          (step.tool === "design_story" && name === "edit_story")
+        )
+          return true
         const kind = previewToolName(step.tool)
         return kind !== undefined && kind === previewToolName(name)
       })
       if (index < 0) continue
       const step = run.flow.steps[index]
-      run.current = Math.max(run.current, index)
+      if (name === "edit_story") {
+        run.current = index
+        for (const later of run.flow.steps.slice(index + 1))
+          run.states.delete(later.id)
+      } else run.current = Math.max(run.current, index)
       run.states.set(step.id, state)
       if (state === "completed" && index === run.flow.steps.length - 1) {
         run.status = "done"

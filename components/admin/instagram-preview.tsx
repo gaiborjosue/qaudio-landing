@@ -116,6 +116,7 @@ function Photo({
     // eslint-disable-next-line @next/next/no-img-element -- the media library's own photo, at its true colors and crop
     <img
       className={styles.photo}
+      crossOrigin="anonymous"
       src={mediaUrl(photo.path)}
       alt={photo.alt}
       loading="lazy"
@@ -283,6 +284,7 @@ function PhotoStrip({
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- a thumbnail of the media library's own photo */}
                 <img
+                  crossOrigin="anonymous"
                   src={mediaUrl(photo.path)}
                   alt=""
                   loading="lazy"

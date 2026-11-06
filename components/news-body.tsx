@@ -1,5 +1,6 @@
 import { Fragment } from "react"
 import Image from "next/image"
+import { isPrivateMediaUrl } from "@/lib/media"
 import type { NewsBlock, NewsInline } from "@/lib/news"
 import styles from "./news-body.module.css"
 
@@ -15,7 +16,13 @@ function Text({ text }: { text: string }) {
   ))
 }
 
-function Inline({ content }: { content: NewsInline[] }) {
+function Inline({
+  content,
+  compact = false,
+}: {
+  content: NewsInline[]
+  compact?: boolean
+}) {
   return content.map((part, index) => {
     if (typeof part === "string") return <Text key={index} text={part} />
     const text = part.strong ? (
@@ -25,7 +32,11 @@ function Inline({ content }: { content: NewsInline[] }) {
     ) : (
       <Text text={part.text} />
     )
-    return part.href ? (
+    return part.href && compact ? (
+      <span key={index} className={styles.previewLink}>
+        {text}
+      </span>
+    ) : part.href ? (
       <a key={index} href={part.href}>
         {text}
       </a>
@@ -36,15 +47,21 @@ function Inline({ content }: { content: NewsInline[] }) {
 }
 
 /** Renders a post body from lib/news-posts.ts. */
-export function NewsBody({ blocks }: { blocks: NewsBlock[] }) {
+export function NewsBody({
+  blocks,
+  compact = false,
+}: {
+  blocks: NewsBlock[]
+  compact?: boolean
+}) {
   return (
-    <div className={styles.body}>
+    <div className={styles.body} data-compact={compact || undefined}>
       {blocks.map((block, index) => {
         switch (block.type) {
           case "paragraph":
             return (
               <p key={index}>
-                <Inline content={block.content} />
+                <Inline content={block.content} compact={compact} />
               </p>
             )
           case "heading":
@@ -54,7 +71,7 @@ export function NewsBody({ blocks }: { blocks: NewsBlock[] }) {
               <ul key={index}>
                 {block.items.map((item, itemIndex) => (
                   <li key={itemIndex}>
-                    <Inline content={item} />
+                    <Inline content={item} compact={compact} />
                   </li>
                 ))}
               </ul>
@@ -70,10 +87,15 @@ export function NewsBody({ blocks }: { blocks: NewsBlock[] }) {
               <figure key={index}>
                 <Image
                   src={block.image.src}
+                  unoptimized={isPrivateMediaUrl(block.image.src)}
                   alt={block.image.alt}
                   width={block.image.width}
                   height={block.image.height}
-                  sizes={IMAGE_SIZES}
+                  sizes={
+                    compact
+                      ? "(max-width: 520px) calc(100vw - 96px), 380px"
+                      : IMAGE_SIZES
+                  }
                 />
                 {block.caption ? (
                   <figcaption>{block.caption}</figcaption>

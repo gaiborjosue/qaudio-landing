@@ -1,0 +1,4 @@
+[functions.media-cleanup]
+# The function authenticates its separate Vault credential inside the
+# service-only claim RPC; publishable keys and user JWTs are rejected.
+verify_jwt = false

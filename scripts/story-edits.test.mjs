@@ -10,7 +10,7 @@ registerHooks({
   resolve(specifier, context, next) {
     if (
       specifier === "./supabase" &&
-      context.parentURL?.endsWith("/agent/lib/story.ts")
+      /\/agent\/lib\/(story|media-session)\.ts$/.test(context.parentURL ?? "")
     ) {
       const code = `export const ACCESS_TOKEN_ATTRIBUTE = "supabaseAccessToken";
         export const callerSupabase = () => globalThis.storyFixture.client;
@@ -38,6 +38,9 @@ registerHooks({
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= "https://media.example"
 const edits = await import("../lib/admin/story-edits.ts")
 const { editStory, designStory } = await import("../agent/lib/story.ts")
+const { reviewStory } = await import("../agent/lib/story-review.ts")
+const { default: designTool } = await import("../agent/tools/design_story.ts")
+const { default: editTool } = await import("../agent/tools/edit_story.ts")
 const source = "uploads/00000000-0000-4000-8000-000000000001.jpg"
 const base = {
   image: source,
@@ -52,6 +55,47 @@ const region = (operation, extra = {}) => ({
   target: null,
   instruction: "",
   ...extra,
+})
+
+test("story review waits for Continue and passes whole-image or region feedback through without approving a post", async () => {
+  let resolve
+  let question
+  const pending = reviewStory({
+    ask: (input) => {
+      question = input
+      return new Promise((done) => {
+        resolve = done
+      })
+    },
+  })
+  let settled = false
+  pending.then(() => {
+    settled = true
+  })
+  await Promise.resolve()
+  assert.equal(settled, false)
+  assert.equal(question.allowFreeform, true)
+  assert.deepEqual(
+    question.options.map((option) => [option.id, option.label]),
+    [["continue", "Continue"]]
+  )
+  resolve({ status: "answered", optionId: "continue" })
+  assert.deepEqual(await pending, { review: "continued" })
+  for (const feedback of [
+    "Make the headline smaller",
+    'Story edit: {"image":"uploads/version.jpg","regions":[]}',
+  ]) {
+    assert.deepEqual(
+      await reviewStory({
+        ask: async () => ({ status: "answered", text: feedback }),
+      }),
+      { review: "changes_requested", feedback }
+    )
+  }
+  for (const status of ["cancelled", "unavailable"])
+    assert.deepEqual(await reviewStory({ ask: async () => ({ status }) }), {
+      review: "interrupted",
+    })
 })
 
 test("region geometry is independent of image scaling, with y before x", () => {
@@ -84,6 +128,10 @@ test("region geometry is independent of image scaling, with y before x", () => {
 test("invalid geometry, empty edits, missing destinations and foreign paths are rejected", () => {
   assert.ok(edits.storyEditInput.safeParse(base).success)
   for (const box of [
+    [],
+    [0, 0, 500],
+    [0, 0, 500, 500, 1000],
+    [0, "0", 500, 500],
     [500, 0, 200, 1000],
     [0, 900, 1000, 800],
     [-1, 0, 500, 500],
@@ -95,6 +143,13 @@ test("invalid geometry, empty edits, missing destinations and foreign paths are 
       edits.storyEditInput.safeParse({
         ...base,
         regions: [region("remove", { box })],
+      }).success,
+      false
+    )
+    assert.equal(
+      edits.storyEditInput.safeParse({
+        ...base,
+        regions: [region("move", { target: box })],
       }).success,
       false
     )
@@ -235,6 +290,7 @@ test("background completion uses Klein and preserves the whole source inside the
 
 const ctx = {
   session: {
+    id: "story-test-session",
     auth: {
       current: {
         principalType: "user",
@@ -267,15 +323,26 @@ async function fixture(t, options = {}) {
     checked: 0,
     admin: options.admin ?? { userId: "admin" },
     client: {
+      async rpc(name) {
+        return {
+          data:
+            name === "media_session_event"
+              ? "00000000-0000-4000-8000-000000000001"
+              : null,
+          error: null,
+        }
+      },
       storage: {
         from(bucket) {
-          assert.equal(bucket, "media")
+          assert.ok(["media", "chat-uploads"].includes(bucket))
           return {
             async download(path) {
               downloads.push(path)
               return { data: new Blob([image]), error: null }
             },
             async upload(path, bytes, config) {
+              assert.equal(bucket, "chat-uploads")
+              assert.equal(config.cacheControl, "300")
               if (options.throwUpload) throw new Error("provider secret")
               uploads.push({ path, bytes, config })
               return {
@@ -327,6 +394,50 @@ async function fixture(t, options = {}) {
     delete globalThis.storyFixture
   })
   return { sent, uploads, downloads }
+}
+
+for (const [name, definition, input] of [
+  ["first design", designTool, first],
+  ["revision", editTool, base],
+]) {
+  test(`the ${name} workflow shows the image, then waits before returning it to the agent`, async (t) => {
+    const f = await fixture(t)
+    let respond
+    let asked = false
+    const sequence = definition.execute(input, {
+      ...ctx,
+      ask: (question) => {
+        asked = true
+        assert.equal(question.options[0].id, "continue")
+        return new Promise((resolve) => {
+          respond = resolve
+        })
+      },
+    })
+    const starting = await sequence.next()
+    assert.equal(starting.value.status, "designing")
+    const preview = await sequence.next()
+    assert.equal(preview.done, false)
+    assert.equal(preview.value.review, "waiting")
+    assert.equal(preview.value.images.length, 1)
+    assert.equal(f.sent.length, 1)
+    let finished = false
+    const waiting = sequence.next().then((result) => {
+      finished = true
+      return result
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    assert.equal(asked, true)
+    assert.equal(finished, false)
+    assert.equal(f.sent.length, 1)
+    respond({ status: "answered", optionId: "continue" })
+    const result = await waiting
+    assert.equal(result.done, true)
+    assert.equal(result.value.review, "continued")
+    assert.deepEqual(result.value.design, preview.value.design)
+    assert.deepEqual(result.value.usage, preview.value.usage)
+    assert.equal(f.sent.length, 1)
+  })
 }
 
 test("both image operations check admin access before paid requests or Storage", async (t) => {
@@ -387,6 +498,10 @@ test("a wrong-aspect initial design gets one Klein background edit, never a seco
   )
   assert.equal(result.images.length, 1)
   assert.equal(result.cost, 0.028)
+  assert.deepEqual(result.usage, [
+    { model: "openai/gpt-image-2.6-flare", costUsd: 0.014 },
+    { model: edits.STORY_EDIT_MODEL, costUsd: 0.014 },
+  ])
   const meta = await sharp(f.uploads[0].bytes).metadata()
   assert.deepEqual([meta.width, meta.height], [1080, 1920])
 })
@@ -420,5 +535,9 @@ for (const failure of [
     assert.equal(f.sent.length, 1)
     assert.ok(result.problem)
     assert.doesNotMatch(result.problem, /provider secret/)
+    if (failure.uploadError || failure.throwUpload)
+      assert.deepEqual(result.usage, [
+        { model: edits.STORY_EDIT_MODEL, costUsd: 0.014 },
+      ])
   })
 }

@@ -46,7 +46,8 @@ const { saveMetadata } = await import("../lib/admin/metadata-save.ts")
 const actions = await import("../app/admin/metadata/actions.ts")
 const { catalogAssetUrl, categoryAssets, productTaxonomyAssets } =
   await import("../lib/catalog-assets.ts")
-const { prepareMetadataImage } = await import("../lib/admin/metadata-upload.ts")
+const { prepareMetadataImage, logoTone } =
+  await import("../lib/admin/metadata-upload.ts")
 const uuid = "00000000-0000-4000-8000-000000000001"
 const staged = `uploads/${uuid}.webp`
 const category = {
@@ -226,7 +227,7 @@ function fakeDb({ error, missing = false, count = 0 } = {}) {
     },
     rpc: async (name, input) => {
       calls.push(["rpc", name, input])
-      return { error }
+      return { error: name === "prepare_media_copy" ? null : error }
     },
   }
   return db
@@ -235,7 +236,8 @@ function fakeDb({ error, missing = false, count = 0 } = {}) {
 test("saves place staged artwork first and append new entries", async () => {
   const db = fakeDb()
   await saveMetadata(db, brand)
-  assert.deepEqual(db.calls[0], ["copy", staged, `brands/${uuid}.webp`])
+  assert.equal(db.calls[0][1], "prepare_media_copy")
+  assert.deepEqual(db.calls[1], ["copy", staged, `brands/${uuid}.webp`])
   const row = db.calls.find((call) => call[0] === "insert")[2]
   assert.equal(row.logo_path, `brands/${uuid}.webp`)
   assert.equal(row.sort_order, 13)
@@ -467,10 +469,13 @@ test("browser preparation preserves artwork, resizes photos, and releases bitmap
     },
   }
   try {
-    await prepareMetadataImage({ type: "image/png", size: 10 }, "icon")
+    const icon = await prepareMetadataImage(
+      { type: "image/png", size: 10 },
+      "icon"
+    )
     assert.deepEqual(
-      [canvas.width, canvas.height, type],
-      [1024, 512, "image/png"]
+      [canvas.width, canvas.height, type, icon.tone],
+      [1024, 512, "image/png", null]
     )
     await prepareMetadataImage({ type: "image/jpeg", size: 10 }, "scene")
     assert.deepEqual(
@@ -482,6 +487,67 @@ test("browser preparation preserves artwork, resizes photos, and releases bitmap
       prepareMetadataImage({ type: "image/svg+xml", size: 10 }, "icon"),
       /PNG/
     )
+  } finally {
+    globalThis.document = originalDocument
+    globalThis.createImageBitmap = originalBitmap
+  }
+})
+
+/** RGBA pixels: `ground` everywhere, `mark` in the middle (a third each way). */
+function artwork(ground, mark, size = 30) {
+  const pixels = new Uint8ClampedArray(size * size * 4)
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const inside =
+        x >= size / 3 &&
+        x < (2 * size) / 3 &&
+        y >= size / 3 &&
+        y < (2 * size) / 3
+      pixels.set(inside ? mark : ground, (y * size + x) * 4)
+    }
+  }
+  return [pixels, size, size]
+}
+const clear = [0, 0, 0, 0]
+const black = [10, 10, 10, 255]
+const white = [250, 250, 250, 255]
+
+test("a logo's tone comes from its marks on a clear ground, or from a solid ground", () => {
+  assert.equal(logoTone(...artwork(clear, black)), "dark")
+  assert.equal(logoTone(...artwork(clear, white)), "light")
+  assert.equal(logoTone(...artwork(white, black)), "dark")
+  assert.equal(logoTone(...artwork(black, white)), "light")
+  // Nothing drawn, or nothing at all: left as it is.
+  assert.equal(logoTone(...artwork(clear, clear)), "light")
+  assert.equal(logoTone(new Uint8ClampedArray(0), 0, 0), "light")
+  // A colour reads by its lightness: a navy wordmark is dark artwork.
+  assert.equal(logoTone(...artwork(clear, [20, 40, 110, 255])), "dark")
+})
+
+test("a logo is prepared with its tone, read from the drawn pixels", async () => {
+  const originalDocument = globalThis.document
+  const originalBitmap = globalThis.createImageBitmap
+  globalThis.createImageBitmap = async () => ({
+    width: 30,
+    height: 30,
+    close() {},
+  })
+  const [data] = artwork(clear, black)
+  globalThis.document = {
+    createElement: () => ({
+      width: 0,
+      height: 0,
+      getContext: () => ({ drawImage() {}, getImageData: () => ({ data }) }),
+      toBlob: (callback, mime) => callback(new Blob(["image"], { type: mime })),
+    }),
+  }
+  try {
+    const logo = await prepareMetadataImage(
+      { type: "image/png", size: 10 },
+      "logo"
+    )
+    assert.equal(logo.tone, "dark")
+    assert.equal(logo.blob.type, "image/png")
   } finally {
     globalThis.document = originalDocument
     globalThis.createImageBitmap = originalBitmap
