@@ -8,7 +8,8 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from "react"
-import { Eraser, Move, Plus, Replace, Trash2, X } from "lucide-react"
+import { Popover } from "@base-ui/react/popover"
+import { Eraser, Info, Move, Plus, Replace, Trash2, X } from "lucide-react"
 import type { ChatActions } from "./chat-actions"
 import { mediaUrl } from "@/lib/media"
 import {
@@ -29,12 +30,11 @@ type Region = StoryRegion & { key: string }
 type Operation = Region["operation"]
 type Drag = { pointer: number; start: readonly number[]; box: StoryBox }
 
-// What each area can do, with the one line that explains it.
+// What each area can do; its label and the field under it say how.
 const ACTIONS: {
   value: Operation
   label: string
   Icon: typeof Replace
-  hint: string
   field: string
   placeholder: string
   required: boolean
@@ -43,36 +43,32 @@ const ACTIONS: {
     value: "change",
     label: "Change",
     Icon: Replace,
-    hint: "Replace what's in this area.",
-    field: "What should it become?",
-    placeholder: "Describe the result, including exact text",
+    field: "Change it to",
+    placeholder: "Exact text, look…",
     required: true,
   },
   {
     value: "add",
     label: "Add",
     Icon: Plus,
-    hint: "Put something new in this area.",
-    field: "What should be added?",
-    placeholder: "Describe it, including exact text",
+    field: "Add",
+    placeholder: "Exact text, look…",
     required: true,
   },
   {
     value: "remove",
     label: "Remove",
     Icon: Eraser,
-    hint: "Erase it and fill in the background.",
-    field: "What to remove (optional)",
-    placeholder: "The price tag, the second speaker…",
+    field: "Details (optional)",
+    placeholder: "e.g. the price tag",
     required: false,
   },
   {
     value: "move",
     label: "Move",
     Icon: Move,
-    hint: "Move or resize it: draw where it should go.",
-    field: "Anything else about it? (optional)",
-    placeholder: "Make it a little larger…",
+    field: "Details (optional)",
+    placeholder: "e.g. a bit larger",
     required: false,
   },
 ]
@@ -105,6 +101,7 @@ export function StoryEditor({
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const lock = useRef(false)
+  const root = useRef<HTMLDivElement>(null)
   const slot = useRef<HTMLDivElement>(null)
   const [width, setWidth] = useState<number>()
   const active = selected === null ? null : regions[selected]
@@ -198,6 +195,7 @@ export function StoryEditor({
 
   return (
     <div
+      ref={root}
       className={styles.editor}
       onKeyDown={(event) => {
         // Escape leaves drawing a destination before it closes the viewer.
@@ -353,7 +351,7 @@ export function StoryEditor({
           </div>
           {placing && active ? (
             <div className={styles.banner} role="status">
-              Draw where area {selected! + 1} should go
+              Draw where area {selected! + 1} goes
               <button type="button" onClick={() => setPlacing(false)}>
                 Cancel
               </button>
@@ -362,7 +360,7 @@ export function StoryEditor({
             regions.length === 0 &&
             !drag && (
               <p className={styles.cue} aria-hidden="true">
-                Drag on the image to select an area
+                Drag to mark an area
               </p>
             )
           )}
@@ -388,12 +386,55 @@ export function StoryEditor({
         }}
       >
         <fieldset disabled={busy}>
-          <legend className={styles.title}>Edit image</legend>
-          <p id={`${id}-hint`} className={styles.hint}>
-            {full
-              ? `That's the most areas (${STORY_REGIONS_MAX}). Delete one to draw another.`
-              : "Drag on the image to mark an area to edit, or press Enter on it to add one. Arrow keys move an area, Shift + arrows resize it."}
+          {/* The first legend stays usable while the fieldset is disabled. */}
+          <legend className={styles.title}>
+            Edit image
+            <Popover.Root>
+              <Popover.Trigger
+                openOnHover
+                delay={150}
+                className={styles.info}
+                aria-label="How editing works"
+              >
+                <Info size={15} aria-hidden="true" />
+              </Popover.Trigger>
+              <Popover.Portal container={root} className={styles.infoPortal}>
+                <Popover.Positioner
+                  side="bottom"
+                  align="start"
+                  sideOffset={8}
+                  collisionPadding={12}
+                  className={styles.infoPositioner}
+                >
+                  <Popover.Popup className={styles.infoPopup}>
+                    <ul>
+                      <li>
+                        Drag on the image to mark an area, then pick what to do
+                        there.
+                      </li>
+                      <li>
+                        Up to {STORY_REGIONS_MAX} areas. Hover one to delete it.
+                      </li>
+                      <li>
+                        Keyboard: Enter on the image adds an area; arrows move
+                        it, Shift + arrows resize, Delete removes.
+                      </li>
+                      <li>
+                        Areas guide the edit; nearby details can change too.
+                      </li>
+                    </ul>
+                  </Popover.Popup>
+                </Popover.Positioner>
+              </Popover.Portal>
+            </Popover.Root>
+          </legend>
+          <p id={`${id}-hint`} className="visually-hidden">
+            Drag to mark an area, or press Enter to add one. Arrows move it,
+            Shift + arrows resize.
           </p>
+          {full && (
+            <p className={styles.hint}>Up to {STORY_REGIONS_MAX} areas.</p>
+          )}
           {active && action && (
             <section
               className={styles.area}
@@ -421,19 +462,18 @@ export function StoryEditor({
                   </label>
                 ))}
               </fieldset>
-              <p className={styles.hint}>{action.hint}</p>
               {active.operation === "move" && (
                 <div className={styles.destination}>
                   <span>
                     {placing
-                      ? "Drawing the destination…"
+                      ? "Drawing destination…"
                       : active.target
                         ? "Destination set"
-                        : "No destination yet"}
+                        : "Needs a destination"}
                   </span>
                   {!placing && (
                     <button type="button" onClick={() => setPlacing(true)}>
-                      {active.target ? "Redraw" : "Draw destination"}
+                      {active.target ? "Redraw" : "Draw"}
                     </button>
                   )}
                 </div>
@@ -461,7 +501,7 @@ export function StoryEditor({
             </section>
           )}
           {regions.length > 0 && !active && (
-            <p className={styles.hint}>Select an area to edit it.</p>
+            <p className={styles.hint}>Select an area to edit.</p>
           )}
           <label className={styles.field}>
             Overall changes
@@ -469,7 +509,7 @@ export function StoryEditor({
               rows={3}
               maxLength={2000}
               value={instructions}
-              placeholder="Anything else to change? You can also edit the whole image without marking areas."
+              placeholder="Anything else? Works without areas too."
               onChange={(event) => setInstructions(event.target.value)}
             />
           </label>

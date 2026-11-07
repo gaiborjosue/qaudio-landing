@@ -33,6 +33,7 @@ export function InstagramConnection({
           >
             <InstagramIcon />
             <span>@{account.username}</span>
+            <span className={styles.service}>Instagram</span>
             <CircleCheck
               size={15}
               className={styles.check}
@@ -50,6 +51,7 @@ export function InstagramConnection({
         >
           <InstagramIcon />
           <span>{label}</span>
+          <span className={styles.service}>Instagram</span>
         </a>
       ) : (
         <button
@@ -65,6 +67,7 @@ export function InstagramConnection({
         >
           <InstagramIcon />
           <span>{status ? label : "Checking…"}</span>
+          <span className={styles.service}>Instagram</span>
         </button>
       )}
       {status?.needsAttention && status.connectUrl && (
@@ -77,6 +80,7 @@ export function InstagramConnection({
         >
           <InstagramIcon />
           <span>Manage connection</span>
+          <span className={styles.service}>Instagram</span>
         </a>
       )}
       {status?.message && (

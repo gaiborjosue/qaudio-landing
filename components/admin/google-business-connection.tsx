@@ -32,10 +32,7 @@ export function GoogleBusinessConnection({
   onCheck: () => void
 }) {
   const connected = status?.state === "connected"
-  const label =
-    status?.state === "reconnect"
-      ? "Reconnect Google Business"
-      : "Connect Google Business"
+  const label = status?.state === "reconnect" ? "Reconnect" : "Connect"
   return (
     <li className={styles.connection}>
       {connected ? (
@@ -49,6 +46,7 @@ export function GoogleBusinessConnection({
           >
             <GoogleBusinessIcon />
             <span>{account.name}</span>
+            <span className={styles.service}>Google Business</span>
             <CircleCheck
               size={15}
               className={styles.check}
@@ -60,34 +58,42 @@ export function GoogleBusinessConnection({
         <a
           href={status.connectUrl}
           className={styles.status}
+          aria-label={`${label} Google Business`}
           target="_blank"
           rel="noopener noreferrer"
         >
           <GoogleBusinessIcon />
           <span>{label}</span>
+          <span className={styles.service}>Google Business</span>
         </a>
       ) : (
         <button
           type="button"
           className={styles.status}
+          aria-label={
+            status
+              ? "Check Google Business connection"
+              : "Checking Google Business connection"
+          }
           disabled={!status}
           onClick={onCheck}
         >
           <GoogleBusinessIcon />
-          <span>
-            {status ? "Check Google Business" : "Checking Google Business…"}
-          </span>
+          <span>{status ? "Check connection" : "Checking…"}</span>
+          <span className={styles.service}>Google Business</span>
         </button>
       )}
       {status?.needsAttention && status.connectUrl && (
         <a
           href={status.connectUrl}
           className={styles.status}
+          aria-label="Manage Google Business connections"
           target="_blank"
           rel="noopener noreferrer"
         >
           <GoogleBusinessIcon />
-          <span>Manage Google Business</span>
+          <span>Manage connection</span>
+          <span className={styles.service}>Google Business</span>
         </a>
       )}
       {status?.message && (

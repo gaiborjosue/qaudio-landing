@@ -26,7 +26,7 @@
   z-index: 60;
 }
 .popup {
-  width: min(280px, calc(100vw - 32px));
+  width: min(320px, calc(100vw - 32px));
   padding: 8px;
   border: 1px solid #dedede;
   border-radius: 14px;
@@ -93,6 +93,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+/* The service a row is for, as a small grey pill after its name. */
+.status > .service {
+  flex: none;
+  padding: 2px 7px;
+  border: 1px solid #e2e2e2;
+  border-radius: 999px;
+  background: #f6f6f6;
+  color: #666;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
 }
 .check {
   color: #15803d;
