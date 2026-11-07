@@ -578,6 +578,12 @@
   background: #f0f0f0;
   color: #111;
 }
+/* A live sale, in the soft green of the shop's New badge. */
+.saleToggle[data-live] {
+  border-color: #bfe4ca;
+  background: #e8f6ec;
+  color: #12632d;
+}
 .saleToggle:focus-visible {
   outline: 2px solid #111;
   outline-offset: 2px;

@@ -1136,6 +1136,7 @@ export function ProductEditor({
                 ref={saleToggle}
                 type="button"
                 className={styles.saleToggle}
+                data-live={saleNote === "On sale now" || undefined}
                 title={saleEnabled ? "Remove sale" : "Add sale"}
                 aria-pressed={saleEnabled}
                 aria-expanded={saleEnabled}

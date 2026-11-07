@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import type { DateRange } from "react-day-picker"
 import { Popover } from "@base-ui/react/popover"
 import { CalendarDays } from "lucide-react"
 import { Calendar } from "@/components/ui/calendar"
@@ -50,6 +51,15 @@ function Clock({
   )
 }
 
+/**
+ * The days the saved dates cover: nothing until an end is picked (an empty
+ * start means "now", not a picked day), so the owner starts the range.
+ */
+function savedRange(start: string, end: string, today: string) {
+  if (end) return { from: calendarDay(start || today), to: calendarDay(end) }
+  return start ? { from: calendarDay(start), to: undefined } : undefined
+}
+
 /** A range on the existing shadcn calendar, with store-time hour/minute selects. */
 export function SaleDateRange({
   start,
@@ -68,9 +78,22 @@ export function SaleDateRange({
   const [open, setOpen] = useState(false)
   const now = toStoreDateTime(new Date())
   const today = now.slice(0, 10)
-  const range = {
-    from: calendarDay(start || today),
-    to: end ? calendarDay(end) : undefined,
+  // The calendar keeps the owner's own clicks (a start picked today reads as
+  // "now", which the saved dates can't show), and follows the dates when
+  // they change elsewhere: the Now box, or the sale removed.
+  const [range, setRange] = useState<DateRange | undefined>(() =>
+    savedRange(start, end, today)
+  )
+  const [seen, setSeen] = useState({ start, end })
+  if (seen.start !== start || seen.end !== end) {
+    setSeen({ start, end })
+    setRange(savedRange(start, end, today))
+  }
+  const pick = (next: DateRange | undefined) => {
+    const dates = saleDatesFromRange(next, start, end, today)
+    setRange(next)
+    setSeen(dates)
+    onChange(dates)
   }
   const summary = `${start ? formatStoreDateTime(start) : "Now"} – ${end ? formatStoreDateTime(end) : "Pick end date"}`
   return (
@@ -99,10 +122,10 @@ export function SaleDateRange({
             <Calendar
               mode="range"
               selected={range}
-              defaultMonth={range.from}
-              onSelect={(next) =>
-                onChange(saleDatesFromRange(next, start, end, today))
-              }
+              defaultMonth={range?.from ?? calendarDay(today)}
+              disabled={{ before: calendarDay(today) }}
+              resetOnSelect
+              onSelect={pick}
               className={styles.calendar}
               autoFocus
             />

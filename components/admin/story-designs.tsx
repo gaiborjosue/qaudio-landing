@@ -6,11 +6,7 @@ import type { EveToolPart } from "eve/react"
 import { AsciiWake } from "@/components/ascii-wake"
 import type { ChatActions } from "./chat-actions"
 import { StoryEditor } from "./story-editor"
-import {
-  STORY_FRAME,
-  storyProgress,
-  type StoryImage,
-} from "@/lib/admin/story-images"
+import { storyProgress, type StoryImage } from "@/lib/admin/story-images"
 import { mediaUrl } from "@/lib/media"
 import styles from "./admin.module.css"
 
@@ -230,10 +226,8 @@ export const StoryDesigns = memo(function StoryDesigns({
 })
 
 /**
- * The design at full height, over the page, as it will post, with the
- * story's safe zone on request (the strips Instagram's own interface
- * covers). A native modal dialog, so focus stays inside it and Escape
- * closes it.
+ * The design at full height, over the page, as it will post. A native modal
+ * dialog, so focus stays inside it and Escape closes it.
  */
 function StoryViewer({
   image,
@@ -247,7 +241,6 @@ function StoryViewer({
   onClose: () => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
-  const [zones, setZones] = useState(false)
   const [editing, setEditing] = useState(initiallyEditing)
 
   useEffect(() => {
@@ -284,14 +277,6 @@ function StoryViewer({
         </button>
         <button
           type="button"
-          className={styles.storyViewerButton}
-          aria-pressed={zones}
-          onClick={() => setZones((on) => !on)}
-        >
-          Safe zone
-        </button>
-        <button
-          type="button"
           className={styles.storyViewerIcon}
           aria-label="Close"
           autoFocus
@@ -301,12 +286,7 @@ function StoryViewer({
         </button>
       </div>
       {editing ? (
-        <StoryEditor
-          image={image}
-          actions={actions}
-          onSent={onClose}
-          zones={zones}
-        />
+        <StoryEditor image={image} actions={actions} onSent={onClose} />
       ) : (
         <div className={styles.storyViewerStage}>
           <figure className={styles.storyViewerFrame}>
@@ -318,20 +298,6 @@ function StoryViewer({
               height={image.height}
               alt="The story design"
             />
-            {zones && (
-              <div className={styles.storyZones} aria-hidden="true">
-                <span
-                  style={{
-                    height: `${(STORY_FRAME.top / STORY_FRAME.height) * 100}%`,
-                  }}
-                />
-                <span
-                  style={{
-                    height: `${(STORY_FRAME.bottom / STORY_FRAME.height) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
           </figure>
         </div>
       )}

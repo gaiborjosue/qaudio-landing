@@ -6,17 +6,21 @@ import { previewToolName } from "@/lib/admin/tool-names"
 import { DealCard } from "@/components/deal-card"
 import { NewsBody } from "@/components/news-body"
 import { NewsCard } from "@/components/news-card"
-import { ProductCatalog, ProductPageView } from "@/components/product-catalog"
 import { StoreHours } from "@/components/store-hours"
 import { InstagramPreview } from "@/components/admin/instagram-preview"
 import { GoogleBusinessPostPreview } from "@/components/admin/google-business-preview"
+import {
+  ConditionBadge,
+  ProductReviewTable,
+  type ReviewColumn,
+  type ReviewProduct,
+} from "@/components/admin/product-review-table"
 import {
   changeFromInput,
   dealFromInput,
   newsFromInput,
   productFromInput,
   productsInOrder,
-  shopProduct,
   withChange,
   withWeek,
   withoutChange,
@@ -47,13 +51,15 @@ import {
   deleteGoogleBusinessPostInputSchema,
   type InstagramPostInput,
 } from "@/lib/admin/schemas"
-import { saleDiscountLabel, saleLines, saleWindowLabel } from "@/lib/admin/sale"
 import {
-  formatStoreDateTime,
-  fromStoreDateTime,
-  toStoreDateTime,
-} from "@/lib/admin/store-time"
-import { descriptionFromColumns } from "@/lib/catalog"
+  saleDiscountLabel,
+  saleStatus,
+  saleWindowLabel,
+  saleLines,
+  type SaleLine,
+} from "@/lib/admin/sale"
+import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
+import { descriptionFromColumns, formatPrice } from "@/lib/catalog"
 import {
   addDays,
   formatChangeDates,
@@ -64,6 +70,7 @@ import {
 } from "@/lib/store-hours"
 import visitStyles from "../visit-section.module.css"
 import styles from "./admin.module.css"
+import tableStyles from "./product-table.module.css"
 
 // Keep the public import used by the chat.
 export { SAVE_TOOLS } from "@/lib/admin/tool-names"
@@ -92,6 +99,48 @@ function HoursPreview({ schedule }: { schedule: StoreSchedule }) {
 function Note({ children }: { children: React.ReactNode }) {
   return <p className={styles.previewNote}>{children}</p>
 }
+
+const statusLabel = (status: string) =>
+  status === "published" ? "Published" : "Draft"
+
+/** "$1,299", or "$1,299 /pair" for a product priced per pair. */
+const price = (cents: number | null, unit?: string) =>
+  `${formatPrice(cents)}${unit === "pair" && cents !== null ? " /pair" : ""}`
+
+const optionalPrice = (cents: number | null) =>
+  cents === null ? "—" : formatPrice(cents)
+
+/** "$250 · 20%": what comes off the price the discount is taken from. */
+const savings = (base: number, sale: number) =>
+  `${formatPrice(base - sale)} · ${Math.round(((base - sale) / base) * 100)}%`
+
+const productsById = (products: AdminProduct[]) =>
+  new Map(products.map((product) => [product.id, product]))
+
+/**
+ * A row's product column: the catalog's photo, brand, and draft status when
+ * the product is loaded here, else the name the tool was given (a product
+ * added since this page loaded).
+ */
+function reviewProduct(
+  product: AdminProduct | undefined,
+  name: string
+): ReviewProduct {
+  const detail = [
+    product?.brand?.name,
+    product && product.status !== "published" && "Draft",
+  ]
+    .filter(Boolean)
+    .join(" · ")
+  return {
+    name: product?.name ?? name,
+    photo: product?.images[0]?.src,
+    detail: detail || undefined,
+  }
+}
+
+const condition = (product: AdminProduct | undefined) =>
+  product ? <ConditionBadge condition={product.condition} /> : "—"
 
 function dealTiming(
   status: string,
@@ -160,10 +209,12 @@ function withDescription(input: unknown) {
 }
 
 /**
- * A save tool's proposed change, drawn with the site's own components. The
- * input comes from the model, so it's checked again here; anything that
- * doesn't parse shows as a note instead of a broken preview. Listings and
- * cards are inert, so their links can't leave the chat.
+ * A save tool's proposed change, drawn with the site's own components;
+ * product changes read as the Products tab's table instead, so many
+ * products stay reviewable. The input comes from the model, so it's checked
+ * again here; anything that doesn't parse shows as a note instead of a
+ * broken preview. Listings and cards are inert, so their links can't leave
+ * the chat.
  */
 export const ChangePreview = memo(function ChangePreview({
   tool,
@@ -278,6 +329,7 @@ export const ChangePreview = memo(function ChangePreview({
       if (!parsed.success) break
       const result = productFromInput(parsed.data, data.taxonomy)
       if ("problem" in result) return <Note>{result.problem}</Note>
+      const { product } = result
       return (
         <>
           <Note>
@@ -286,9 +338,50 @@ export const ChangePreview = memo(function ChangePreview({
               ? "Published in the shop"
               : "Draft, hidden from the shop"}
           </Note>
-          <div className={styles.productPreview}>
-            <ProductPageView product={result.product} />
-          </div>
+          {product.short_description && (
+            <Note>{product.short_description}</Note>
+          )}
+          <ProductReviewTable
+            label="Product"
+            rows={[product]}
+            rowKey={(row) => row.id}
+            product={(row) => ({
+              name: row.name,
+              photo: row.images[0]?.src,
+              detail: row.brand?.name,
+            })}
+            columns={[
+              { label: "Category", cell: (row) => row.category.name },
+              {
+                label: "Condition",
+                cell: (row) => <ConditionBadge condition={row.condition} />,
+              },
+              {
+                label: "Price",
+                numeric: true,
+                cell: (row) => (
+                  <>
+                    {price(row.price_cents, row.price_unit)}
+                    {row.sale && (
+                      <span className={tableStyles.sale}>
+                        Sale · was {formatPrice(row.sale.regular_price_cents)}
+                      </span>
+                    )}
+                  </>
+                ),
+              },
+              {
+                label: "MSRP",
+                numeric: true,
+                cell: (row) => optionalPrice(row.msrp_cents),
+              },
+              {
+                label: "Audition",
+                cell: (row) => (row.ready_for_audition ? "Yes" : "No"),
+              },
+              { label: "Status", cell: () => statusLabel(parsed.data.status) },
+            ]}
+          />
         </>
       )
     }
@@ -315,25 +408,54 @@ export const ChangePreview = memo(function ChangePreview({
               ?.name ?? brand_slug)
           : "All products"
       const drafts = ordered.filter((product) => product.status !== "published")
-      const now = new Date()
+      const now = toStoreDateTime(new Date())
       return (
         <>
           <Note>
             {scope}
-            {drafts.length > 0 &&
-              ` · Drafts keep their place but stay hidden: ${drafts
-                .map((product) => product.name)
-                .join(", ")}`}
+            {drafts.length > 0 && " · Drafts keep their place but stay hidden"}
             {unknown > 0 &&
               ` · ${unknown} not shown (added since this page loaded)`}
           </Note>
-          <div className={styles.listPreview} inert>
-            <ProductCatalog
-              products={ordered
-                .filter((product) => product.status === "published")
-                .map((product) => shopProduct(product, now))}
+          {ordered.length > 0 && (
+            <ProductReviewTable
+              label="Product order"
+              numbered
+              rows={ordered}
+              rowKey={(product) => product.id}
+              product={(product) => reviewProduct(product, product.name)}
+              columns={[
+                {
+                  label: "Category",
+                  cell: (product) => product.category.name,
+                },
+                {
+                  label: "Condition",
+                  cell: (product) => (
+                    <ConditionBadge condition={product.condition} />
+                  ),
+                },
+                {
+                  label: "Price",
+                  numeric: true,
+                  cell: (product) => (
+                    <>
+                      {price(product.price_cents, product.price_unit)}
+                      {product.sale_window && (
+                        <span className={tableStyles.sale}>
+                          {saleStatus(product.sale_window, now)}
+                        </span>
+                      )}
+                    </>
+                  ),
+                },
+                {
+                  label: "Status",
+                  cell: (product) => statusLabel(product.status),
+                },
+              ]}
             />
-          </div>
+          )}
         </>
       )
     }
@@ -342,70 +464,123 @@ export const ChangePreview = memo(function ChangePreview({
       if (!parsed.success) break
       const sale = parsed.data
       const lines = saleLines(sale)
-      const problems = lines.filter((line) => line.problem)
-      const ids = lines.filter((line) => !line.problem).map((line) => line.id)
-      const { ordered, unknown } = productsInOrder(ids, data.products)
-      const prices = new Map(lines.map((line) => [line.id, line]))
-      const endsAt = fromStoreDateTime(sale.ends_at)
-      // Each card as the shop will show it during the sale, from the
-      // prices the tool was given (the ones it saves against).
-      const shown = ordered.map((product) => {
-        const line = prices.get(product.id)!
-        return {
-          ...product,
-          price_cents: line.sale_price_cents,
-          msrp_cents: line.msrp_cents,
-          sale: { regular_price_cents: line.price_cents, ends_at: endsAt },
-        }
-      })
+      const problems = lines.filter((line) => line.problem).length
+      const byId = productsById(data.products)
+      const hasMsrp = lines.some((line) => line.msrp_cents !== null)
+      // From the prices the tool was given (the ones it saves against).
+      const columns: ReviewColumn<SaleLine>[] = [
+        {
+          label: "Condition",
+          cell: (line) => condition(byId.get(line.id)),
+        },
+        {
+          label: "Price",
+          numeric: true,
+          cell: (line) => formatPrice(line.price_cents),
+        },
+        ...(hasMsrp
+          ? [
+              {
+                label: "MSRP",
+                numeric: true,
+                cell: (line: SaleLine) => optionalPrice(line.msrp_cents),
+              },
+            ]
+          : []),
+        {
+          label: "Sale price",
+          numeric: true,
+          cell: (line) =>
+            line.problem ? (
+              "—"
+            ) : (
+              <span className={tableStyles.strong}>
+                {price(line.sale_price_cents, byId.get(line.id)?.price_unit)}
+              </span>
+            ),
+        },
+        {
+          label: "Off",
+          numeric: true,
+          cell: (line) =>
+            line.problem
+              ? "—"
+              : savings(line.base_cents, line.sale_price_cents),
+        },
+      ]
       return (
         <>
           <Note>
             {saleDiscountLabel(sale)} · {saleWindowLabel(sale)} · {lines.length}{" "}
             product{lines.length === 1 ? "" : "s"}
-            {unknown > 0 &&
-              ` · ${unknown} not shown (added since this page loaded)`}
+            {problems > 0 && ` · ${problems} can’t go on sale`}
           </Note>
-          {problems.length > 0 && (
-            <Note>
-              Can’t go on sale:{" "}
-              {problems
-                .map((line) => `${line.name} (${line.problem})`)
-                .join(", ")}
-            </Note>
-          )}
-          {shown.length > 0 && (
-            <div className={styles.listPreview} inert>
-              <ProductCatalog products={shown} />
-            </div>
-          )}
+          <ProductReviewTable
+            label="Products on sale"
+            rows={lines}
+            rowKey={(line) => line.id}
+            product={(line) => ({
+              ...reviewProduct(byId.get(line.id), line.name),
+              problem: line.problem && `Can’t go on sale: ${line.problem}`,
+            })}
+            columns={columns}
+          />
         </>
       )
     }
     case "end_sale": {
       const parsed = endSaleInputSchema.safeParse(input)
       if (!parsed.success) break
-      const { ordered, unknown } = productsInOrder(
-        parsed.data.products.map((product) => product.id),
-        data.products
+      const byId = productsById(data.products)
+      const rows = parsed.data.products
+      const hasMsrp = rows.some(
+        (row) => (byId.get(row.id)?.msrp_cents ?? null) !== null
       )
+      const now = toStoreDateTime(new Date())
+      const columns: ReviewColumn<(typeof rows)[number]>[] = [
+        { label: "Condition", cell: (row) => condition(byId.get(row.id)) },
+        {
+          label: "Sale",
+          cell: (row) => {
+            const sale = byId.get(row.id)?.sale_window
+            return sale ? saleStatus(sale, now) : "—"
+          },
+        },
+        {
+          label: "Regular price",
+          numeric: true,
+          cell: (row) => {
+            const product = byId.get(row.id)
+            return product ? (
+              <span className={tableStyles.strong}>
+                {price(product.price_cents, product.price_unit)}
+              </span>
+            ) : (
+              "—"
+            )
+          },
+        },
+        ...(hasMsrp
+          ? [
+              {
+                label: "MSRP",
+                numeric: true,
+                cell: (row: (typeof rows)[number]) =>
+                  optionalPrice(byId.get(row.id)?.msrp_cents ?? null),
+              },
+            ]
+          : []),
+      ]
       return (
         <>
-          <Note>
-            {parsed.data.title} · Regular prices show again now
-            {unknown > 0 &&
-              ` · ${unknown} not shown (added since this page loaded)`}
-          </Note>
-          {ordered.length > 0 && (
-            <div className={styles.listPreview} inert>
-              <ProductCatalog
-                products={ordered.map((product) => ({
-                  ...product,
-                  sale: null,
-                }))}
-              />
-            </div>
-          )}
+          <Note>{parsed.data.title} · Regular prices show again now</Note>
+          <ProductReviewTable
+            label="Products leaving the sale"
+            rows={rows}
+            rowKey={(row) => row.id}
+            product={(row) => reviewProduct(byId.get(row.id), row.name)}
+            columns={columns}
+          />
         </>
       )
     }

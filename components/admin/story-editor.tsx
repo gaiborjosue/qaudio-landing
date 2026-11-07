@@ -15,7 +15,7 @@ import {
   type StoryBox,
   type StoryRegion,
 } from "@/lib/admin/story-edits"
-import { STORY_FRAME, type StoryImage } from "@/lib/admin/story-images"
+import { type StoryImage } from "@/lib/admin/story-images"
 import styles from "./story-editor.module.css"
 
 type Region = StoryRegion & { key: string }
@@ -26,12 +26,10 @@ export function StoryEditor({
   image,
   actions,
   onSent,
-  zones,
 }: {
   image: StoryImage
   actions: ChatActions
   onSent: () => void
-  zones: boolean
 }) {
   const id = useId()
   const [regions, setRegions] = useState<Region[]>([])
@@ -122,20 +120,6 @@ export function StoryEditor({
             height={image.height}
             draggable={false}
           />
-          {zones && (
-            <div className={styles.safeZone} aria-hidden="true">
-              <span
-                style={{
-                  height: `${(STORY_FRAME.top / STORY_FRAME.height) * 100}%`,
-                }}
-              />
-              <span
-                style={{
-                  height: `${(STORY_FRAME.bottom / STORY_FRAME.height) * 100}%`,
-                }}
-              />
-            </div>
-          )}
           <div
             className={styles.layer}
             role="group"

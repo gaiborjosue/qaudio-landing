@@ -25,11 +25,11 @@ const fromDay = (day: Date) =>
   `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`
 
 /**
- * ask_dates' question: a range on the calendar, starting now when it starts
- * today, otherwise at a time, and ending at a time (the day's end unless
- * changed). The answer goes back as "<start>/<end>" in store time, which
- * the tool reads as dates (agent/lib/ask-dates.ts); typing an answer in the
- * message field works too.
+ * ask_dates' question: a range the owner picks on the calendar (nothing
+ * picked at first), starting now when it starts today, otherwise at a time,
+ * and ending at a time (the day's end unless changed). The answer goes back
+ * as "<start>/<end>" in store time, which the tool reads as dates
+ * (agent/lib/ask-dates.ts); typing an answer in the message field works too.
  */
 export function DatesPrompt({
   interaction,
@@ -53,10 +53,15 @@ export function DatesPrompt({
       : null
   const now = toStoreDateTime(new Date())
   const today = toDay(now.slice(0, 10))
-  const [range, setRange] = useState<DateRange | undefined>(() => ({
-    from: start && start > now ? toDay(start.slice(0, 10)) : today,
-    to: end ? toDay(end.slice(0, 10)) : undefined,
-  }))
+  // Nothing is picked until the owner starts the range; a suggestion only
+  // sets the times and the month shown.
+  const [range, setRange] = useState<DateRange | undefined>()
+  const suggestedMonth =
+    start && start > now
+      ? toDay(start.slice(0, 10))
+      : end && end > now
+        ? toDay(end.slice(0, 10))
+        : today
   const [startTime, setStartTime] = useState(start ? start.slice(11) : "00:00")
   const [endTime, setEndTime] = useState(end ? end.slice(11) : "23:59")
   const [sending, setSending] = useState(false)
@@ -100,8 +105,9 @@ export function DatesPrompt({
           mode="range"
           selected={range}
           onSelect={setRange}
-          defaultMonth={range?.from ?? today}
+          defaultMonth={suggestedMonth}
           disabled={{ before: today }}
+          resetOnSelect
           className={styles.calendar}
         />
         <div className={styles.dateTimes}>

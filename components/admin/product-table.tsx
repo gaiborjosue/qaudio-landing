@@ -1,7 +1,6 @@
 "use client"
 
 import { useId, useState, useTransition } from "react"
-import Image from "next/image"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
@@ -16,6 +15,7 @@ import { saleStatus } from "@/lib/admin/sale"
 import type { ProductQuickEdit } from "@/lib/admin/schemas"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { Choice } from "./choice"
+import { ProductThumb } from "./product-review-table"
 import adminStyles from "./admin.module.css"
 import styles from "./product-table.module.css"
 
@@ -476,7 +476,6 @@ function ProductRow({
   // assistive technology.
   const mark = (field: keyof Draft) => fields[field] !== undefined || undefined
   const changed = (field: keyof Draft) => (mark(field) ? changedId : undefined)
-  const photo = product.images[0]
   const price = draft.price ?? dollars(product.price_cents)
   const priceInvalid = mark("price") && !isPrice(parseDollars(price))
   const pair = product.price_unit === "pair"
@@ -484,18 +483,7 @@ function ProductRow({
   return (
     <tr>
       <td>
-        {photo ? (
-          <Image
-            className={styles.photo}
-            src={photo.src}
-            alt=""
-            width={40}
-            height={40}
-            sizes="40px"
-          />
-        ) : (
-          <span className={styles.photo} />
-        )}
+        <ProductThumb src={product.images[0]?.src} />
       </td>
       <th scope="row" className={styles.product}>
         <button type="button" className={styles.name} onClick={onOpen}>

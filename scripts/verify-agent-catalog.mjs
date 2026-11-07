@@ -449,8 +449,8 @@ for (const name of [...catalog.deferred.keys(), ...retired]) {
   renders += 2
 }
 assert.equal(renders, 36)
-// A sale's card shows the product as the shop will during the sale: 25% off
-// the $1,200 list price is $900, against the crossed-out list price.
+// A sale's card lists each product's prices as a table row: 25% off the
+// $1,200 list price is $900, $300 off, against its $1,000 regular price.
 const saleCard = renderToStaticMarkup(
   createElement(
     AppRouterContext.Provider,
@@ -488,8 +488,11 @@ const saleCard = renderToStaticMarkup(
   )
 )
 assert(saleCard.includes("25% off MSRP"))
-assert(saleCard.includes("$900"))
-assert(saleCard.includes("<s>$1,200</s>"))
+assert(saleCard.includes('aria-label="Products on sale"'))
+const saleRow = saleCard.match(/<tbody>.*<\/tbody>/s)?.[0] ?? ""
+for (const cell of ["Sample", "$1,000", "$1,200", "$900", "$300 · 25%"]) {
+  assert(saleRow.includes(cell), cell)
+}
 // A pending carousel's card adds the reorderable photo row, and the post
 // follows the arranged order.
 const arranged = renderToStaticMarkup(
