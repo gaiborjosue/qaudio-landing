@@ -98,6 +98,86 @@ test("story review waits for Continue and passes whole-image or region feedback 
     })
 })
 
+test("Continue with an earlier version returns that version as the design, and only a story frame from the chat's uploads", async () => {
+  const versions = await import("../lib/admin/story-versions.ts")
+  const earlier = {
+    path: "uploads/chat/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.jpg",
+    width: 1080,
+    height: 1920,
+  }
+  const text = versions.storyVersionText(2, earlier)
+  assert.match(text, /^Continue with version 2\./)
+  assert.deepEqual(
+    await reviewStory({
+      ask: async () => ({ status: "answered", optionId: "continue", text }),
+    }),
+    { review: "continued", design: earlier }
+  )
+  for (const foreign of [
+    { ...earlier, path: "products/sample.jpg" },
+    { ...earlier, path: earlier.path.replace(".jpg", ".webp") },
+    { ...earlier, width: 1000 },
+    { ...earlier, path: "uploads/chat/../products/x.jpg" },
+  ]) {
+    const answer = versions.storyVersionText(1, foreign)
+    assert.equal(versions.readStoryVersion(answer), null)
+    assert.deepEqual(
+      await reviewStory({
+        ask: async () => ({
+          status: "answered",
+          optionId: "continue",
+          text: answer,
+        }),
+      }),
+      { review: "continued" }
+    )
+  }
+  assert.equal(versions.readStoryVersion("Story version: {not json"), null)
+})
+
+test("story versions count each edit on from the version it edited, across the chat", async () => {
+  const { storyVersions } = await import("../lib/admin/story-versions.ts")
+  const image = (n) => ({
+    path: `uploads/v${n}.jpg`,
+    width: 1080,
+    height: 1920,
+  })
+  const found = storyVersions([
+    { callId: "a", name: "design_story", output: { images: [image(1)] } },
+    {
+      callId: "b",
+      name: "edit_story",
+      input: { image: image(1).path },
+      output: { images: [image(2)], design: image(2) },
+    },
+    // Still designing, then failed: no version.
+    { callId: "c", name: "edit_story", input: { image: image(2).path } },
+    // An edit of version 1 still counts on: version 3.
+    {
+      callId: "d",
+      name: "edit_story",
+      input: { image: image(1).path },
+      // Continued with version 2: its own image stays version 3.
+      output: { images: [image(3)], design: image(2), review: "continued" },
+    },
+    { callId: "e", name: "design_story", output: { images: [image(9)] } },
+  ])
+  assert.deepEqual(
+    Object.fromEntries(
+      Object.entries(found).map(([id, item]) => [
+        id,
+        [item.version, item.versions.map((version) => version.path)],
+      ])
+    ),
+    {
+      a: [1, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      b: [2, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      d: [3, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      e: [1, ["uploads/v9.jpg"]],
+    }
+  )
+})
+
 test("region geometry is independent of image scaling, with y before x", () => {
   for (const scale of [1, 0.5, 0.2]) {
     const a = edits.storyPoint(

@@ -78,7 +78,7 @@ export const FLOWS = [
         label: "Instagram story",
         tool: "instagram__save_post",
         instructions:
-          'After the design review returns continued, load the instagram skill and discover instagram__. Propose the design as a story with instagram__save_post: kind story, the design\'s path, width, and height as its one photo, fit cover, alt text from what it shows, no caption. Its when matches the news post: "now" if it went live now, its time if that\'s within 7 days, otherwise "draft". If the owner requests changes to the design, use edit_story (FLUX Klein) with the current design and that feedback, copying any Story edit regions exactly, wait for its Continue, then propose the edited one for fresh approval. Never call design_story for revisions or restart this flow for feedback.',
+          'After the design review returns continued, load the instagram skill and discover instagram__. Propose the design as a story with instagram__save_post: kind story, the returned design\'s path, width, and height as its one photo (the owner may continue with an earlier version; use the returned design), fit cover, alt text from what it shows, no caption. Its when matches the news post: "now" if it went live now, its time if that\'s within 7 days, otherwise "draft". If the owner requests changes to the design, use edit_story (FLUX Klein) with the current design and that feedback, copying any Story edit regions exactly, wait for its Continue, then propose the design it returns for fresh approval. Never call design_story for revisions or restart this flow for feedback.',
       },
     ],
   },

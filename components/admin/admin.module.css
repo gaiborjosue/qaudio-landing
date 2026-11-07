@@ -962,6 +962,76 @@
   cursor: default;
   opacity: 0.55;
 }
+/* The design's version, once its story has several: a pill at top left. */
+.storyVersion {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.92);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.12);
+  color: #111;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 1;
+  pointer-events: none;
+}
+/* Every version, to pick the one to continue with. */
+.storyVersions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 360px;
+}
+.storyVersionOption {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #6b6b6b;
+  font: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.storyVersionOption img {
+  display: block;
+  width: 40px;
+  height: auto;
+  aspect-ratio: 9 / 16;
+  border: 1px solid #dcdcdc;
+  border-radius: 8px;
+  object-fit: cover;
+  opacity: 0.7;
+  transition:
+    opacity 160ms ease,
+    border-color 160ms ease;
+}
+.storyVersionOption:hover img {
+  opacity: 1;
+}
+.storyVersionOption[aria-pressed="true"] {
+  color: #111;
+  font-weight: 600;
+}
+.storyVersionOption[aria-pressed="true"] img {
+  border-color: #111;
+  box-shadow: 0 0 0 1px #111;
+  opacity: 1;
+}
+.storyVersionOption:focus-visible {
+  border-radius: 8px;
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+.storyVersionOption:disabled {
+  cursor: default;
+}
 
 /* The large view (StoryViewer): the design at nearly full height on a dark
    backdrop, its controls in white pills. */
@@ -1018,6 +1088,13 @@
   margin-right: auto;
   font-size: 15px;
   font-weight: 500;
+}
+.storyViewerVersion {
+  padding: 3px 8px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 999px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
 }
 .storyViewerButton {
   padding: 7px 14px;
@@ -1080,7 +1157,8 @@
   .storyViewer[open] {
     animation: none;
   }
-  .storyExpand {
+  .storyExpand,
+  .storyVersionOption img {
     transition: none;
   }
 }

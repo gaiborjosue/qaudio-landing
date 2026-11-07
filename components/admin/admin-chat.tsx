@@ -57,6 +57,7 @@ import {
 import { Steps } from "@/components/admin/steps"
 import { TaskQueue } from "@/components/admin/task-queue"
 import { isStoryTool, StoryDesigns } from "@/components/admin/story-designs"
+import { storyVersions, type StoryVersions } from "@/lib/admin/story-versions"
 import { useVoiceInput, VoiceWaveform } from "@/components/admin/voice-input"
 import { ChromaticButton } from "@/components/chromatic-button"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
@@ -398,6 +399,14 @@ const Conversation = memo(function Conversation({
   const lastRow = useRef<HTMLDivElement>(null)
   const ownerSaved = ownerSavedOrders(messages)
   const choices = approvedProposals(messages)
+  const stories = storyVersions(
+    messages.flatMap((message) =>
+      message.parts.filter(
+        (part): part is EveToolPart =>
+          part.type === "tool" && isStoryTool(part.name)
+      )
+    )
+  )
   // Steering can split a turn into several messages. Only its last reply
   // gets actions, and only after the turn itself has settled.
   const finalReplies = new Map<string, string>()
@@ -432,6 +441,13 @@ const Conversation = memo(function Conversation({
             </MessageScrollerItem>
             {messages.map((message, index) => {
               const cards = cardStates(message, ownerSaved, choices)
+              const versions = Object.fromEntries(
+                message.parts.flatMap((part) =>
+                  part.type === "tool" && stories[part.callId]
+                    ? [[part.callId, stories[part.callId]]]
+                    : []
+                )
+              )
               return (
                 <MessageScrollerItem
                   key={message.id}
@@ -445,6 +461,8 @@ const Conversation = memo(function Conversation({
                     preview={preview}
                     cards={cards}
                     cardsKey={JSON.stringify(cards)}
+                    versions={versions}
+                    versionsKey={JSON.stringify(versions)}
                     getUsage={getUsage}
                     finished={
                       !actions.resuming &&
@@ -658,6 +676,9 @@ type MessageViewProps = {
   cards: Record<string, CardState>
   /** `cards` as text, so a redraw can be skipped when they're the same. */
   cardsKey: string
+  /** Its story designs' versions, by call. */
+  versions: Record<string, StoryVersions>
+  versionsKey: string
   getUsage: (id: string) => ReturnType<typeof responseUsage>
   finished: boolean
   onEdit: (text: string) => void
@@ -678,6 +699,7 @@ function sameMessage(a: MessageViewProps, b: MessageViewProps) {
     a.actions === b.actions &&
     a.preview === b.preview &&
     a.cardsKey === b.cardsKey &&
+    a.versionsKey === b.versionsKey &&
     a.getUsage === b.getUsage &&
     a.finished === b.finished &&
     a.onEdit === b.onEdit
@@ -689,6 +711,7 @@ const MessageView = memo(function MessageView({
   actions,
   preview,
   cards,
+  versions,
   getUsage,
   finished,
   onEdit,
@@ -790,7 +813,11 @@ const MessageView = memo(function MessageView({
               if (isStoryTool(part.name)) {
                 return (
                   <Fragment key={key}>
-                    <StoryDesigns part={part} actions={actions} />
+                    <StoryDesigns
+                      part={part}
+                      actions={actions}
+                      versions={versions[part.callId]}
+                    />
                     {part.interaction?.status === "open" &&
                       !(
                         part.output &&

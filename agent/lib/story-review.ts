@@ -1,6 +1,11 @@
 import type { WorkflowToolContext } from "eve/tools"
+import { readStoryVersion } from "../../lib/admin/story-versions"
 
-/** A durable pause after each design, separate from permission to post it. */
+/**
+ * A durable pause after each design, separate from permission to post it.
+ * Continue may name an earlier version of the design (a `Story version:`
+ * line); that version is then returned as the design to post.
+ */
 export async function reviewStory(ctx: WorkflowToolContext) {
   "use workflow"
   const answer = await ctx.ask({
@@ -14,7 +19,10 @@ export async function reviewStory(ctx: WorkflowToolContext) {
     return { review: "interrupted" as const }
   }
   if (answer.optionId === "continue") {
-    return { review: "continued" as const }
+    const design = readStoryVersion(answer.text)
+    return design
+      ? { review: "continued" as const, design }
+      : { review: "continued" as const }
   }
   return {
     review: "changes_requested" as const,

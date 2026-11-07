@@ -1,13 +1,21 @@
+/* The story editor (story-editor.tsx), inside the dark story viewer: the
+   image with the areas drawn on it, and beside it a floating panel in
+   translucent dark glass that only grows as tall as it needs. Monochrome;
+   the design keeps its color. */
+
 .editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  align-items: center;
+  gap: 24px;
   min-height: 0;
+  height: 100%;
 }
 .canvasSlot {
   display: flex;
   align-items: center;
   justify-content: center;
+  height: 100%;
   min-height: 0;
   min-width: 0;
   overflow: hidden;
@@ -18,20 +26,38 @@
   max-width: 100%;
   aspect-ratio: 9 / 16;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 18px;
   background: #111;
 }
 .canvas img {
   display: block;
   width: 100%;
   height: 100%;
+  user-select: none;
 }
+
+/* Drawing */
+
 .layer {
   position: absolute;
   inset: 0;
   touch-action: none;
   cursor: crosshair;
 }
+.layer:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+  border-radius: 18px;
+}
+.layer[data-full] {
+  cursor: default;
+}
+/* Drawing a destination draws over the areas. */
+.layer[data-placing] .region,
+.layer[data-placing] .target {
+  pointer-events: none;
+}
+
 .region,
 .target,
 .drawing {
@@ -39,51 +65,171 @@
   margin: 0;
   padding: 0;
   border: 2px solid #fff;
-  background: rgb(255 255 255 / 0.1);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.65);
+  border-radius: 6px;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    inset 0 0 0 1px rgb(0 0 0 / 0.25);
   color: #fff;
 }
 .region {
-  cursor: pointer;
-  text-align: left;
+  background: rgb(255 255 255 / 0.08);
 }
-.region[aria-pressed="true"] {
-  border-style: dashed;
-  background: rgb(255 255 255 / 0.2);
+.region[data-selected] {
+  background: rgb(255 255 255 / 0.18);
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.55),
+    0 0 0 4px rgb(255 255 255 / 0.25);
 }
-.region span {
+.regionSelect {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  min-width: 22px;
-  padding: 3px;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
   border-radius: 4px;
-  background: #111;
-  color: #fff;
-  font: 500 12px var(--font-ui);
-  text-align: center;
+  background: none;
+  cursor: pointer;
+}
+.regionSelect:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+/* An area's number, at its top left; the destination repeats it. */
+.number {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font: 600 11px/1 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+}
+.region .number,
+.target .number {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+}
+/* Delete, inside the area's top right corner (so the frame never clips
+   it), on hover or focus, and always on the selected area (touch has no
+   hover). */
+.regionDelete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.35);
+  color: #111;
+  cursor: pointer;
+  opacity: 0;
+  scale: 0.85;
+  transition:
+    opacity 140ms ease,
+    scale 140ms ease;
+}
+.region:hover .regionDelete,
+.region:focus-within .regionDelete,
+.region[data-selected] .regionDelete {
+  opacity: 1;
+  scale: 1;
+}
+.regionDelete:hover {
+  background: #f0f0f0;
+}
+.regionDelete:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 .target,
 .drawing {
   border-style: dashed;
 }
+.target {
+  background: rgb(0 0 0 / 0.25);
+  cursor: pointer;
+  opacity: 0.6;
+}
+.target[data-selected] {
+  opacity: 1;
+}
+.target:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
 .drawing {
   pointer-events: none;
+  background: rgb(255 255 255 / 0.12);
 }
-.target {
-  cursor: move;
-  padding: 4px;
-  background: rgb(0 0 0 / 0.3);
-  font-size: 11px;
+
+/* Over the image: what to do while drawing a destination (top), or how to
+   start when there are no areas yet (bottom). */
+.banner,
+.cue {
+  position: absolute;
+  left: 50%;
+  translate: -50% 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 7px 8px 7px 14px;
+  border-radius: 999px;
+  background: rgb(17 17 17 / 0.82);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
 }
+.banner {
+  top: 12px;
+}
+.banner button {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.banner button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.cue {
+  bottom: 16px;
+  padding-right: 14px;
+  pointer-events: none;
+}
+
+/* The panel */
+
 .panel {
+  max-height: 100%;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   padding: 18px;
-  border-radius: 14px;
-  background: #fafafa;
-  color: #111;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 18px;
+  background: rgb(28 28 28 / 0.72);
+  backdrop-filter: blur(16px);
+  color: #fff;
 }
 .panel fieldset {
   display: grid;
@@ -94,96 +240,176 @@
   border: 0;
 }
 .title {
-  margin-bottom: 10px;
+  margin-bottom: 6px;
+  padding: 0;
   font-size: 15px;
   font-weight: 500;
 }
 .hint {
   margin: 0;
-  color: #666;
+  color: rgb(255 255 255 / 0.62);
   font-size: 12px;
   line-height: 1.5;
 }
-.panel label {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
-  font-size: 12px;
+.error {
+  margin: 0;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
 }
-.panel :is(input, textarea, select) {
-  width: 100%;
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid #cfcfcf;
+
+/* The selected area */
+.area {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgb(255 255 255 / 0.1);
+  border-radius: 14px;
+  background: rgb(255 255 255 / 0.05);
+}
+.areaTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+/* What to do: one choice of four, as a segmented control. */
+.panel .actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 0.08);
+}
+.action {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 8px 2px 7px;
   border-radius: 8px;
+  color: rgb(255 255 255 / 0.72);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 140ms ease,
+    color 140ms ease;
+}
+.action:hover {
+  color: #fff;
+}
+.action input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  margin: 0;
+  cursor: pointer;
+}
+.action:has(input:checked) {
   background: #fff;
   color: #111;
-  font: inherit;
+  font-weight: 500;
+}
+.action:has(input:focus-visible) {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.destination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 13px;
 }
-.panel textarea {
-  resize: vertical;
-}
-.panel button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 8px 10px;
-  border: 1px solid #ccc;
-  border-radius: 8px;
-  background: #fff;
-  color: #333;
+.destination button {
+  padding: 5px 12px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
-.panel button[aria-pressed="true"],
-.panel .submit {
-  border-color: #111;
-  background: #111;
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: rgb(255 255 255 / 0.85);
+  font-size: 12px;
+}
+.panel textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgb(255 255 255 / 0.16);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 0.06);
   color: #fff;
+  font: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+.panel textarea::placeholder {
+  color: rgb(255 255 255 / 0.4);
+}
+.remove {
+  display: inline-flex;
+  justify-self: center;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: rgb(255 255 255 / 0.72);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.remove:hover {
+  background: rgb(255 255 255 / 0.08);
+  color: #fff;
+}
+.submit {
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
 }
 .panel button:disabled {
   opacity: 0.45;
   cursor: default;
 }
-.regions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.regionFields {
-  display: grid;
-  gap: 12px;
-  padding-bottom: 14px;
-  border-bottom: 1px solid #dedede;
-}
-.panel .remove {
-  justify-self: start;
-  padding-left: 0;
-  border-color: transparent;
-  background: transparent;
-}
-.panel :is(button, input, textarea, select):focus-visible,
-.region:focus-visible {
-  outline: 2px solid #111;
-  outline-offset: 3px;
-}
-.region:focus-visible {
-  outline-color: #fff;
-}
-.target:focus-visible {
+.panel :is(button, textarea):focus-visible {
   outline: 2px solid #fff;
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
+
 @media (max-width: 700px) {
   .editor {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(160px, 45%) minmax(0, 1fr);
+    align-items: stretch;
     gap: 12px;
   }
   .panel {
     padding: 14px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .regionDelete,
+  .action {
+    transition: none;
   }
 }

@@ -7,6 +7,11 @@ import { AsciiWake } from "@/components/ascii-wake"
 import type { ChatActions } from "./chat-actions"
 import { StoryEditor } from "./story-editor"
 import { storyProgress, type StoryImage } from "@/lib/admin/story-images"
+import {
+  madeStory,
+  storyVersionText,
+  type StoryVersions,
+} from "@/lib/admin/story-versions"
 import { mediaUrl } from "@/lib/media"
 import styles from "./admin.module.css"
 
@@ -46,22 +51,24 @@ function useProgress(startedAt: number | undefined, running: boolean) {
  * The story design, in the chat: while the image model works, a 9:16
  * placeholder whose whole ground is Bencho's ASCII wake to play with, the
  * estimated progress over it; then the design itself, in color (it's what
- * will be posted), with a button at its top right to see it large. The
- * owner can edit it or Continue to the story's separate approval card.
+ * will be posted), with buttons at its top right to edit it or see it
+ * large. Once a story has several versions, each carries its number, and
+ * while it waits for Continue the owner can pick an earlier version to go
+ * on with (lib/admin/story-versions.ts).
  */
 export const StoryDesigns = memo(function StoryDesigns({
   part,
   actions,
+  versions,
 }: {
   part: EveToolPart
   actions: ChatActions
+  /** This design's place among its story's versions in the chat. */
+  versions?: StoryVersions
 }) {
   const editing = part.name === "edit_story"
   const output = (part.output ?? {}) as Output
-  const design =
-    output.design ??
-    output.chosen ??
-    (output.images?.length === 1 ? output.images[0] : undefined)
+  const design = madeStory(output)
   // Older chats designed two at once; show them all.
   const images = design ? [design] : (output.images ?? [])
   // Cancelling a review must not discard an image already made.
@@ -83,6 +90,8 @@ export const StoryDesigns = memo(function StoryDesigns({
   } | null>(null)
   const [continuing, setContinuing] = useState(false)
   const [problem, setProblem] = useState("")
+  // An earlier version the owner picked to go on with, by number.
+  const [picked, setPicked] = useState<number | null>(null)
   const opener = useRef<HTMLButtonElement | null>(null)
   const reviewing =
     output.review === "waiting" &&
@@ -131,12 +140,53 @@ export const StoryDesigns = memo(function StoryDesigns({
 
   if (images.length === 0) return null
 
+  const all = versions?.versions ?? []
+  const own = versions?.version
+  const several = all.length > 1 && images.length === 1
+  // While it waits for Continue, an earlier version may stand in for it.
+  const chosen = reviewing && picked !== null && picked !== own ? picked : null
+  const shown = chosen ? [all[chosen - 1]] : images
+  const shownVersion = chosen ?? own
+  // A review that went on with an earlier version says which.
+  const continuedWith =
+    output.review === "continued" &&
+    design &&
+    output.design &&
+    output.design.path !== design.path
+      ? all.findIndex((image) => image.path === output.design!.path) + 1
+      : 0
+
+  const answer = async () => {
+    if (!part.interaction || continuing) return
+    setContinuing(true)
+    setProblem("")
+    try {
+      await actions.respond([
+        {
+          interactionId: part.interaction.interactionId,
+          optionId: "continue",
+          ...(chosen && {
+            text: storyVersionText(chosen, all[chosen - 1]),
+          }),
+        },
+      ])
+    } catch {
+      setProblem("Couldn't continue. Try again.")
+    } finally {
+      setContinuing(false)
+    }
+  }
+
   return (
     <section className={styles.story} aria-label="Story design">
       <div className={styles.storyOptions}>
-        {images.map((image, index) => {
+        {shown.map((image, index) => {
           const name =
-            images.length > 1 ? `Design ${index + 1}` : "The story design"
+            images.length > 1
+              ? `Design ${index + 1}`
+              : several
+                ? `Version ${shownVersion} of the story design`
+                : "The story design"
           return (
             <div key={image.path} className={styles.storyChoice}>
               {/* eslint-disable-next-line @next/next/no-img-element -- a generated design in storage, of known size */}
@@ -148,6 +198,11 @@ export const StoryDesigns = memo(function StoryDesigns({
                 height={image.height}
                 alt={name}
               />
+              {several && (
+                <span className={styles.storyVersion} aria-hidden="true">
+                  V{shownVersion}
+                </span>
+              )}
               <div className={styles.storyControls}>
                 <button
                   type="button"
@@ -179,30 +234,53 @@ export const StoryDesigns = memo(function StoryDesigns({
           )
         })}
       </div>
+      {reviewing && several && (
+        <div
+          className={styles.storyVersions}
+          role="group"
+          aria-label="Versions to continue with"
+        >
+          {all.map((image, index) => {
+            const number = index + 1
+            return (
+              <button
+                key={image.path}
+                type="button"
+                className={styles.storyVersionOption}
+                aria-label={`Version ${number}${number === own ? ", newest" : ""}`}
+                aria-pressed={number === shownVersion}
+                disabled={actions.resuming || continuing}
+                onClick={() => setPicked(number === own ? null : number)}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- a generated design in storage, of known size */}
+                <img
+                  crossOrigin="anonymous"
+                  src={mediaUrl(image.path)}
+                  width={image.width}
+                  height={image.height}
+                  alt=""
+                />
+                <span aria-hidden="true">V{number}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+      {continuedWith > 0 && (
+        <p className={styles.hint}>Continued with V{continuedWith}</p>
+      )}
       {reviewing && (
         <button
           type="button"
           className={styles.primary}
           disabled={actions.resuming || continuing}
-          onClick={async () => {
-            if (!part.interaction || continuing) return
-            setContinuing(true)
-            setProblem("")
-            try {
-              await actions.respond([
-                {
-                  interactionId: part.interaction.interactionId,
-                  optionId: "continue",
-                },
-              ])
-            } catch {
-              setProblem("Couldn't continue. Try again.")
-            } finally {
-              setContinuing(false)
-            }
-          }}
+          onClick={() => void answer()}
         >
-          {continuing ? "Continuing…" : "Continue"}
+          {continuing
+            ? "Continuing…"
+            : chosen
+              ? `Continue with V${chosen}`
+              : "Continue"}
         </button>
       )}
       {problem && (
@@ -213,6 +291,7 @@ export const StoryDesigns = memo(function StoryDesigns({
       {viewing && (
         <StoryViewer
           image={viewing.image}
+          version={several ? shownVersion : undefined}
           initiallyEditing={viewing.editing}
           actions={actions}
           onClose={() => {
@@ -231,11 +310,13 @@ export const StoryDesigns = memo(function StoryDesigns({
  */
 function StoryViewer({
   image,
+  version,
   initiallyEditing,
   actions,
   onClose,
 }: {
   image: StoryImage
+  version?: number
   initiallyEditing: boolean
   actions: ChatActions
   onClose: () => void
@@ -265,7 +346,12 @@ function StoryViewer({
       }}
     >
       <div className={styles.storyViewerBar}>
-        <span className={styles.storyViewerTitle}>Story design</span>
+        <span className={styles.storyViewerTitle}>
+          Story design
+          {version && (
+            <span className={styles.storyViewerVersion}>V{version}</span>
+          )}
+        </span>
         <button
           type="button"
           className={styles.storyViewerButton}

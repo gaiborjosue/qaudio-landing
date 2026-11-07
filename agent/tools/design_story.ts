@@ -29,7 +29,7 @@ export type StoryOutput =
 
 export default defineWorkflowTool({
   description:
-    "Create the FIRST Instagram story image with GPT Image: one vertical 1080 × 1920 design with the Q Audio logo, from your brief and the owner's photos. Pauses on the design for the owner's Continue or edit feedback. Only review continued means propose it with instagram__save_post as a story; changes_requested means edit_story with that image and feedback instead, and interrupted means stop. For ALL changes use edit_story (FLUX Klein), never call this again for revisions. Takes about half a minute and costs money: use it only for a sale story or when the owner asks for a new designed story. Never automatically retry a failed or uncertain request.",
+    "Create the FIRST Instagram story image with GPT Image: one vertical 1080 × 1920 design with the Q Audio logo, from your brief and the owner's photos. Pauses on the design for the owner's Continue or edit feedback. Only review continued means propose the returned design (the owner may continue with an earlier version) with instagram__save_post as a story; changes_requested means edit_story with that image and feedback instead, and interrupted means stop. For ALL changes use edit_story (FLUX Klein), never call this again for revisions. Takes about half a minute and costs money: use it only for a sale story or when the owner asks for a new designed story. Never automatically retry a failed or uncertain request.",
   inputSchema: z.object({
     brief: z
       .string()
