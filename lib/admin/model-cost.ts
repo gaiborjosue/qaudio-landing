@@ -2,6 +2,7 @@
 export type ModelCost = { model: string; costUsd: number | null }
 
 export const MAIN_MODEL_ID = "openai/gpt-6.1-terra"
+export const PLAN_MODEL_ID = "openai/gpt-6.1-sol"
 export const FAST_MODEL_ID = "anthropic/claude-haiku-5.5"
 
 export const validCost = (value: unknown): value is number =>

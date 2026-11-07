@@ -55,6 +55,7 @@ import {
   type QuickMenusProps,
 } from "@/components/admin/quick-menus"
 import { Steps } from "@/components/admin/steps"
+import { TaskQueue } from "@/components/admin/task-queue"
 import { isStoryTool, StoryDesigns } from "@/components/admin/story-designs"
 import { useVoiceInput, VoiceWaveform } from "@/components/admin/voice-input"
 import { ChromaticButton } from "@/components/chromatic-button"
@@ -100,6 +101,7 @@ import {
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { sentPhotos } from "@/lib/admin/chat-photos"
 import { enabledFlows, FLOW_TOOL, flowState } from "@/lib/admin/flows"
+import { PLAN_TOOL, taskPlanState } from "@/lib/admin/task-plan"
 import { photoLine } from "@/lib/admin/photo-lines"
 import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
@@ -263,6 +265,7 @@ export function AdminChat({
   // Read again only when the conversation changes, not as the owner types;
   // the stepper redraws only when the run's steps change.
   const run = useMemo(() => flowState(agent.messages), [agent.messages])
+  const plan = useMemo(() => taskPlanState(agent.messages), [agent.messages])
 
   // What the quick actions need, kept as one object that changes only when
   // they do, so the composer doesn't redraw with every streamed update.
@@ -293,7 +296,11 @@ export function AdminChat({
           )}
         <div className={styles.workspace}>
           {/* Above the thread, or in the space left of it on wide screens. */}
-          <FlowStepper run={run} />
+          {plan ? (
+            <TaskQueue key={plan.id} plan={plan} busy={busy} />
+          ) : (
+            <FlowStepper run={run} />
+          )}
           <div className={styles.chat}>
             <Conversation
               active={active}
@@ -595,6 +602,14 @@ function replyRuns(parts: readonly ReplyPart[]) {
   parts.forEach((part, index) => {
     if (part.type === "tool" && part.kind === "control") return
     if (part.type === "tool" && part.name === FLOW_TOOL) return
+    if (
+      part.type === "tool" &&
+      part.name === PLAN_TOOL &&
+      part.state !== "failed" &&
+      part.state !== "rejected" &&
+      part.state !== "cancelled"
+    )
+      return
     if (part.type === "reasoning" || part.type === "file") return
     if (isStep(part)) {
       const last = runs.at(-1)
