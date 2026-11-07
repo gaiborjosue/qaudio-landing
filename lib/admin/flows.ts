@@ -303,6 +303,7 @@ export function flowState(messages: readonly Message[]): FlowView | null {
       continue
     }
     for (const item of message.parts) {
+      if (!item || typeof item !== "object") continue
       const part = item as Record<string, unknown>
       if (part.type !== "tool" || typeof part.name !== "string") continue
       const state = typeof part.state === "string" ? part.state : ""
