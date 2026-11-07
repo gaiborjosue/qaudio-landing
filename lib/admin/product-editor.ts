@@ -10,6 +10,7 @@ export type EditorPhoto = {
   alt: string
   width: number
   height: number
+  caption?: string
 }
 
 export type ProductValues = {
@@ -23,6 +24,9 @@ export type ProductValues = {
   ready_for_audition: boolean
   status: ProductInput["status"]
   /** Dollars as typed. */
+  price_note: string
+  condition_note: string
+  availability: "available" | "sold" | "unavailable"
   price: string
   msrp: string
   price_unit: ProductInput["price_unit"]
@@ -83,6 +87,9 @@ export function valuesFrom(
     ready_for_audition: record.ready_for_audition ?? false,
     status: record.status ?? "draft",
     price: dollars(record.price_cents),
+    price_note: record.price_note ?? "",
+    condition_note: record.condition_note ?? "",
+    availability: record.availability ?? "available",
     msrp: dollars(record.msrp_cents),
     price_unit: record.price_unit ?? "each",
     sale_price: dollars(record.sale?.price_cents),
@@ -102,18 +109,22 @@ export function valuesFromProduct(product: AdminProduct): ProductValues {
     slug: product.slug,
     name: product.name,
     category_slug: product.category.slug,
-    brand_slug: product.brand.slug,
+    brand_slug: product.brand?.slug ?? null,
     condition: product.condition as ProductInput["condition"],
     ready_for_audition: product.ready_for_audition,
     status: product.status as ProductInput["status"],
     price_cents: product.price_cents,
+    price_note: product.price_note,
+    condition_note: product.condition_note,
+    availability: product.availability as ProductInput["availability"],
     msrp_cents: product.msrp_cents,
     sale: product.sale_window ?? null,
     price_unit: product.price_unit as ProductInput["price_unit"],
     short_description: product.short_description,
     description: product.description,
     manufacturer_url: product.manufacturer_url,
-    images: product.images.map(({ path, alt, width, height }) => ({
+    images: product.images.map(({ path, alt, width, height, caption }) => ({
+      caption,
       path,
       alt,
       width,
@@ -173,11 +184,14 @@ export function inputFromValues(
     ...(values.id && { id: values.id }),
     slug: values.slug.trim(),
     category_slug: values.category_slug,
-    brand_slug: values.brand_slug,
+    brand_slug: values.brand_slug || null,
     name,
     short_description: values.short_description.trim(),
     description: values.description.trim(),
-    price_cents: parseDollars(values.price),
+    price_cents: values.price.trim() ? parseDollars(values.price) : null,
+    price_note: values.price_note,
+    condition_note: values.condition_note,
+    availability: values.availability,
     msrp_cents: msrp ? parseDollars(msrp) : null,
     ...(saleChanged && { sale }),
     price_unit: values.price_unit,

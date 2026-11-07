@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { RECORD_COLUMNS } from "../catalog-columns"
 import { descriptionColumns, descriptionFromColumns } from "../catalog"
-import type { Database } from "../supabase/database.types"
+import type { Database } from "../supabase/database"
 import type {
   ProductInput,
   ProductQuickEdit,
@@ -25,14 +26,7 @@ export async function readProduct(
   where: { id: string } | { slug: string },
   fail: Fail
 ): Promise<ProductRecord | null> {
-  const query = supabase.from("products").select(
-    `id, slug, category_slug, brand_slug, name, short_description,
-      description_intro, features, description_closing, price_cents,
-      msrp_cents, price_unit, condition, ready_for_audition,
-      manufacturer_url, status, sort_order,
-      sale_price_cents, sale_starts_at, sale_ends_at,
-      product_images(path, alt, width, height, sort_order)`
-  )
+  const query = supabase.from("products").select(RECORD_COLUMNS)
   const { data, error } = await (
     "id" in where ? query.eq("id", where.id) : query.eq("slug", where.slug)
   ).maybeSingle()
@@ -50,6 +44,7 @@ export async function readProduct(
   } = data
   return {
     ...product,
+    availability: product.availability as ProductInput["availability"],
     description: descriptionFromColumns({
       description_intro,
       features,
@@ -68,7 +63,13 @@ export async function readProduct(
         : null,
     images: product_images
       .sort((a, b) => a.sort_order - b.sort_order)
-      .map(({ path, alt, width, height }) => ({ path, alt, width, height })),
+      .map(({ path, alt, width, height, caption }) => ({
+        path,
+        alt,
+        width,
+        height,
+        caption,
+      })),
   }
 }
 
@@ -132,6 +133,7 @@ export async function saveProduct(
         alt: image.alt.trim(),
         width: image.width,
         height: image.height,
+        caption: image.caption ?? "",
       })),
       { onConflict: "product_id,sort_order" }
     )

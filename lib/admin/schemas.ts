@@ -126,6 +126,7 @@ export const productImageInputSchema = z.object({
       "Path in the media bucket: an uploaded photo's uploads/ path, or an existing products/ path."
     ),
   alt: z.string().trim().min(1).max(300).describe("What the photo shows."),
+  caption: z.string().max(2000).optional(),
   width: z.int().positive(),
   height: z.int().positive(),
 })
@@ -159,12 +160,12 @@ export const productInputSchema = z.object({
     .describe("An existing product's id to edit it; omit to add a new one."),
   slug: slug.max(120).describe("Its /products/<slug> address."),
   category_slug: slug,
-  brand_slug: slug,
+  brand_slug: slug.nullable(),
   name: z.string().trim().min(1).max(160),
   short_description: z
     .string()
-    .max(300)
-    .describe("The card line: one sentence, 300 characters at most."),
+    .max(1000)
+    .describe("The card line, 1000 characters at most."),
   description: z
     .string()
     .max(10000)
@@ -174,6 +175,7 @@ export const productInputSchema = z.object({
   price_cents: z
     .int()
     .positive()
+    .nullable()
     .describe(
       "Regular selling price in US cents: 79900 is $799. A time-limited sale goes in sale."
     ),
@@ -190,6 +192,9 @@ export const productInputSchema = z.object({
     .describe(
       "A time-limited sale price, null to end one; omit to leave it as it is."
     ),
+  price_note: z.string().max(500).optional(),
+  condition_note: z.string().max(500).optional(),
+  availability: z.enum(["available", "sold", "unavailable"]).optional(),
   price_unit: z.enum(["each", "pair"]),
   condition: z.enum(["New", "Demo", "Used"]),
   ready_for_audition: z.boolean(),
@@ -244,7 +249,7 @@ export const reorderProductsInputSchema = z
     product_ids: z
       .array(z.uuid())
       .min(1)
-      .max(200)
+      .max(1000)
       .describe(
         "Every product in that category or brand (drafts included), first shown first. With neither slug, every product in the shop."
       ),

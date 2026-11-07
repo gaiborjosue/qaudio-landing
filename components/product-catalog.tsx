@@ -33,6 +33,8 @@ import {
 } from "lucide-react"
 import {
   formatPrice,
+  priceQualifications,
+  conditionQualification,
   formatSaleEnd,
   isProductOnSale,
   PRODUCT_PATH,
@@ -44,6 +46,30 @@ import { MarkdownText } from "./markdown-text"
 import styles from "./product-catalog.module.css"
 
 const CONDITION_TONES = ["new", "demo", "used"]
+
+function ProductBrand({
+  product,
+  width,
+  height,
+}: {
+  product: Product
+  width: number
+  height: number
+}) {
+  const brand = product.brand
+  if (!brand) return null
+  return brand.logo_path ? (
+    <Image
+      className={styles.brandLogo}
+      src={brand.logo_path}
+      alt={brand.name}
+      width={width}
+      height={height}
+    />
+  ) : (
+    <span>{brand.name}</span>
+  )
+}
 
 function conditionTone(condition: string) {
   const key = condition.trim().toLowerCase()
@@ -58,6 +84,26 @@ function ProductPrice({
   product: Product
   detail?: boolean
 }) {
+  const qualification = priceQualifications(
+    product.price_note,
+    product.condition
+  )
+  if (
+    product.availability === "sold" ||
+    product.availability === "unavailable" ||
+    product.price_cents === null
+  ) {
+    return (
+      <p className={detail ? styles.detailPrice : undefined}>
+        {product.availability === "sold"
+          ? "Sold out"
+          : product.availability === "unavailable"
+            ? "Unavailable"
+            : "Price on request"}
+        {qualification.text && <span>{qualification.text}</span>}
+      </p>
+    )
+  }
   const onSale = isProductOnSale(product)
   const label = onSale
     ? "Sale price · "
@@ -66,13 +112,17 @@ function ProductPrice({
       : ""
   // A sale is compared with the list price, or else the regular one.
   const listed =
-    product.msrp_cents !== null && product.price_cents < product.msrp_cents
+    product.msrp_cents !== null &&
+    product.price_cents !== null &&
+    product.price_cents < product.msrp_cents
   return (
     <p className={detail ? styles.detailPrice : undefined}>
+      {qualification.startingAt && "Starting at "}
       {formatPrice(product.price_cents)}
       <span>
         {label}USD / {product.price_unit}
       </span>
+      {qualification.text && <span>{qualification.text}</span>}
       {!detail && onSale && listed && (
         <span>
           MSRP <s>{formatPrice(product.msrp_cents!)}</s>
@@ -215,7 +265,7 @@ function ProductGallery({
         aria-live="polite"
         aria-atomic="true"
       >
-        {index + 1} / {product.images.length} — {current.alt}
+        {index + 1} / {product.images.length} — {current.caption || current.alt}
       </p>
       <div className={styles.thumbnails} aria-label="Gallery photos">
         {product.images.map((image, i) => (
@@ -248,6 +298,7 @@ function ProductDetails({
   const galleryTrigger = useRef<HTMLButtonElement | null>(null)
   const titleId = `product-title-${product.id}`
   const atMsrp = product.msrp_cents === product.price_cents
+  const conditionText = conditionQualification(product.condition_note)
   const Title = close ? motion.h2 : motion.h1
   const openGallery = (index: number, trigger: HTMLButtonElement) => {
     galleryTrigger.current = trigger
@@ -268,13 +319,7 @@ function ProductDetails({
         className={close ? styles.detailCard : styles.standaloneCard}
       >
         <div className={styles.detailTop}>
-          <Image
-            className={styles.brandLogo}
-            src={product.brand.logo_path}
-            alt={product.brand.name}
-            width={150}
-            height={56}
-          />
+          <ProductBrand product={product} width={150} height={56} />
           {close && (
             <button
               type="button"
@@ -369,6 +414,9 @@ function ProductDetails({
                       {product.condition}
                     </span>
                   </span>
+                  {conditionText && (
+                    <span className={styles.unit}>{conditionText}</span>
+                  )}
                 </dd>
               </div>
               {product.msrp_cents !== null && !atMsrp && (
@@ -376,6 +424,7 @@ function ProductDetails({
                   <dt>MSRP</dt>
                   <dd>
                     {isProductOnSale(product) &&
+                    product.price_cents !== null &&
                     product.price_cents < product.msrp_cents ? (
                       <s>{formatPrice(product.msrp_cents)}</s>
                     ) : (
@@ -568,13 +617,7 @@ export function ProductCatalog({ products }: { products: Product[] }) {
                     )}
                   </motion.div>
                   <div className={styles.cardText}>
-                    <Image
-                      className={styles.brandLogo}
-                      src={product.brand.logo_path}
-                      alt={product.brand.name}
-                      width={130}
-                      height={48}
-                    />
+                    <ProductBrand product={product} width={130} height={48} />
                     <motion.h2 layoutId={layoutId(product, "title")}>
                       {product.name}
                     </motion.h2>

@@ -81,20 +81,26 @@ function productJsonLd(product: Product) {
     name: product.name,
     description: product.short_description,
     image: product.images.map((image) => image.src),
-    brand: { "@type": "Brand", name: product.brand.name },
+    ...(product.brand && {
+      brand: { "@type": "Brand", name: product.brand.name },
+    }),
     category: product.category.name,
-    offers: {
-      "@type": "Offer",
-      price: (product.price_cents / 100).toFixed(2),
-      priceCurrency: "USD",
-      // A sale price holds until its last day (store time).
-      ...(product.sale && {
-        priceValidUntil: storeClock(new Date(product.sale.ends_at)).date,
+    ...(product.price_cents !== null &&
+      product.availability !== "sold" &&
+      product.availability !== "unavailable" && {
+        offers: {
+          "@type": "Offer",
+          price: (product.price_cents / 100).toFixed(2),
+          priceCurrency: "USD",
+          // A sale price holds until its last day (store time).
+          ...(product.sale && {
+            priceValidUntil: storeClock(new Date(product.sale.ends_at)).date,
+          }),
+          itemCondition:
+            product.condition === "New"
+              ? "https://schema.org/NewCondition"
+              : "https://schema.org/UsedCondition",
+        },
       }),
-      itemCondition:
-        product.condition === "New"
-          ? "https://schema.org/NewCondition"
-          : "https://schema.org/UsedCondition",
-    },
   }).replace(/</g, "\\u003c")
 }

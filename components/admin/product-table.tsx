@@ -7,6 +7,10 @@ import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
 import { GridBeam, type GridBeamLines } from "@/components/ui/grid-beam"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
+import {
+  NO_PRODUCT_FILTERS,
+  type ProductFilters,
+} from "@/lib/admin/product-filters"
 import { parseDollars } from "@/lib/admin/product-editor"
 import { saleStatus } from "@/lib/admin/sale"
 import type { ProductQuickEdit } from "@/lib/admin/schemas"
@@ -42,22 +46,6 @@ type Draft = {
 }
 type Drafts = Record<string, Draft>
 
-type Filters = {
-  search: string
-  category: string
-  brand: string
-  condition: string
-  status: string
-}
-
-const NO_FILTERS: Filters = {
-  search: "",
-  category: "",
-  brand: "",
-  condition: "",
-  status: "",
-}
-
 // Matching ignores case and accents, like the Edit menu's lists.
 const fold = (text: string) =>
   text
@@ -69,11 +57,13 @@ const plural = (count: number, noun: string) =>
   `${count} ${noun}${count === 1 ? "" : "s"}`
 
 /** 129950 → "1,299.50": the price field's text before it's edited. */
-const dollars = (cents: number) =>
-  (cents / 100).toLocaleString("en-US", {
-    minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
-  })
+const dollars = (cents: number | null) =>
+  cents === null
+    ? ""
+    : (cents / 100).toLocaleString("en-US", {
+        minimumFractionDigits: cents % 100 === 0 ? 0 : 2,
+        maximumFractionDigits: 2,
+      })
 
 const isPrice = (cents: number) => Number.isSafeInteger(cents) && cents > 0
 
@@ -136,6 +126,8 @@ function tableLines(root: HTMLElement, box: DOMRect): GridBeamLines {
 export function ProductTable({
   products,
   taxonomy,
+  filters,
+  onFilters,
   beam,
   onOpen,
   onDelete,
@@ -144,6 +136,8 @@ export function ProductTable({
   /** Every product, in shop order. */
   products: AdminProduct[]
   taxonomy: CatalogTaxonomy
+  filters: ProductFilters
+  onFilters: (filters: ProductFilters) => void
   /** Runs the grid beam over the table (off while it isn't shown). */
   beam: boolean
   /** Opens a product in the full form. */
@@ -155,14 +149,18 @@ export function ProductTable({
 }) {
   const router = useRouter()
   const id = useId()
-  const [filters, setFilters] = useState<Filters>(NO_FILTERS)
   const [page, setPage] = useState(1)
+  const [previousFilters, setPreviousFilters] = useState(filters)
+  if (filters !== previousFilters) {
+    setPreviousFilters(filters)
+    setPage(1)
+  }
   const [drafts, setDrafts] = useState<Drafts>({})
   const [saving, startSaving] = useTransition()
   const [saveError, setSaveError] = useState<string | null>(null)
 
-  const setFilter = (key: keyof Filters, value: string) => {
-    setFilters((current) => ({ ...current, [key]: value }))
+  const setFilter = (key: keyof ProductFilters, value: string) => {
+    onFilters({ ...filters, [key]: value })
     setPage(1)
   }
   const filtered = Object.values(filters).some(Boolean)
@@ -174,13 +172,13 @@ export function ProductTable({
     if (filters.category && product.category.slug !== filters.category) {
       return false
     }
-    if (filters.brand && product.brand.slug !== filters.brand) return false
+    if (filters.brand && product.brand?.slug !== filters.brand) return false
     if (filters.condition && product.condition !== filters.condition) {
       return false
     }
     if (filters.status && product.status !== filters.status) return false
     const text = fold(
-      `${product.name} ${product.brand.name} ${product.category.name}`
+      `${product.name} ${product.brand?.name ?? ""} ${product.category.name}`
     )
     return words.every((word) => text.includes(word))
   })
@@ -247,7 +245,7 @@ export function ProductTable({
   }
 
   const facets: {
-    key: Exclude<keyof Filters, "search">
+    key: Exclude<keyof ProductFilters, "search">
     label: string
     all: string
     options: readonly { value: string; label: string }[]
@@ -301,7 +299,6 @@ export function ProductTable({
             {/* "all" stands for no filter: the select needs a value. */}
             <Choice
               small
-              openDown
               value={filters[facet.key] || ALL}
               options={[{ value: ALL, label: facet.all }, ...facet.options]}
               onChange={(value) =>
@@ -316,7 +313,7 @@ export function ProductTable({
             type="button"
             className={adminStyles.quiet}
             onClick={() => {
-              setFilters(NO_FILTERS)
+              onFilters(NO_PRODUCT_FILTERS)
               setPage(1)
             }}
           >
@@ -504,7 +501,7 @@ function ProductRow({
         <button type="button" className={styles.name} onClick={onOpen}>
           {product.name}
         </button>
-        <span className={styles.brand}>{product.brand.name}</span>
+        <span className={styles.brand}>{product.brand?.name ?? ""}</span>
       </th>
       <td className={styles.category}>{product.category.name}</td>
       <td>

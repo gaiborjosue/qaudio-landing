@@ -1,5 +1,6 @@
 import "server-only"
 import { cacheLife, cacheTag } from "next/cache"
+import { mediaUrl } from "@/lib/media"
 import { publicSupabase } from "@/lib/supabase/public"
 
 // Live QDeal promotions from Supabase, read as an anonymous visitor, so RLS
@@ -22,6 +23,7 @@ export type Deal = {
   title: string
   summary: string
   note: string
+  image?: { src: string; width: number; height: number; alt: string } | null
   items: DealItem[]
 }
 
@@ -32,9 +34,7 @@ export async function getDeals(): Promise<Deal[]> {
   cacheTag(DEALS_CACHE_TAG)
   const { data, error } = await publicSupabase()
     .from("deals")
-    .select(
-      "id, title, summary, note, deal_items (id, brand, name, condition, price_cents)"
-    )
+    .select("*, deal_items (id, brand, name, condition, price_cents)")
     .order("sort_order")
     .order("created_at")
     .order("sort_order", { referencedTable: "deal_items" })
@@ -45,6 +45,15 @@ export async function getDeals(): Promise<Deal[]> {
     title: deal.title,
     summary: deal.summary,
     note: deal.note,
+    image:
+      deal.image_path && deal.image_width && deal.image_height
+        ? {
+            src: mediaUrl(deal.image_path),
+            width: deal.image_width,
+            height: deal.image_height,
+            alt: deal.image_alt,
+          }
+        : null,
     items: deal.deal_items.map((item) => ({
       id: item.id,
       brand: item.brand,

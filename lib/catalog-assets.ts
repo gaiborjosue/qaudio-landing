@@ -2,6 +2,8 @@ import { mediaUrl } from "./media"
 
 /** Catalog assets can be bundled site files or immutable media-bucket objects. */
 export function catalogAssetUrl(path: string) {
+  // Bypass browser-cached 308s from the former broad legacy page redirects.
+  if (/^\/(?:brands|categories)\/[^?#]+$/.test(path)) return `${path}?catalog=2`
   return path.startsWith("/") || path.startsWith("https://")
     ? path
     : mediaUrl(path)
@@ -17,14 +19,17 @@ export function categoryAssets<
   }
 }
 
-export function brandAssets<T extends { logo_path: string }>(row: T): T {
-  return { ...row, logo_path: catalogAssetUrl(row.logo_path) }
+export function brandAssets<T extends { logo_path: string | null }>(row: T): T {
+  return {
+    ...row,
+    logo_path: row.logo_path ? catalogAssetUrl(row.logo_path) : null,
+  }
 }
 
 export function productTaxonomyAssets<
   T extends {
     category: { artwork_path: string }
-    brand: { logo_path: string }
+    brand: { logo_path: string | null } | null
   },
 >(row: T): T {
   return {
@@ -33,6 +38,6 @@ export function productTaxonomyAssets<
       ...row.category,
       artwork_path: catalogAssetUrl(row.category.artwork_path),
     },
-    brand: brandAssets(row.brand),
+    brand: row.brand ? brandAssets(row.brand) : null,
   }
 }

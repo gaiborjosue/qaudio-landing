@@ -29,7 +29,6 @@ export function Choice({
   onChange,
   placeholder,
   small = false,
-  openDown = false,
   disabled,
   className,
   ...aria
@@ -39,8 +38,6 @@ export function Choice({
   onChange: (value: string) => void
   placeholder?: string
   small?: boolean
-  /** Keep filter menus below their trigger, even with a selected option. */
-  openDown?: boolean
   disabled?: boolean
   className?: string
   id?: string
@@ -71,10 +68,7 @@ export function Choice({
       </SelectTrigger>
       <SelectContent
         className={cn(styles.content, "motion-reduce:animate-none")}
-        alignItemWithTrigger={!openDown}
-        collisionAvoidance={
-          openDown ? { side: "none", align: "shift" } : undefined
-        }
+        alignItemWithTrigger={false}
       >
         {options.map((option) => (
           <SelectItem

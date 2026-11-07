@@ -71,7 +71,7 @@ export function ProductOrder({
               <span className={styles.orderName}>{product.name}</span>
               <span className={styles.orderMeta}>
                 {[
-                  product.brand.name,
+                  product.brand?.name ?? "",
                   formatPrice(product.price_cents),
                   product.status !== "published" && "Draft",
                 ]

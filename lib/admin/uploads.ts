@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "../supabase/database.types"
+import type { Database } from "../supabase/database"
 import { UPLOADS } from "./schemas"
 import { isPrivateUpload, mediaBucket } from "./media-lifecycle"
 

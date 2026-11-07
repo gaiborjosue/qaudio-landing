@@ -23,12 +23,12 @@ export default defineTool({
     let products = supabase
       .from("products")
       .select(
-        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, condition, status, sort_order, sale_price_cents, sale_starts_at, sale_ends_at"
+        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, price_note, condition, condition_note, availability, status, sort_order, sale_price_cents, sale_starts_at, sale_ends_at"
       )
       // The shop's own order, so the list reads as the pages show it.
       .order("sort_order")
       .order("id")
-      .limit(200)
+      .limit(1000)
     if (filters.search) {
       const escaped = filters.search.replace(/[\\%_]/g, (match) => `\\${match}`)
       products = products.ilike("name", `%${escaped}%`)

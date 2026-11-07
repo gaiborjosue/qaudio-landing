@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "../supabase/database.types"
+import type { Database } from "../supabase/database"
 import { placeUploads } from "./uploads"
 import {
   metadataError,
@@ -25,12 +25,14 @@ export async function saveMetadata(
         : "category-scenes"
   const placed = await Promise.all(
     paths.map((path, index) =>
-      placeUploads(
-        supabase,
-        [path],
-        folder(index),
-        () => new MetadataSaveError("Couldn’t save the image.")
-      )
+      path
+        ? placeUploads(
+            supabase,
+            [path],
+            folder(index),
+            () => new MetadataSaveError("Couldn’t save the image.")
+          )
+        : Promise.resolve(() => null)
     )
   )
   const row =
@@ -39,10 +41,15 @@ export async function saveMetadata(
           slug: fields.slug,
           name: fields.name,
           wheel_label: input.wheel_label,
-          artwork_path: placed[0](paths[0]),
-          scene_path: placed[1](paths[1]),
+          artwork_path: placed[0](paths[0] ?? ""),
+          scene_path: placed[1](paths[1] ?? ""),
         }
-      : { slug: fields.slug, name: fields.name, logo_path: placed[0](paths[0]) }
+      : {
+          slug: fields.slug,
+          name: fields.name,
+          logo_path: placed[0](paths[0] ?? ""),
+          ...(input.featured !== undefined && { featured: input.featured }),
+        }
   let sort_order = 0
   if (!original_slug) {
     const last = await supabase

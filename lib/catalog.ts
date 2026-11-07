@@ -13,7 +13,8 @@ export type CatalogCategory = {
 export type CatalogBrand = {
   slug: string
   name: string
-  logo_path: string
+  logo_path: string | null
+  featured?: boolean
 }
 
 export type ProductImage = {
@@ -22,6 +23,43 @@ export type ProductImage = {
   alt: string
   width: number
   height: number
+  caption?: string
+}
+
+/** Keep source qualifications without repeating the price, unit or status labels. */
+export function priceQualifications(note = "", condition = "") {
+  const startingAt = /\bstarting\s+at\b/i.test(note)
+  const parts = note.split("·").map((part) => {
+    const text = part
+      .trim()
+      .replace(/\(\s*(?:each|pair|new)\s*\)/gi, "")
+      .replace(/^(?:msrp|(?:used|sale|item|regular|list)\s+price)\b\s*/i, "")
+      .replace(/\bstarting\s+at\b\s*:?/gi, "")
+      .replace(/^[\s:]+|[\s:]+$/g, "")
+    if (/^(?:sold(?:\s*out)?|unavailable)$/i.test(text)) return ""
+    if (condition === "Demo" && /^demo\s+sale$/i.test(text)) return ""
+    return text
+  })
+  return { startingAt, text: [...new Set(parts.filter(Boolean))].join(" · ") }
+}
+
+/** The condition badge supplies New/Demo/Used; retain only grade/terms beside it. */
+export function conditionQualification(note = "") {
+  return [
+    ...new Set(
+      note
+        .split("·")
+        .map((part) => {
+          const text = part
+            .trim()
+            .replace(/^(?:new|demo|used)\b\s*/i, "")
+            .replace(/^\((.*)\)$/, "$1")
+            .trim()
+          return text ? text[0].toUpperCase() + text.slice(1) : ""
+        })
+        .filter(Boolean)
+    ),
+  ].join(" · ")
 }
 
 export type Product = {
@@ -33,17 +71,20 @@ export type Product = {
   /** The details page's description, as Markdown. */
   description: string
   /** Current selling price, including any sale, in US cents. */
-  price_cents: number
+  price_cents: number | null
   /** Manufacturer list price for comparison; null when unknown. */
   msrp_cents: number | null
   /** A time-limited sale showing now, if any. */
   sale?: ProductSale | null
+  price_note?: string
+  condition_note?: string
+  availability?: string
   price_unit: string
   condition: string
   ready_for_audition: boolean
   manufacturer_url: string | null
   category: Pick<CatalogCategory, "slug" | "name" | "artwork_path">
-  brand: CatalogBrand
+  brand: CatalogBrand | null
   images: ProductImage[]
 }
 
@@ -57,7 +98,7 @@ export type ProductSale = {
 
 /** A product's price columns, with its time-limited sale. */
 export type SaleColumns = {
-  price_cents: number
+  price_cents: number | null
   sale_price_cents: number | null
   sale_starts_at: string | null
   sale_ends_at: string | null
@@ -71,8 +112,9 @@ export type SaleColumns = {
 export function sellingPrice(
   { price_cents, sale_price_cents, sale_starts_at, sale_ends_at }: SaleColumns,
   now: number
-): { price_cents: number; sale: ProductSale | null } {
+): { price_cents: number | null; sale: ProductSale | null } {
   const live =
+    price_cents !== null &&
     sale_price_cents !== null &&
     sale_ends_at !== null &&
     sale_price_cents < price_cents &&
@@ -90,18 +132,22 @@ export function sellingPrice(
 export const formatSaleEnd = (endsAt: string) =>
   `Ends ${formatMonthDay(storeClock(new Date(endsAt)).date)}`
 
-export const formatPrice = (cents: number) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
-  }).format(cents / 100)
+export const formatPrice = (cents: number | null) =>
+  cents === null
+    ? "Price on request"
+    : new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: cents % 100 === 0 ? 0 : 2,
+      }).format(cents / 100)
 
 export const isProductOnSale = (
   product: Pick<Product, "price_cents" | "msrp_cents" | "sale">
 ) =>
   !!product.sale ||
-  (product.msrp_cents !== null && product.price_cents < product.msrp_cents)
+  (product.price_cents !== null &&
+    product.msrp_cents !== null &&
+    product.price_cents < product.msrp_cents)
 
 /** Product pages live at /products/<slug>, the live qaudio.com address. */
 export const PRODUCT_PATH = "/products/"

@@ -23,6 +23,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
+import type { ProductFilters } from "@/lib/admin/product-filters"
 import { valuesFrom, valuesFromProduct } from "@/lib/admin/product-editor"
 import adminStyles from "./admin.module.css"
 import styles from "./products-view.module.css"
@@ -50,6 +51,8 @@ const NEW_SHEET: Shown = { mode: "new" }
 export function ProductsView({
   products,
   taxonomy,
+  filters,
+  onFilters,
   active,
   sheet,
   onSheet,
@@ -58,6 +61,8 @@ export function ProductsView({
 }: {
   products: AdminProduct[]
   taxonomy: CatalogTaxonomy
+  filters: ProductFilters
+  onFilters: (filters: ProductFilters) => void
   /** Whether this tab is the one shown. */
   active: boolean
   sheet: ProductSheet | null
@@ -205,6 +210,8 @@ export function ProductsView({
       <ProductTable
         products={products}
         taxonomy={taxonomy}
+        filters={filters}
+        onFilters={onFilters}
         beam={active && !sheet && !deleting}
         onOpen={(product) => {
           gone.current = false

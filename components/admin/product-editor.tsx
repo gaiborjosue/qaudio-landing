@@ -9,11 +9,12 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
-import { motion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 import {
   Check,
   CircleCheck,
   LoaderCircle,
+  BadgePercent,
   Trash2,
   WandSparkles,
   X,
@@ -52,6 +53,7 @@ import {
 } from "@/lib/admin/schemas"
 import { MarkdownText } from "@/components/markdown-text"
 import { Choice } from "./choice"
+import { SaleDateRange } from "./sale-date-range"
 import { ProductPhotos } from "./product-photos"
 import adminStyles from "./admin.module.css"
 import styles from "./product-editor.module.css"
@@ -67,7 +69,7 @@ const PROBLEMS: Record<string, string> = {
   brand_slug: "Pick a brand.",
   price_cents: "Enter a price, like 1,299.",
   msrp_cents: "Enter the list price, or leave it empty.",
-  short_description: "Keep it under 300 characters.",
+  short_description: "Keep it under 1000 characters.",
   description: "Keep it under 10,000 characters.",
   manufacturer_url: "Use the brand’s page address, starting with https://.",
   images: "Up to 20 photos, each with a description.",
@@ -212,6 +214,11 @@ export function ProductEditor({
   const form = useRef<HTMLDivElement>(null)
   const [baseline, setBaseline] = useState(initial)
   const [values, setValues] = useState(() => restore(storageKey) ?? initial)
+  const [saleEnabled, setSaleEnabled] = useState(
+    () => !!(values.sale_price.trim() || values.sale_starts || values.sale_ends)
+  )
+  const saleToggle = useRef<HTMLButtonElement>(null)
+  const still = useReducedMotion()
   // A new product's address follows its name until the owner edits it.
   const [slugFollows, setSlugFollows] = useState(
     !initial.id && (!initial.slug || initial.slug === slugify(initial.name))
@@ -699,7 +706,8 @@ export function ProductEditor({
     const saleTooHigh =
       parsed.success &&
       !!parsed.data.sale &&
-      parsed.data.sale.price_cents >= parsed.data.price_cents
+      (parsed.data.price_cents === null ||
+        parsed.data.sale.price_cents >= parsed.data.price_cents)
     if (!parsed.success || saleTooHigh) {
       const marked: Record<string, string> = {}
       for (const issue of parsed.error?.issues ?? []) {
@@ -771,16 +779,20 @@ export function ProductEditor({
     name: string,
     label: ReactNode,
     control: ReactNode,
-    className?: string
+    className?: string,
+    labelAction?: ReactNode
   ) => (
     <div className={[styles.field, className].filter(Boolean).join(" ")}>
-      <label
-        id={`${fieldId(name)}-label`}
-        htmlFor={fieldId(name)}
-        className={styles.label}
-      >
-        {label}
-      </label>
+      <div className={styles.fieldHeading}>
+        <label
+          id={`${fieldId(name)}-label`}
+          htmlFor={fieldId(name)}
+          className={styles.label}
+        >
+          {label}
+        </label>
+        {labelAction}
+      </div>
       {control}
       {errors[name] && (
         <span id={`${fieldId(name)}-problem`} className={styles.problem}>
@@ -850,6 +862,8 @@ export function ProductEditor({
           : "On sale now"
       : null
   const removeSale = () => {
+    setSaleEnabled(false)
+    saleToggle.current?.focus()
     setValues((current) => ({
       ...current,
       sale_price: "",
@@ -880,7 +894,6 @@ export function ProductEditor({
               "category_slug",
               <Choice
                 value={values.category_slug}
-                openDown
                 placeholder="Choose…"
                 options={taxonomy.categories.map(({ slug, name }) => ({
                   value: slug,
@@ -899,12 +912,14 @@ export function ProductEditor({
               "brand_slug",
               <Choice
                 value={values.brand_slug}
-                openDown
                 placeholder="Choose…"
-                options={taxonomy.brands.map(({ slug, name }) => ({
-                  value: slug,
-                  label: name,
-                }))}
+                options={[
+                  { value: "", label: "No brand" },
+                  ...taxonomy.brands.map(({ slug, name }) => ({
+                    value: slug,
+                    label: name,
+                  })),
+                ]}
                 onChange={(value) => set("brand_slug", value)}
                 aria-labelledby={`${fieldId("brand_slug")}-label`}
                 {...invalid("brand_slug")}
@@ -1085,6 +1100,22 @@ export function ProductEditor({
             </span>,
             styles.wide
           )}
+          {field(
+            "availability",
+            "Availability",
+            <Choice
+              value={values.availability}
+              options={[
+                { value: "available", label: "Available" },
+                { value: "sold", label: "Sold out" },
+                { value: "unavailable", label: "Unavailable" },
+              ]}
+              onChange={(value) =>
+                set("availability", value as ProductValues["availability"])
+              }
+              aria-labelledby={`${fieldId("availability")}-label`}
+            />
+          )}
           <div className={`${styles.pricing} ${styles.full}`}>
             {field(
               "price_cents",
@@ -1099,7 +1130,24 @@ export function ProductEditor({
                   onChange={(event) => set("price", event.target.value)}
                   {...invalid("price_cents")}
                 />
-              </span>
+              </span>,
+              undefined,
+              <button
+                ref={saleToggle}
+                type="button"
+                className={styles.saleToggle}
+                aria-label="Sale"
+                title={saleEnabled ? "Remove sale" : "Add sale"}
+                aria-pressed={saleEnabled}
+                aria-expanded={saleEnabled}
+                aria-controls={fieldId("sale-fields")}
+                disabled={disabled || saving}
+                onClick={() =>
+                  saleEnabled ? removeSale() : setSaleEnabled(true)
+                }
+              >
+                <BadgePercent size={17} aria-hidden="true" />
+              </button>
             )}
             {field(
               "msrp_cents",
@@ -1177,61 +1225,74 @@ export function ProductEditor({
               styles.auditionField
             )}
           </div>
-          {/* A time-limited sale: the shop shows the sale price only between
-            its start (or now) and its end, then the regular price again. */}
-          <div className={`${styles.pricing} ${styles.full}`}>
-            {field(
-              "sale",
-              <>
-                Sale price
-                <span className={styles.aside}>{saleNote ?? "Optional"}</span>
-              </>,
-              <span className={styles.affix}>
-                <span aria-hidden="true">$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={values.sale_price}
-                  onChange={(event) => set("sale_price", event.target.value)}
-                  {...invalid("sale")}
-                />
-              </span>
-            )}
-            {field(
-              "sale_starts",
-              <>
-                Sale starts <span className={styles.aside}>Empty is now</span>
-              </>,
-              <input
-                type="datetime-local"
-                value={values.sale_starts}
-                disabled={!values.sale_price.trim()}
-                onChange={(event) => set("sale_starts", event.target.value)}
-                id={fieldId("sale_starts")}
-              />
-            )}
-            {field(
-              "sale_ends",
-              <>
-                Sale ends <span className={styles.aside}>Store time</span>
-              </>,
-              <input
-                type="datetime-local"
-                value={values.sale_ends}
-                disabled={!values.sale_price.trim()}
-                onChange={(event) => set("sale_ends", event.target.value)}
-                id={fieldId("sale_ends")}
-              />
-            )}
-            {values.sale_price.trim() && (
-              <button
-                type="button"
-                className={`${styles.editCard} ${styles.endSale}`}
-                disabled={disabled || saving}
-                onClick={removeSale}
-              >
-                Remove sale
-              </button>
+          {/* Dates appear once there is a sale price; a saved sale opens here. */}
+          <div
+            id={fieldId("sale-fields")}
+            className={`${styles.full} ${styles.saleFields}`}
+            hidden={!saleEnabled}
+          >
+            {saleEnabled && (
+              <div className={styles.pricing}>
+                {field(
+                  "sale",
+                  <>
+                    Sale price
+                    <span className={styles.aside}>
+                      {saleNote ?? "Optional"}
+                    </span>
+                  </>,
+                  <span className={styles.affix}>
+                    <span aria-hidden="true">$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={values.sale_price}
+                      onChange={(event) =>
+                        set("sale_price", event.target.value)
+                      }
+                      {...invalid("sale")}
+                    />
+                  </span>
+                )}
+                {values.sale_price.trim() && (
+                  <motion.div
+                    className={styles.saleDates}
+                    initial={{ opacity: 0, y: still ? 0 : -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: still ? 0 : 0.18 }}
+                  >
+                    {field(
+                      "sale_dates",
+                      <>
+                        Sale dates{" "}
+                        <span className={styles.aside}>Store time</span>
+                      </>,
+                      <SaleDateRange
+                        start={values.sale_starts}
+                        end={values.sale_ends}
+                        disabled={disabled || saving}
+                        id={fieldId("sale_dates")}
+                        aria-labelledby={`${fieldId("sale_dates")}-label`}
+                        onChange={({ start, end }) =>
+                          setValues((current) => ({
+                            ...current,
+                            sale_starts: start,
+                            sale_ends: end,
+                          }))
+                        }
+                      />
+                    )}
+                    <button
+                      type="button"
+                      className={`${styles.editCard} ${styles.endSale}`}
+                      disabled={disabled || saving}
+                      onClick={removeSale}
+                    >
+                      Remove sale
+                    </button>
+                  </motion.div>
+                )}
+              </div>
             )}
           </div>
           {field(
@@ -1293,7 +1354,7 @@ export function ProductEditor({
               Card line
               {editingCard && (
                 <span className={styles.aside}>
-                  {values.short_description.length}/300
+                  {values.short_description.length}/1000
                 </span>
               )}
             </span>

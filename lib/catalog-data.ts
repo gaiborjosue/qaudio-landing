@@ -1,4 +1,5 @@
 import "server-only"
+import { PRODUCT_COLUMNS } from "./catalog-columns"
 import { cacheLife, cacheTag } from "next/cache"
 import { publicSupabase, mediaUrl } from "@/lib/supabase/public"
 import {
@@ -23,16 +24,6 @@ import {
 export const CATALOG_CACHE_TAG = "catalog"
 
 const SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/
-
-const PRODUCT_COLUMNS = `
-  id, slug, name, short_description, description_intro, features,
-  description_closing, price_cents, msrp_cents, price_unit, condition,
-  ready_for_audition, manufacturer_url,
-  sale_price_cents, sale_starts_at, sale_ends_at,
-  category:catalog_categories!inner(slug, name, artwork_path),
-  brand:catalog_brands!inner(slug, name, logo_path),
-  product_images(id, path, alt, width, height, sort_order)
-`
 
 function cacheCatalog() {
   cacheLife("content")
@@ -103,7 +94,7 @@ export async function getCatalogTaxonomy(): Promise<{
       .order("slug"),
     supabase
       .from("catalog_brands")
-      .select("slug, name, logo_path")
+      .select("slug, name, logo_path, featured")
       .order("sort_order")
       .order("slug"),
   ])
@@ -127,7 +118,8 @@ export async function getProducts(
   if (categorySlug) query = query.eq("category_slug", categorySlug)
   if (brandSlug) query = query.eq("brand_slug", brandSlug)
   const { data, error } = await query
-  if (error) throw new Error(`Catalog: ${error.message}`)
+  if (error || !data)
+    throw new Error(`Catalog: ${error?.message ?? "unavailable"}`)
   const now = Date.now()
   return data.map((row) => toProduct(row, now))
 }

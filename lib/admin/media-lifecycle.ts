@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "../supabase/database.types"
+import type { Database } from "../supabase/database"
 import { mediaUrl } from "../media"
 
 export const CHAT_BUCKET = "chat-uploads"

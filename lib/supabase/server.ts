@@ -2,7 +2,7 @@ import "server-only"
 import { cookies } from "next/headers"
 import { connection } from "next/server"
 import { createServerClient } from "@supabase/ssr"
-import type { Database } from "./database.types"
+import type { Database } from "./database"
 
 /**
  * Supabase as the signed-in user, from the request's auth cookies, so RLS

@@ -18,11 +18,13 @@ export function ProductLinesSection({ brands }: { brands: CatalogBrand[] }) {
   const wallRef = useRef<HTMLDivElement>(null)
   const tiles = useMemo(
     () =>
-      brands.map((brand) => ({
-        image: brand.logo_path,
-        title: brand.name,
-        href: `/shop?brand=${brand.slug}`,
-      })),
+      brands
+        .filter((brand) => brand.featured !== false && brand.logo_path)
+        .map((brand) => ({
+          image: brand.logo_path!,
+          title: brand.name,
+          href: `/shop?brand=${brand.slug}`,
+        })),
     [brands]
   )
   const [query, setQuery] = useState("")

@@ -1455,7 +1455,9 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
   object-fit: contain;
   padding: 12px;
 }
-.product-lines-wall .drift-wall__tile img[src$="/dali.png"] {
+.product-lines-wall
+  .drift-wall__tile
+  img:is([src$="/dali.png"], [src*="/dali.png?"]) {
   object-fit: cover;
   object-position: center bottom;
   padding: 0;
@@ -1586,7 +1588,9 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
   .product-lines-wall .drift-wall__tile img {
     padding: 8px;
   }
-  .product-lines-wall .drift-wall__tile img[src$="/dali.png"] {
+  .product-lines-wall
+    .drift-wall__tile
+    img:is([src$="/dali.png"], [src*="/dali.png?"]) {
     padding: 0;
   }
 }

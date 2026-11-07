@@ -9,7 +9,8 @@ export type MetadataRow = {
   wheel_label?: string
   artwork_path?: string
   scene_path?: string
-  logo_path?: string
+  logo_path?: string | null
+  featured?: boolean
 }
 export type MetadataData = Record<MetadataKind, MetadataRow[]>
 export class MetadataSaveError extends Error {}
@@ -48,7 +49,11 @@ export const metadataInput = z
     z.object({
       ...base,
       kind: z.literal("brands"),
-      logo_path: assetPath("brands"),
+      logo_path: assetPath("brands")
+        .nullable()
+        .or(z.literal(""))
+        .transform((path) => path || null),
+      featured: z.boolean().optional(),
     }),
   ])
   .refine(

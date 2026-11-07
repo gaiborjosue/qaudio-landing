@@ -37,7 +37,7 @@ async function ShopListing({ searchParams }: { searchParams: SearchParams }) {
   return (
     <>
       <div className={styles.heading}>
-        {brand ? (
+        {brand?.logo_path ? (
           <Image
             className={styles.headingLogo}
             src={brand.logo_path}

@@ -15,6 +15,10 @@ import {
   deleteMetadataFromAdmin,
   saveMetadataOrder,
 } from "@/app/admin/metadata/actions"
+import {
+  NO_PRODUCT_FILTERS,
+  productFiltersHref,
+} from "@/lib/admin/product-filters"
 import { catalogAssetUrl } from "@/lib/catalog-assets"
 import type {
   MetadataData,
@@ -61,10 +65,12 @@ export function MetadataView({
   data,
   products,
   active,
+  onProducts,
 }: {
   data: MetadataData
   products: AdminProduct[]
   active: boolean
+  onProducts: (facet: "category" | "brand", slug: string) => void
 }) {
   const router = useRouter()
   const id = useId()
@@ -87,7 +93,8 @@ export function MetadataView({
   const counts = new Map<string, number>()
   for (const product of products) {
     const slug =
-      kind === "categories" ? product.category.slug : product.brand.slug
+      kind === "categories" ? product.category.slug : product.brand?.slug
+    if (!slug) continue
     counts.set(slug, (counts.get(slug) ?? 0) + 1)
   }
   const sortable = useMemo(
@@ -372,7 +379,30 @@ export function MetadataView({
                           </td>
                         </>
                       )}
-                      <td>{used}</td>
+                      <td>
+                        <a
+                          href={productFiltersHref({
+                            ...NO_PRODUCT_FILTERS,
+                            [singular]: row.slug,
+                          })}
+                          className={styles.productCount}
+                          aria-label={`Show ${used} products for ${row.name}`}
+                          onClick={(event) => {
+                            if (
+                              event.button !== 0 ||
+                              event.metaKey ||
+                              event.ctrlKey ||
+                              event.shiftKey ||
+                              event.altKey
+                            )
+                              return
+                            event.preventDefault()
+                            onProducts(singular, row.slug)
+                          }}
+                        >
+                          {used}
+                        </a>
+                      </td>
                       <td>
                         <div className={styles.rowActions}>
                           <button

@@ -114,7 +114,22 @@ test("orders require an exact permutation", () => {
 
 test("asset resolution handles both taxonomy and embedded product joins", () => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://metadata-test.supabase.co"
-  assert.equal(catalogAssetUrl("/brands/logo.png"), "/brands/logo.png")
+  assert.equal(
+    catalogAssetUrl("/brands/logo.png"),
+    "/brands/logo.png?catalog=2"
+  )
+  assert.equal(
+    catalogAssetUrl("/categories/subwoofers.svg"),
+    "/categories/subwoofers.svg?catalog=2"
+  )
+  assert.equal(
+    catalogAssetUrl("/brands/logo.png?catalog=2"),
+    "/brands/logo.png?catalog=2"
+  )
+  assert.equal(
+    catalogAssetUrl("/category-scenes/turntables.webp"),
+    "/category-scenes/turntables.webp"
+  )
   const url = catalogAssetUrl(`brands/${uuid}.webp`)
   assert(
     url.startsWith(
@@ -134,6 +149,56 @@ test("asset resolution handles both taxonomy and embedded product joins", () => 
       scene_path: `category-scenes/${uuid}.webp`,
     }).scene_path.startsWith("https://")
   )
+})
+
+test("missing brands and logos remain absent without invented artwork", async () => {
+  const input = metadataInput.parse({
+    ...brand,
+    logo_path: null,
+    featured: false,
+  })
+  assert.equal(input.logo_path, null)
+  assert.equal(metadataInput.parse({ ...brand, logo_path: "" }).logo_path, null)
+  const product = productTaxonomyAssets({
+    category: { artwork_path: "/categories/a.png" },
+    brand: null,
+  })
+  assert.equal(product.brand, null)
+  const db = fakeDb()
+  await saveMetadata(db, input)
+  assert(!db.calls.some(([kind]) => kind === "copy" || kind === "rpc"))
+  assert.equal(db.calls.find(([kind]) => kind === "insert")[2].logo_path, null)
+  assert.equal(db.calls.find(([kind]) => kind === "insert")[2].featured, false)
+})
+
+test("dark transparent logo marks turn white while their ground stays black", async () => {
+  const input = await sharp({
+    create: {
+      width: 12,
+      height: 12,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+    .composite([
+      {
+        input: await sharp({
+          create: { width: 4, height: 4, channels: 4, background: "black" },
+        })
+          .png()
+          .toBuffer(),
+        left: 4,
+        top: 4,
+      },
+    ])
+    .png()
+    .toBuffer()
+  const output = await encodeMetadataImage(input, "logo", true)
+  const { data, info } = await sharp(output)
+    .raw()
+    .toBuffer({ resolveWithObject: true })
+  assert(data[0] < 10)
+  assert(data[(6 * info.width + 6) * info.channels] > 245)
 })
 
 test("every metadata action refuses unsigned users before touching data", async () => {

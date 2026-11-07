@@ -1,3 +1,4 @@
+import Image from "next/image"
 import type { Deal, DealItem } from "@/lib/deals-data"
 import styles from "./deal-card.module.css"
 
@@ -27,6 +28,16 @@ export function DealCard({ deal }: { deal: Deal }) {
         </h2>
         {deal.summary ? <p className={styles.summary}>{deal.summary}</p> : null}
       </div>
+      {deal.image && (
+        <Image
+          className={styles.poster}
+          src={deal.image.src}
+          alt={deal.image.alt}
+          width={deal.image.width}
+          height={deal.image.height}
+          sizes="(max-width: 760px) 90vw, 700px"
+        />
+      )}
       {deal.items.length > 0 ? (
         <ul className={styles.items}>
           {deal.items.map((item) => (

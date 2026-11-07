@@ -77,6 +77,9 @@
 }
 
 .content {
+  max-height: min(288px, var(--available-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   min-width: 160px;
   padding: 4px;
   border-radius: 12px;

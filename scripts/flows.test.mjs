@@ -25,12 +25,181 @@ registerHooks({
 
 const flows = await import("../lib/admin/flows.ts")
 const sale = await import("../lib/admin/sale.ts")
-const { sellingPrice } = await import("../lib/catalog.ts")
+const { sellingPrice, priceQualifications, conditionQualification } =
+  await import("../lib/catalog.ts")
+const { valuesFrom, inputFromValues } =
+  await import("../lib/admin/product-editor.ts")
 const { saleInputSchema, saleProposalSchema, productSaleSchema } =
   await import("../lib/admin/schemas.ts")
 const { datesFromAnswer } = await import("../agent/lib/ask-dates.ts")
 
+const { calendarDay, storeDay, saleDatesFromRange } =
+  await import("../lib/admin/sale-dates.ts")
+const { NO_PRODUCT_FILTERS, productFiltersFromQuery, productFiltersHref } =
+  await import("../lib/admin/product-filters.ts")
+
 const id = (n) => `00000000-0000-4000-8000-00000000000${n}`
+
+test("metadata product links round-trip only supported filters, including escaped values", () => {
+  for (const facet of ["category", "brand"]) {
+    const filters = { ...NO_PRODUCT_FILTERS, [facet]: "a&b / hi-fi" }
+    const url = new URL(productFiltersHref(filters), "https://qaudio.test")
+    assert.equal(url.pathname, "/admin/products")
+    assert.equal(url.searchParams.get(facet), "a&b / hi-fi")
+    assert.deepEqual(productFiltersFromQuery(url.searchParams), filters)
+  }
+  assert.equal(productFiltersHref(NO_PRODUCT_FILTERS), "/admin/products")
+  assert.deepEqual(
+    productFiltersFromQuery(new URLSearchParams("other=ignored")),
+    NO_PRODUCT_FILTERS
+  )
+  const all = {
+    search: "KEF R3",
+    category: "speakers",
+    brand: "kef",
+    condition: "Demo",
+    status: "draft",
+  }
+  assert.deepEqual(
+    productFiltersFromQuery(
+      new URL(productFiltersHref(all), "https://qaudio.test").searchParams
+    ),
+    all
+  )
+})
+
+test("sale calendar days stay in store time across browser zones and daylight-saving changes", () => {
+  const previous = process.env.TZ
+  try {
+    for (const zone of [
+      "America/Los_Angeles",
+      "America/New_York",
+      "Asia/Tokyo",
+      "Pacific/Kiritimati",
+    ]) {
+      process.env.TZ = zone
+      for (const day of ["2026-03-08", "2026-11-01", "2027-01-01"])
+        assert.equal(storeDay(calendarDay(day)), day)
+      assert.deepEqual(
+        saleDatesFromRange(
+          { from: calendarDay("2026-11-01"), to: calendarDay("2026-11-03") },
+          "2026-10-31T10:15",
+          "2026-11-02T18:45",
+          "2026-10-31"
+        ),
+        { start: "2026-11-01T10:15", end: "2026-11-03T18:45" }
+      )
+    }
+  } finally {
+    if (previous === undefined) delete process.env.TZ
+    else process.env.TZ = previous
+  }
+})
+
+test("sale range preserves Now and leaves an incomplete end for validation", () => {
+  const today = "2026-11-06"
+  assert.deepEqual(
+    saleDatesFromRange(
+      { from: calendarDay(today), to: calendarDay(today) },
+      "",
+      "",
+      today
+    ),
+    { start: "", end: "2026-11-06T23:59" }
+  )
+  assert.deepEqual(
+    saleDatesFromRange({ from: calendarDay("2026-11-07") }, "", "", today),
+    { start: "2026-11-07T00:00", end: "" }
+  )
+  assert.deepEqual(saleDatesFromRange(undefined, "", "", today), {
+    start: "",
+    end: "",
+  })
+})
+
+test("source price labels do not duplicate the existing price, unit or availability", () => {
+  for (const note of [
+    "MSRP",
+    "MSRP (Each)",
+    "MSRP (Pair) · Sale Price",
+    "MSRP (new) · Sale Price (Each)",
+    "Used Price (pair)",
+    "Item Price · Sale Price",
+    "SOLD OUT",
+  ])
+    assert.deepEqual(
+      priceQualifications(note),
+      { startingAt: false, text: "" },
+      note
+    )
+  assert.deepEqual(priceQualifications("Used Price starting at:"), {
+    startingAt: true,
+    text: "",
+  })
+  assert.deepEqual(priceQualifications("Starting at (Each)"), {
+    startingAt: true,
+    text: "",
+  })
+  assert.equal(priceQualifications("MSRP · Closeout").text, "Closeout")
+  assert.equal(priceQualifications("MSRP · Demo Sale", "Demo").text, "")
+  assert.equal(
+    priceQualifications("Visit us for price").text,
+    "Visit us for price"
+  )
+})
+
+test("condition qualifications retain grades and final-sale terms without another condition label", () => {
+  assert.equal(conditionQualification("Used"), "")
+  assert.equal(conditionQualification("New"), "")
+  assert.equal(
+    conditionQualification("Used (final sale) · 6 out of 10"),
+    "Final sale · 6 out of 10"
+  )
+  assert.equal(conditionQualification("9 out of 10"), "9 out of 10")
+})
+
+test("editing existing price controls preserves imported qualifications without note inputs", () => {
+  const baseline = valuesFrom({
+    price_cents: 8900,
+    price_note: "Used Price starting at:",
+    condition: "Used",
+    condition_note: "9 out of 10",
+  })
+  const input = inputFromValues(
+    { ...baseline, price: "99", msrp: "129" },
+    baseline
+  )
+  assert.equal(input.price_cents, 9900)
+  assert.equal(input.msrp_cents, 12900)
+  assert.equal(input.price_note, baseline.price_note)
+  assert.equal(input.condition_note, baseline.condition_note)
+})
+
+test("turning off an existing sale clears it on Save while unrelated edits preserve it", () => {
+  const baseline = valuesFrom({
+    price_cents: 129900,
+    sale: {
+      price_cents: 99900,
+      starts_at: null,
+      ends_at: "2026-12-01T18:00",
+    },
+  })
+  assert.equal(
+    "sale" in inputFromValues({ ...baseline, name: "Updated" }, baseline),
+    false
+  )
+  const removed = inputFromValues(
+    {
+      ...baseline,
+      sale_price: "",
+      sale_starts: "",
+      sale_ends: "",
+    },
+    baseline
+  )
+  assert.equal(removed.sale, null)
+  assert.equal(removed.price_cents, 129900)
+})
 
 test("sale prices come off MSRP or the regular price, rounded as asked", () => {
   const percent = { kind: "percent", percent: 25 }

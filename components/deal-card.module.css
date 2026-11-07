@@ -184,3 +184,11 @@
     padding-bottom: 24px;
   }
 }
+
+.poster {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 24px;
+  filter: grayscale(1);
+}

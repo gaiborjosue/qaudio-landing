@@ -1,5 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js"
-import type { Database } from "../../lib/supabase/database.types"
+import type { Database } from "../../lib/supabase/database"
 
 // The agent talks to Supabase only as the signed-in admin: the admin chat
 // sends the admin's Supabase access token, the eve channel verifies it, and

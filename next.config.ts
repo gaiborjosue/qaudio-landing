@@ -64,6 +64,12 @@ const nextConfig: NextConfig = {
     content: { stale: 300, revalidate: 300 },
   },
   images: {
+    localPatterns: [
+      { pathname: "/**", search: "" },
+      // Only catalog artwork uses a query to bypass the old cached redirects.
+      { pathname: "/brands/**", search: "?catalog=2" },
+      { pathname: "/categories/**", search: "?catalog=2" },
+    ],
     remotePatterns: [
       new URL("/storage/v1/object/public/media/**", supabaseUrl),
     ],
@@ -85,6 +91,35 @@ const nextConfig: NextConfig = {
   // Used Equipment category.
   redirects: async () => [
     { source: "/used", destination: "/shop/used-equipment", permanent: true },
+    // Observed on the live Webflow homepage/sitemap, archived on the migration
+    // SSD. Alias only the renamed source slugs; taxonomy still lives in the DB.
+    ...Object.entries({
+      "cd-sacdblu-raydac": "cd-sacd",
+      "genuine-thorens-parts": "thorens-parts",
+      "network-players-hires-audio": "network-players",
+      "preamplifier-processor": "preamplifiers",
+      subwoofer: "subwoofers",
+    }).map(([source, destination]) => ({
+      source: `/categories/${source}`,
+      destination: `/shop/${destination}`,
+      permanent: true,
+    })),
+    {
+      // Page slugs only: these folders also contain bundled image files.
+      source: "/categories/:category([a-z0-9-]+)",
+      destination: "/shop/:category",
+      permanent: true,
+    },
+    {
+      source: "/brands/musical-fideliy",
+      destination: "/shop?brand=musical-fidelity",
+      permanent: true,
+    },
+    {
+      source: "/brands/:brand([a-z0-9-]+)",
+      destination: "/shop?brand=:brand",
+      permanent: true,
+    },
   ],
 }
 

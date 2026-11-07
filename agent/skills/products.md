@@ -14,8 +14,8 @@ Adding, editing, publishing, unpublishing, and deleting products, and changing t
 
 How the shop catalog works:
 
-- Every product has a `slug` (its page is `/products/<slug>`), a category and a brand, a `name`, a card line (`short_description`), and a Markdown `description`.
-- Price: `price_cents` is the regular selling price in US cents, and `msrp_cents` the manufacturer's list price or null. A selling price below MSRP shows as a sale. `price_unit` is `each` or `pair`. Say prices in dollars.
+- Every product has a `slug` (its page is `/products/<slug>`), a category and an optional brand, a `name`, a card line (`short_description`), and a Markdown `description`.
+- Price: `price_cents` is the regular selling price in US cents, and `msrp_cents` the manufacturer's list price or null. A selling price below MSRP shows as a sale. `price_unit` is `each` or `pair`. Say prices in dollars. A null price means no quoted selling price; never replace it with MSRP or a number from the teaser. Preserve `price_note` (starting-at, each/pair, final sale) and `condition_note`. `availability` distinguishes available, sold, and unavailable listings; do not offer sold or unavailable stock or put unpriced listings on a sale. Missing brands/logos are intentional; never infer them from names.
 - `sale` is a time-limited sale, if any: its `price_cents` shows instead of the regular price from `starts_at` (null: as soon as it's saved) until `ends_at`, store time, and then the regular price shows again by itself. A sale that has ended stays listed until a new one replaces it.
 - `condition` is `New`, `Demo`, or `Used`. `status` `published` shows the product in the shop; `draft` hides it.
 - There's no product line field: a line ("Paradigm Monitor SE") is the brand plus a name match, so find it with `products__list_catalog` (`brand_slug` and `search`) and check the names.

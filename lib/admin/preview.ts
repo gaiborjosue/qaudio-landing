@@ -106,7 +106,8 @@ export function productFromInput(
   const brand = brands.find((item) => item.slug === input.brand_slug)
   if (!category)
     return { problem: `Unknown category “${input.category_slug}”.` }
-  if (!brand) return { problem: `Unknown brand “${input.brand_slug}”.` }
+  if (input.brand_slug && !brand)
+    return { problem: `Unknown brand “${input.brand_slug}”.` }
   return {
     product: shopProduct(
       {
@@ -119,6 +120,9 @@ export function productFromInput(
         msrp_cents: input.msrp_cents,
         sale_window: input.sale,
         price_unit: input.price_unit,
+        price_note: input.price_note,
+        condition_note: input.condition_note,
+        availability: input.availability,
         condition: input.condition,
         ready_for_audition: input.ready_for_audition,
         manufacturer_url: input.manufacturer_url,
@@ -128,12 +132,13 @@ export function productFromInput(
           name: category.name,
           artwork_path: category.artwork_path,
         },
-        brand,
+        brand: brand ?? null,
         images: input.images.map((image, index) => ({
           id: `${index}-${image.path}`,
           src: mediaUrl(image.path),
           path: image.path,
           alt: image.alt,
+          caption: image.caption,
           width: image.width,
           height: image.height,
         })),

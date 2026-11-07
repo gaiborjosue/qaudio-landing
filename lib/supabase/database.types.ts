@@ -16,19 +16,22 @@ export type Database = {
     Tables: {
       catalog_brands: {
         Row: {
-          logo_path: string
+          featured: boolean
+          logo_path: string | null
           name: string
           slug: string
           sort_order: number
         }
         Insert: {
-          logo_path: string
+          featured?: boolean
+          logo_path?: string | null
           name: string
           slug: string
           sort_order?: number
         }
         Update: {
-          logo_path?: string
+          featured?: boolean
+          logo_path?: string | null
           name?: string
           slug?: string
           sort_order?: number
@@ -111,6 +114,10 @@ export type Database = {
           created_at: string
           ends_at: string | null
           id: string
+          image_alt: string
+          image_height: number | null
+          image_path: string | null
+          image_width: number | null
           note: string
           sort_order: number
           starts_at: string | null
@@ -123,6 +130,10 @@ export type Database = {
           created_at?: string
           ends_at?: string | null
           id?: string
+          image_alt?: string
+          image_height?: number | null
+          image_path?: string | null
+          image_width?: number | null
           note?: string
           sort_order?: number
           starts_at?: string | null
@@ -135,6 +146,10 @@ export type Database = {
           created_at?: string
           ends_at?: string | null
           id?: string
+          image_alt?: string
+          image_height?: number | null
+          image_path?: string | null
+          image_width?: number | null
           note?: string
           sort_order?: number
           starts_at?: string | null
@@ -311,6 +326,7 @@ export type Database = {
       product_images: {
         Row: {
           alt: string
+          caption: string
           height: number
           id: string
           path: string
@@ -320,6 +336,7 @@ export type Database = {
         }
         Insert: {
           alt: string
+          caption?: string
           height: number
           id?: string
           path: string
@@ -329,6 +346,7 @@ export type Database = {
         }
         Update: {
           alt?: string
+          caption?: string
           height?: number
           id?: string
           path?: string
@@ -348,9 +366,11 @@ export type Database = {
       }
       products: {
         Row: {
-          brand_slug: string
+          availability: string
+          brand_slug: string | null
           category_slug: string
           condition: string
+          condition_note: string
           created_at: string
           currency: string
           description_closing: string
@@ -360,7 +380,8 @@ export type Database = {
           manufacturer_url: string | null
           msrp_cents: number | null
           name: string
-          price_cents: number
+          price_cents: number | null
+          price_note: string
           price_unit: string
           ready_for_audition: boolean
           sale_ends_at: string | null
@@ -373,9 +394,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
-          brand_slug: string
+          availability?: string
+          brand_slug?: string | null
           category_slug: string
           condition: string
+          condition_note?: string
           created_at?: string
           currency?: string
           description_closing?: string
@@ -385,7 +408,8 @@ export type Database = {
           manufacturer_url?: string | null
           msrp_cents?: number | null
           name: string
-          price_cents: number
+          price_cents?: number | null
+          price_note?: string
           price_unit?: string
           ready_for_audition?: boolean
           sale_ends_at?: string | null
@@ -398,9 +422,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
-          brand_slug?: string
+          availability?: string
+          brand_slug?: string | null
           category_slug?: string
           condition?: string
+          condition_note?: string
           created_at?: string
           currency?: string
           description_closing?: string
@@ -410,7 +436,8 @@ export type Database = {
           manufacturer_url?: string | null
           msrp_cents?: number | null
           name?: string
-          price_cents?: number
+          price_cents?: number | null
+          price_note?: string
           price_unit?: string
           ready_for_audition?: boolean
           sale_ends_at?: string | null
@@ -496,6 +523,42 @@ export type Database = {
           opens_at?: string | null
           updated_at?: string
           weekday?: number
+        }
+        Relationships: []
+      }
+      webflow_import_records: {
+        Row: {
+          applied_at: string
+          collection_id: string
+          item_id: string
+          manifest_sha256: string
+          source_sha256: string
+          source_slug: string
+          target_fingerprint: string
+          target_key: string
+          target_table: string
+        }
+        Insert: {
+          applied_at?: string
+          collection_id: string
+          item_id: string
+          manifest_sha256: string
+          source_sha256: string
+          source_slug: string
+          target_fingerprint: string
+          target_key: string
+          target_table: string
+        }
+        Update: {
+          applied_at?: string
+          collection_id?: string
+          item_id?: string
+          manifest_sha256?: string
+          source_sha256?: string
+          source_slug?: string
+          target_fingerprint?: string
+          target_key?: string
+          target_table?: string
         }
         Relationships: []
       }

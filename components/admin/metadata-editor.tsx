@@ -38,6 +38,7 @@ export type MetadataDraft = {
   artwork_path: string
   scene_path: string
   logo_path: string
+  featured: boolean
 }
 
 export type MetadataDraftChange =
@@ -56,6 +57,7 @@ export function metadataDraft(
     artwork_path: row?.artwork_path ?? "",
     scene_path: row?.scene_path ?? "",
     logo_path: row?.logo_path ?? "",
+    featured: row?.featured ?? false,
   }
 }
 
@@ -146,6 +148,21 @@ export function MetadataEditor({
               required
               onChange={(event) => field("wheel_label", event.target.value)}
             />
+          </label>
+        )}
+        {draft.kind === "brands" && (
+          <label>
+            <input
+              type="checkbox"
+              checked={draft.featured}
+              onChange={(event) =>
+                onChange((current) => ({
+                  ...current,
+                  featured: event.target.checked,
+                }))
+              }
+            />{" "}
+            Show on homepage
           </label>
         )}
         <div className={styles.images}>

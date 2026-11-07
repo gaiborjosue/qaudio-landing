@@ -31,7 +31,10 @@ export async function encodeMetadataImage(
     .toColourspace("srgb")
   if (kind !== "scene") output = output.greyscale()
   if (kind === "logo") {
-    if (darkArtwork) output = output.negate({ alpha: false })
+    // Sharp flattens before colour operations in a single pipeline. Finish
+    // inversion with alpha intact first, then put the light marks on black.
+    if (darkArtwork)
+      output = sharp(await output.negate({ alpha: false }).png().toBuffer())
     output = output.flatten({ background: "#000000" })
   }
   return output

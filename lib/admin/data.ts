@@ -1,4 +1,5 @@
 import "server-only"
+import { PRODUCT_COLUMNS } from "../catalog-columns"
 import { connection } from "next/server"
 import {
   toDayHours,
@@ -65,18 +66,11 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
   const supabase = await sessionSupabase()
   const { data, error } = await supabase
     .from("products")
-    .select(
-      `id, slug, name, short_description, description_intro, features,
-      description_closing, price_cents, msrp_cents, price_unit, condition,
-      ready_for_audition, manufacturer_url, status,
-      sale_price_cents, sale_starts_at, sale_ends_at,
-      category:catalog_categories!inner(slug, name, artwork_path),
-      brand:catalog_brands!inner(slug, name, logo_path),
-      product_images(id, path, alt, width, height, sort_order)`
-    )
+    .select(PRODUCT_COLUMNS)
     .order("sort_order")
     .order("id")
-  if (error) throw new Error(`Admin products: ${error.message}`)
+  if (error || !data)
+    throw new Error(`Admin products: ${error?.message ?? "unavailable"}`)
   return data.map(
     ({
       product_images,
@@ -104,7 +98,8 @@ export async function getAdminProducts(): Promise<AdminProduct[]> {
           : null,
       images: product_images
         .sort((a, b) => a.sort_order - b.sort_order)
-        .map(({ id, path, alt, width, height }) => ({
+        .map(({ id, path, alt, width, height, caption }) => ({
+          caption,
           id,
           path,
           alt,

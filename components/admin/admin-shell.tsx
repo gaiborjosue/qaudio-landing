@@ -2,6 +2,13 @@
 
 import { useCallback, useId, useRef, useState, type KeyboardEvent } from "react"
 import Image from "next/image"
+import { useSearchParams } from "next/navigation"
+import {
+  NO_PRODUCT_FILTERS,
+  productFiltersFromQuery,
+  productFiltersHref,
+  type ProductFilters,
+} from "@/lib/admin/product-filters"
 import { LayoutGroup, MotionConfig, motion } from "motion/react"
 import { LogOut } from "lucide-react"
 import { signOut } from "@/app/admin/actions"
@@ -28,7 +35,7 @@ const VIEWS: { id: AdminView; label: string }[] = [
 // Next patches history; going around it keeps the workspace mounted while
 // the address follows the view and the chat's session.
 function setAddress(path: string) {
-  if (window.location.pathname === path) return
+  if (`${window.location.pathname}${window.location.search}` === path) return
   History.prototype.replaceState.call(
     window.history,
     window.history.state,
@@ -58,6 +65,11 @@ export function AdminShell({
   metadata: MetadataData
 }) {
   const id = useId()
+  const root = useRef<HTMLDivElement>(null)
+  const query = useSearchParams()
+  const [productFilters, setProductFilters] = useState(() =>
+    productFiltersFromQuery(query)
+  )
   const [view, setView] = useState(initialView)
   const current = useRef(initialView)
   const session = useRef(sessionId)
@@ -70,7 +82,7 @@ export function AdminShell({
     next === "metadata"
       ? "/admin/metadata"
       : next === "products"
-        ? "/admin/products"
+        ? productFiltersHref(productFilters)
         : session.current
           ? `/admin/s/${encodeURIComponent(session.current)}`
           : "/admin"
@@ -101,12 +113,28 @@ export function AdminShell({
     }
   }
 
+  const filterProducts = (filters: ProductFilters) => {
+    setProductFilters(filters)
+    if (current.current === "products") setAddress(productFiltersHref(filters))
+  }
+
+  const showProducts = (facet: "category" | "brand", slug: string) => {
+    const filters = { ...NO_PRODUCT_FILTERS, [facet]: slug }
+    setProductFilters(filters)
+    current.current = "products"
+    setView("products")
+    setAddress(productFiltersHref(filters))
+    root.current
+      ?.querySelector<HTMLButtonElement>('[data-view="products"]')
+      ?.focus()
+  }
+
   const tabId = (view: AdminView) => `${id}-tab-${view}`
   const panelId = (view: AdminView) => `${id}-panel-${view}`
 
   return (
     <MotionConfig reducedMotion="user">
-      <div className={styles.app}>
+      <div ref={root} className={styles.app}>
         <header className={styles.topbar}>
           <div className={styles.brand}>
             <Image
@@ -170,6 +198,8 @@ export function AdminShell({
           <ProductsView
             products={preview.products}
             taxonomy={preview.taxonomy}
+            filters={productFilters}
+            onFilters={filterProducts}
             active={view === "products"}
             sheet={sheet}
             onSheet={setSheet}
@@ -186,6 +216,7 @@ export function AdminShell({
         >
           <MetadataView
             data={metadata}
+            onProducts={showProducts}
             products={preview.products}
             active={view === "metadata"}
           />
@@ -250,6 +281,7 @@ function ViewSwitch({
               }}
               type="button"
               role="tab"
+              data-view={item.id}
               id={tabId(item.id)}
               aria-selected={selected}
               aria-controls={panelId(item.id)}

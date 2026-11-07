@@ -95,6 +95,13 @@ export function ProductPhotos({
                   )
                 )
               }
+              onCaption={(caption) =>
+                onChange(
+                  images.map((item) =>
+                    item.path === photo.path ? { ...item, caption } : item
+                  )
+                )
+              }
               onMove={(step, button) => move(index, step, button)}
               onRemove={() => onRemove(index)}
               suggested={suggested.includes(photo.path)}
@@ -122,6 +129,7 @@ function ProductPhoto({
   count,
   hint,
   onDescription,
+  onCaption,
   onMove,
   onRemove,
   onDrop,
@@ -133,6 +141,7 @@ function ProductPhoto({
   count: number
   hint: string
   onDescription: (alt: string) => void
+  onCaption: (caption: string) => void
   onMove: (step: -1 | 1, button: HTMLButtonElement) => void
   onRemove: () => void
   onDrop: () => void
@@ -197,6 +206,14 @@ function ProductPhoto({
         placeholder="Describe this photo"
         aria-label={`Description of photo ${index + 1}`}
         onChange={(event) => onDescription(event.target.value)}
+      />
+      <input
+        type="text"
+        value={photo.caption ?? ""}
+        maxLength={2000}
+        placeholder="Caption (optional)"
+        aria-label={`Caption of photo ${index + 1}`}
+        onChange={(event) => onCaption(event.target.value)}
       />
       <div className={styles.photoActions}>
         <button
