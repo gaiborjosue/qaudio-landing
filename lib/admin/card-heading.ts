@@ -46,6 +46,8 @@ function noun(post: Post) {
 
 /** The thing a release title is about, and its name on its own. */
 function subject(tool: ReleaseTool, post: Post) {
+  if (tool === "save_google_business_post")
+    return { object: "the Google Business post", name: "Google Business post" }
   if (tool === "save_news_post") {
     return {
       object: quoted(post.title),
@@ -79,6 +81,8 @@ function releaseSentence(
   if (release === "schedule") {
     return `${done ? "Scheduled" : "Scheduling"} ${object}${when}`
   }
+  if (tool === "save_google_business_post")
+    return `${done ? "Posted" : "Posting"} to Google Business`
   if (tool === "save_instagram_post") {
     return `${done ? "Posted" : "Posting"} the ${noun(post)} to Instagram`
   }
@@ -96,7 +100,13 @@ function savedRelease(
   now: string
 ): ChosenRelease | null {
   const result = (output ?? {}) as { status?: unknown; live?: unknown }
-  if (tool === "save_instagram_post") {
+  if (
+    tool === "save_google_business_post" &&
+    post.when === "now" &&
+    result.status !== "published"
+  )
+    return null
+  if (tool === "save_instagram_post" || tool === "save_google_business_post") {
     const release = proposedRelease(tool, post, now)
     return release && { release, at: scheduledAt(tool, post) }
   }

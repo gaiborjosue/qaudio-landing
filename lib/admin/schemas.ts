@@ -10,7 +10,11 @@ import {
   instagramScheduleProblem,
   mentionCount,
 } from "./instagram"
-import { STORE_DATETIME, toStoreDateTime } from "./store-time"
+import {
+  fromStoreDateTime,
+  STORE_DATETIME,
+  toStoreDateTime,
+} from "./store-time"
 
 // Inputs of the admin agent's write tools. The agent validates tool calls with
 // them, and the admin chat renders previews from the same (validated) input.
@@ -693,6 +697,157 @@ const instagramPostReference = {
 
 export const deleteInstagramPostInputSchema = z.object(instagramPostReference)
 export const retryInstagramPostInputSchema = z.object(instagramPostReference)
+
+// Google Business targets are copied from get_location, then checked again
+// against the server-selected location before each write.
+export const googleBusinessTargetSchema = z.object({
+  account_id: z.string().regex(/^[a-f0-9]{24}$/i),
+  location_id: z.string().regex(/^locations\/\d+$/),
+  business: z.string().trim().min(1).max(300),
+})
+const revision = z.string().regex(/^[a-f0-9]{64}$/)
+const calendarDate = date.refine((value) => {
+  const parsed = new Date(`${value}T12:00:00Z`)
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === value
+  )
+}, "Use a real calendar date.")
+const googleBusinessDay = dayHoursSchema.refine(
+  (day) => day.kind !== "appointment",
+  "Google can't represent appointment-only hours. Ask for exact opening hours; never mark appointments as closed."
+)
+const googleBusinessChange = z
+  .object({
+    starts_on: calendarDate,
+    ends_on: calendarDate,
+    kind: z.enum(["open", "closed", "regular"]),
+    opens_at: time.optional(),
+    closes_at: time.optional(),
+  })
+  .superRefine((change, ctx) => {
+    if (
+      change.ends_on < change.starts_on ||
+      Date.parse(change.ends_on) - Date.parse(change.starts_on) >
+        365 * 86_400_000
+    )
+      ctx.addIssue({
+        code: "custom",
+        message: "Use an inclusive range of at most 366 days.",
+      })
+    const day = dayHoursSchema.safeParse({
+      ...change,
+      kind: change.kind === "regular" ? "closed" : change.kind,
+    })
+    if (!day.success)
+      for (const issue of day.error.issues)
+        ctx.addIssue({ code: "custom", message: issue.message })
+  })
+export const googleBusinessHoursInputSchema = z
+  .object({
+    target: googleBusinessTargetSchema,
+    revision: revision.describe(
+      "Exact hours revision from googlebusiness__get_location."
+    ),
+    week: z
+      .array(googleBusinessDay)
+      .length(7)
+      .optional()
+      .describe("Replace the regular week, Monday first. Omit to keep it."),
+    changes: z
+      .array(googleBusinessChange)
+      .max(12)
+      .default([])
+      .describe(
+        "Only affected date ranges. regular removes overrides so Google's regular week applies. Preserve other dates."
+      ),
+  })
+  .superRefine((input, ctx) => {
+    if (!input.week && !input.changes.length)
+      ctx.addIssue({
+        code: "custom",
+        message: "Include a week or dated changes.",
+      })
+    const sorted = [...input.changes].sort((a, b) =>
+      a.starts_on.localeCompare(b.starts_on)
+    )
+    for (let i = 1; i < sorted.length; i++)
+      if (sorted[i].starts_on <= sorted[i - 1].ends_on)
+        ctx.addIssue({
+          code: "custom",
+          message: "Google hours ranges must not overlap.",
+        })
+  })
+export const googleBusinessPostInputSchema = z
+  .object({
+    target: googleBusinessTargetSchema,
+    id: z
+      .string()
+      .regex(/^[a-f0-9]{24}$/i)
+      .optional(),
+    revision: revision
+      .optional()
+      .describe("Required when editing: copy from googlebusiness__list_posts."),
+    content: z.string().trim().min(1).max(1500),
+    photo: instagramPhotoSchema
+      .optional()
+      .describe(
+        "Optional single photo. Complete replacement on edit; omit to remove the old photo."
+      ),
+    call_to_action: z
+      .object({
+        type: z.enum([
+          "LEARN_MORE",
+          "BOOK",
+          "ORDER",
+          "SHOP",
+          "SIGN_UP",
+          "CALL",
+        ]),
+        url: z.url({ protocol: /^https$/ }).max(2000),
+      })
+      .optional(),
+    when: z.union([
+      z.literal("now"),
+      z.literal("draft"),
+      z.string().regex(STORE_DATETIME),
+    ]),
+  })
+  .superRefine((post, ctx) => {
+    if (post.when !== "now" && post.when !== "draft") {
+      let validTime = false
+      try {
+        validTime =
+          calendarDate.safeParse(post.when.slice(0, 10)).success &&
+          toStoreDateTime(fromStoreDateTime(post.when)) === post.when
+      } catch {
+        /* invalid calendar or daylight-saving time */
+      }
+      if (!validTime)
+        ctx.addIssue({
+          code: "custom",
+          message: "Use a real America/New_York date and time.",
+        })
+    }
+    if (post.id && !post.revision)
+      ctx.addIssue({
+        code: "custom",
+        message: "An edit requires its current revision.",
+      })
+  })
+export const deleteGoogleBusinessPostInputSchema = z.object({
+  target: googleBusinessTargetSchema,
+  id: z.string().regex(/^[a-f0-9]{24}$/i),
+  revision,
+  summary: z.string().min(1).max(200),
+})
+export type GoogleBusinessTarget = z.infer<typeof googleBusinessTargetSchema>
+export type GoogleBusinessHoursInput = z.infer<
+  typeof googleBusinessHoursInputSchema
+>
+export type GoogleBusinessPostInput = z.infer<
+  typeof googleBusinessPostInputSchema
+>
 
 export type DayHoursInput = z.infer<typeof dayHoursSchema>
 export type WeeklyHoursInput = z.infer<typeof weeklyHoursInputSchema>

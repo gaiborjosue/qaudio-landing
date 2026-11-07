@@ -1,6 +1,8 @@
 import type { InstagramStatus } from "./instagram-types"
 
-type Summary = Pick<InstagramStatus, "state" | "accounts" | "needsAttention">
+type Summary = Pick<InstagramStatus, "state" | "needsAttention"> & {
+  accounts: readonly unknown[]
+}
 export type ConnectionHealth = "checking" | "healthy" | "warning"
 
 /** A warning takes precedence; green requires every service to be checked. */

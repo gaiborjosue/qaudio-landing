@@ -141,7 +141,7 @@ for (const [name, entry] of new Map([
   ...catalog.deferred,
 ]))
   checkArraySchemas(serializeModelInputSchema(entry.inputSchema), name)
-assert.equal(catalog.deferred.size, 21)
+assert.equal(catalog.deferred.size, 27)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -168,6 +168,7 @@ for (const [group, count] of Object.entries({
   news: 4,
   deals: 3,
   instagram: 5,
+  googlebusiness: 6,
 })) {
   const result = await catalog.advertised
     .get("eve__search")
@@ -302,6 +303,46 @@ const fixtures = {
     schemas.retryInstagramPostInputSchema,
     { id: "0000000000000000000000a1", summary: "Failed: “Sample”" },
   ],
+  set_google_business_hours: [
+    schemas.googleBusinessHoursInputSchema,
+    {
+      target: {
+        account_id: "0000000000000000000000a1",
+        location_id: "locations/123",
+        business: "Sample",
+      },
+      revision: "a".repeat(64),
+      week: Array.from({ length: 7 }, () => ({ kind: "closed" })),
+      changes: [
+        { starts_on: "2030-11-26", ends_on: "2030-11-27", kind: "closed" },
+      ],
+    },
+  ],
+  save_google_business_post: [
+    schemas.googleBusinessPostInputSchema,
+    {
+      target: {
+        account_id: "0000000000000000000000a1",
+        location_id: "locations/123",
+        business: "Sample",
+      },
+      content: "Sample Google update",
+      when: "draft",
+    },
+  ],
+  delete_google_business_post: [
+    schemas.deleteGoogleBusinessPostInputSchema,
+    {
+      target: {
+        account_id: "0000000000000000000000a1",
+        location_id: "locations/123",
+        business: "Sample",
+      },
+      id: "0000000000000000000000a2",
+      revision: "a".repeat(64),
+      summary: "Draft: Sample",
+    },
+  ],
 }
 let writes = 0
 for (const [name, definition] of catalog.deferred) {
@@ -337,7 +378,7 @@ for (const [name, definition] of catalog.deferred) {
     "valid"
   )
 }
-assert.equal(writes, 13)
+assert.equal(writes, 16)
 // Products are saved and deleted in the admin's Products tab; the agent has
 // no product writes left, only their names for older chats' cards.
 const retired = ["products__save_product", "products__delete_product"]
@@ -406,7 +447,7 @@ for (const name of [...catalog.deferred.keys(), ...retired]) {
   assert(!render(name).includes("Unknown category"))
   renders += 2
 }
-assert.equal(renders, 30)
+assert.equal(renders, 36)
 // A sale's card shows the product as the shop will during the sale: 25% off
 // the $1,200 list price is $900, against the crossed-out list price.
 const saleCard = renderToStaticMarkup(
@@ -468,5 +509,5 @@ assert.deepEqual(
   ["products/sample.webp", "uploads/sample.webp"]
 )
 console.log(
-  "Catalog verified: 21 deferred (hours 4, products 5, news 4, deals 3, instagram 5); 7 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 13 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 30 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
+  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 7 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
 )

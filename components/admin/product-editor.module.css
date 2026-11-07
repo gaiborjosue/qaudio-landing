@@ -556,16 +556,20 @@
   gap: 14px 16px;
 }
 .saleToggle {
-  display: grid;
-  place-items: center;
-  width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
   height: 24px;
   margin-block: -3px;
-  padding: 0;
+  padding: 0 8px 0 6px;
   border: 1px solid transparent;
   border-radius: 6px;
   background: transparent;
   color: #737373;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
   cursor: pointer;
 }
 .saleToggle:hover,

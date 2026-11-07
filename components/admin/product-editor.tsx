@@ -1136,7 +1136,6 @@ export function ProductEditor({
                 ref={saleToggle}
                 type="button"
                 className={styles.saleToggle}
-                aria-label="Sale"
                 title={saleEnabled ? "Remove sale" : "Add sale"}
                 aria-pressed={saleEnabled}
                 aria-expanded={saleEnabled}
@@ -1146,7 +1145,8 @@ export function ProductEditor({
                   saleEnabled ? removeSale() : setSaleEnabled(true)
                 }
               >
-                <BadgePercent size={17} aria-hidden="true" />
+                <BadgePercent size={15} aria-hidden="true" />
+                Sale
               </button>
             )}
             {field(

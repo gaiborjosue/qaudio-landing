@@ -9,6 +9,7 @@ import { NewsCard } from "@/components/news-card"
 import { ProductCatalog, ProductPageView } from "@/components/product-catalog"
 import { StoreHours } from "@/components/store-hours"
 import { InstagramPreview } from "@/components/admin/instagram-preview"
+import { GoogleBusinessPostPreview } from "@/components/admin/google-business-preview"
 import {
   changeFromInput,
   dealFromInput,
@@ -41,6 +42,9 @@ import {
   retryInstagramPostInputSchema,
   saleInputSchema,
   weeklyHoursInputSchema,
+  googleBusinessHoursInputSchema,
+  googleBusinessPostInputSchema,
+  deleteGoogleBusinessPostInputSchema,
   type InstagramPostInput,
 } from "@/lib/admin/schemas"
 import { saleDiscountLabel, saleLines, saleWindowLabel } from "@/lib/admin/sale"
@@ -174,6 +178,62 @@ export const ChangePreview = memo(function ChangePreview({
   photoOrder?: { order: number[] | null; onOrder: (order: number[]) => void }
 }) {
   switch (previewToolName(tool)) {
+    case "set_google_business_hours": {
+      const parsed = googleBusinessHoursInputSchema.safeParse(input)
+      if (!parsed.success) break
+      const { target, week, changes } = parsed.data
+      return (
+        <>
+          <Note>
+            Google Business · {target.business} · {target.location_id} ·
+            America/New_York
+          </Note>
+          {week && (
+            <HoursPreview
+              schedule={{
+                weekly: week.map((day) =>
+                  day.kind === "open"
+                    ? { open: day.opens_at!, close: day.closes_at! }
+                    : "closed"
+                ),
+                changes: [],
+              }}
+            />
+          )}
+          {changes.map((change) => (
+            <Note key={change.starts_on}>
+              {change.starts_on} – {change.ends_on} ·{" "}
+              {change.kind === "regular"
+                ? "Restore regular Google hours"
+                : change.kind === "closed"
+                  ? "Closed"
+                  : formatHours({
+                      open: change.opens_at!,
+                      close: change.closes_at!,
+                    })}
+            </Note>
+          ))}
+          <Note>
+            Updates Google Business only. Other dated overrides stay in place.
+          </Note>
+        </>
+      )
+    }
+    case "save_google_business_post": {
+      const parsed = googleBusinessPostInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return <GoogleBusinessPostPreview post={parsed.data} />
+    }
+    case "delete_google_business_post": {
+      const parsed = deleteGoogleBusinessPostInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return (
+        <Note>
+          Deletes “{parsed.data.summary}” from Zernio for Google Business ·{" "}
+          {parsed.data.target.business} · {parsed.data.target.location_id}.
+        </Note>
+      )
+    }
     case "set_weekly_hours": {
       const parsed = weeklyHoursInputSchema.safeParse(input)
       if (!parsed.success) break

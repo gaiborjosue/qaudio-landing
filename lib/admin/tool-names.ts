@@ -21,6 +21,9 @@ const PREVIEW_TOOLS = {
   instagram__save_post: "save_instagram_post",
   instagram__delete_post: "delete_instagram_post",
   instagram__retry_post: "retry_instagram_post",
+  googlebusiness__set_hours: "set_google_business_hours",
+  googlebusiness__save_post: "save_google_business_post",
+  googlebusiness__delete_post: "delete_google_business_post",
 } as const
 
 type PreviewTool = (typeof PREVIEW_TOOLS)[keyof typeof PREVIEW_TOOLS]

@@ -3,11 +3,12 @@ import {
   instagramPhotoSchema,
   instagramPostInputSchema,
   newsPostInputSchema,
+  googleBusinessPostInputSchema,
 } from "./schemas"
 import { formatStoreDateTime, STORE_DATETIME } from "./store-time"
 import { previewToolName } from "./tool-names"
 
-// The approval card's Approve step for Instagram posts, news posts, and
+// The approval card's Approve step for Instagram/Google posts, news posts, and
 // deals. The owner picks how it goes out there (now, a draft, or a scheduled
 // time), so the agent proposes straight away instead of asking first. A
 // tool's input can't change once proposed, so a choice that differs from the
@@ -29,13 +30,18 @@ export type Release = "now" | "draft" | "schedule"
 /** The Approve step's choices, in order. */
 export const RELEASES: readonly Release[] = ["now", "draft", "schedule"]
 
-export type ReleaseTool = "save_instagram_post" | "save_news_post" | "save_deal"
+export type ReleaseTool =
+  | "save_instagram_post"
+  | "save_google_business_post"
+  | "save_news_post"
+  | "save_deal"
 type Post = Record<string, unknown>
 type Photos = { photos: unknown[] }
 
 /** The fields an "Approved as:" line may set, by tool. */
 const FIELDS: Record<ReleaseTool, readonly string[]> = {
   save_instagram_post: ["when", "photos"],
+  save_google_business_post: ["when"],
   save_news_post: ["status", "published_at"],
   save_deal: ["status", "starts_at"],
 }
@@ -44,6 +50,7 @@ const FIELDS: Record<ReleaseTool, readonly string[]> = {
 export function releaseTool(name: string): ReleaseTool | undefined {
   const tool = previewToolName(name)
   return tool === "save_instagram_post" ||
+    tool === "save_google_business_post" ||
     tool === "save_news_post" ||
     tool === "save_deal"
     ? tool
@@ -62,9 +69,11 @@ function parse(tool: ReleaseTool, value: unknown): Post | null {
   const result =
     tool === "save_instagram_post"
       ? instagramPostInputSchema.safeParse(value)
-      : tool === "save_news_post"
-        ? newsPostInputSchema.safeParse(value)
-        : dealInputSchema.safeParse(value)
+      : tool === "save_google_business_post"
+        ? googleBusinessPostInputSchema.safeParse(value)
+        : tool === "save_news_post"
+          ? newsPostInputSchema.safeParse(value)
+          : dealInputSchema.safeParse(value)
   const post = result.success ? result.data : null
   if (value && typeof value === "object") {
     parsed.set(value, { ...parsed.get(value), [tool]: post })
@@ -92,7 +101,9 @@ function canonical(value: unknown): string {
 export function releaseLabel(tool: ReleaseTool, release: Release) {
   if (release === "draft") return "Save draft"
   if (release === "schedule") return "Schedule"
-  return tool === "save_instagram_post" ? "Post" : "Publish"
+  return tool === "save_instagram_post" || tool === "save_google_business_post"
+    ? "Post"
+    : "Publish"
 }
 
 /** How the proposal itself goes out, so the card can lead with it. */
@@ -103,7 +114,7 @@ export function proposedRelease(
 ): Release | null {
   const post = parse(tool, input)
   if (!post) return null
-  if (tool === "save_instagram_post") {
+  if (tool === "save_instagram_post" || tool === "save_google_business_post") {
     return post.when === "now" || post.when === "draft" ? post.when : "schedule"
   }
   if (post.status !== "published") return "draft"
@@ -115,7 +126,7 @@ export function proposedRelease(
 export function scheduledAt(tool: ReleaseTool, input: unknown) {
   const post = parse(tool, input)
   const at =
-    tool === "save_instagram_post"
+    tool === "save_instagram_post" || tool === "save_google_business_post"
       ? post?.when
       : tool === "save_news_post"
         ? post?.published_at
@@ -144,7 +155,7 @@ export function releaseFields(
 ): Post | null {
   const post = parse(tool, input)
   if (!post || (release === "schedule" && !isTime(at))) return null
-  if (tool === "save_instagram_post") {
+  if (tool === "save_instagram_post" || tool === "save_google_business_post") {
     return { when: release === "schedule" ? at : release }
   }
   if (release === "draft") return { status: "draft" }
@@ -197,7 +208,7 @@ export function approvedMessage(
       ? "Save it as a draft"
       : release === "schedule" && at
         ? `Schedule it for ${formatStoreDateTime(at)}`
-        : tool === "save_instagram_post"
+        : tool === "save_instagram_post" || tool === "save_google_business_post"
           ? "Post it now"
           : "Publish it now"
   const order =

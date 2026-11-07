@@ -204,7 +204,8 @@ export function ApprovalActions({
                 current={scheduledAt(release, input)}
                 before={scheduleBefore(release, input)}
                 maxDays={
-                  release === "save_instagram_post"
+                  release === "save_instagram_post" ||
+                  release === "save_google_business_post"
                     ? INSTAGRAM_SCHEDULE_DAYS
                     : undefined
                 }

@@ -18,3 +18,4 @@ Steps:
 3. For the regular week, call `hours__set_weekly_hours` with all seven days, unchanged days included.
 4. For a dated change, call `hours__save_hours_change` (with `id` to edit one). To remove one, call `hours__delete_hours_change` with its `id` and a short summary such as "Closed Nov 7–15".
 5. "Closed on Monday" usually means one date (a schedule change), not the regular week. Ask if it's unclear.
+6. For shop-wide hours requests, also load `google-business` and discover `googlebusiness__`. After the website save succeeds, read Google's selected location and propose the matching hours there with its own approval card. Carry the old affected dates through edits/deletions so removed overrides are restored correctly. Follow that skill's rules for preserving other dates and appointment-only hours. If only one destination was requested, respect it. Report website and Google outcomes separately; development Google writes are blocked.

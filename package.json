@@ -14,6 +14,7 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test:zernio": "node --test scripts/zernio.test.mjs",
+    "test:google-business": "node --test scripts/google-business.test.mjs",
     "test:speech": "node --test scripts/speech.test.mjs",
     "test:prefill": "node --test scripts/product-prefill.test.mjs",
     "test:metadata": "node --test scripts/metadata.test.mjs scripts/catalog-routing.test.mjs",

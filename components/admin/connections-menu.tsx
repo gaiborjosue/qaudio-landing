@@ -4,14 +4,18 @@ import { useEffect, useRef, useState } from "react"
 import { Popover } from "@base-ui/react/popover"
 import { CircleCheck, Network, TriangleAlert } from "lucide-react"
 import type { InstagramStatus } from "@/lib/admin/instagram-types"
+import type { GoogleBusinessStatus } from "@/lib/admin/google-business-types"
 import { connectionHealth } from "@/lib/admin/connection-health"
 import { InstagramConnection } from "./instagram-connection"
+import { GoogleBusinessConnection } from "./google-business-connection"
 import styles from "./connections-menu.module.css"
 
 /** Shared header entry point for the admin's connected services. */
 export function ConnectionsMenu() {
   const [open, setOpen] = useState(false)
   const [instagram, setInstagram] = useState<InstagramStatus | null>(null)
+  const [googleBusiness, setGoogleBusiness] =
+    useState<GoogleBusinessStatus | null>(null)
   const trigger = useRef<HTMLButtonElement>(null)
   const lastCheck = useRef(0)
   const check = useRef<(() => Promise<void>) | null>(null)
@@ -31,21 +35,49 @@ export function ConnectionsMenu() {
         return
       pending = true
       try {
-        const response = await fetch("/api/instagram/status", {
-          cache: "no-store",
-          signal: controller.signal,
-        })
-        if (!response.ok) throw new Error("Connection check failed.")
-        const status: InstagramStatus = await response.json()
-        if (!controller.signal.aborted) setInstagram(status)
-      } catch {
-        if (!controller.signal.aborted)
-          setInstagram((previous) => ({
-            state: "unavailable",
-            accounts: [],
-            connectUrl: previous?.connectUrl ?? null,
-            message: "Instagram connection could not be checked. Try again.",
-          }))
+        // Independent checks: one provider's failure never hides the other.
+        await Promise.all([
+          (async () => {
+            try {
+              const response = await fetch("/api/instagram/status", {
+                cache: "no-store",
+                signal: controller.signal,
+              })
+              if (!response.ok) throw new Error("Connection check failed.")
+              const status: InstagramStatus = await response.json()
+              if (!controller.signal.aborted) setInstagram(status)
+            } catch {
+              if (!controller.signal.aborted)
+                setInstagram({
+                  state: "unavailable",
+                  accounts: [],
+                  connectUrl: null,
+                  message:
+                    "Instagram connection could not be checked. Try again.",
+                })
+            }
+          })(),
+          (async () => {
+            try {
+              const response = await fetch("/api/google-business/status", {
+                cache: "no-store",
+                signal: controller.signal,
+              })
+              if (!response.ok) throw new Error("Connection check failed.")
+              const status: GoogleBusinessStatus = await response.json()
+              if (!controller.signal.aborted) setGoogleBusiness(status)
+            } catch {
+              if (!controller.signal.aborted)
+                setGoogleBusiness({
+                  state: "unavailable",
+                  accounts: [],
+                  connectUrl: null,
+                  message:
+                    "Google Business connection could not be checked. Try again.",
+                })
+            }
+          })(),
+        ])
       } finally {
         pending = false
         if (!controller.signal.aborted) lastCheck.current = Date.now()
@@ -66,7 +98,7 @@ export function ConnectionsMenu() {
     }
   }, [])
 
-  const health = connectionHealth([instagram])
+  const health = connectionHealth([instagram, googleBusiness])
   const summary =
     health === "healthy"
       ? "All connected"
@@ -122,6 +154,10 @@ export function ConnectionsMenu() {
             <Popover.Title className={styles.title}>Connections</Popover.Title>
             <ul className={styles.list} aria-label="Connected services">
               <InstagramConnection status={instagram} onCheck={checkAgain} />
+              <GoogleBusinessConnection
+                status={googleBusiness}
+                onCheck={checkAgain}
+              />
             </ul>
           </Popover.Popup>
         </Popover.Positioner>
