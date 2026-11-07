@@ -166,14 +166,18 @@ test("story versions count each edit on from the version it edited, across the c
     Object.fromEntries(
       Object.entries(found).map(([id, item]) => [
         id,
-        [item.version, item.versions.map((version) => version.path)],
+        [
+          item.version,
+          item.latest,
+          item.versions.map((version) => version.path),
+        ],
       ])
     ),
     {
-      a: [1, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
-      b: [2, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
-      d: [3, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
-      e: [1, ["uploads/v9.jpg"]],
+      a: [1, false, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      b: [2, false, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      d: [3, true, ["uploads/v1.jpg", "uploads/v2.jpg", "uploads/v3.jpg"]],
+      e: [1, true, ["uploads/v9.jpg"]],
     }
   )
 })

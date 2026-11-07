@@ -52,9 +52,10 @@ function useProgress(startedAt: number | undefined, running: boolean) {
  * placeholder whose whole ground is Bencho's ASCII wake to play with, the
  * estimated progress over it; then the design itself, in color (it's what
  * will be posted), with buttons at its top right to edit it or see it
- * large. Once a story has several versions, each carries its number, and
- * while it waits for Continue the owner can pick an earlier version to go
- * on with (lib/admin/story-versions.ts).
+ * large. Each new version of a story replaces the one before in the chat:
+ * the newest card carries the version number and a strip to view every
+ * version, and while it waits for Continue the owner can pick an earlier
+ * version to go on with (lib/admin/story-versions.ts).
  */
 export const StoryDesigns = memo(function StoryDesigns({
   part,
@@ -139,15 +140,14 @@ export const StoryDesigns = memo(function StoryDesigns({
   }
 
   if (images.length === 0) return null
+  // A newer version of this story replaces it in the chat; the newest
+  // card's version strip still shows it.
+  if (versions && !versions.latest && !reviewing) return null
 
   const all = versions?.versions ?? []
   const own = versions?.version
   const several = all.length > 1 && images.length === 1
-  // While it waits for Continue, an earlier version may stand in for it.
-  const chosen = reviewing && picked !== null && picked !== own ? picked : null
-  const shown = chosen ? [all[chosen - 1]] : images
-  const shownVersion = chosen ?? own
-  // A review that went on with an earlier version says which.
+  // A review that went on with an earlier version says which, and shows it.
   const continuedWith =
     output.review === "continued" &&
     design &&
@@ -155,6 +155,14 @@ export const StoryDesigns = memo(function StoryDesigns({
     output.design.path !== design.path
       ? all.findIndex((image) => image.path === output.design!.path) + 1
       : 0
+  const shownVersion = picked ?? (continuedWith || own)
+  const shown =
+    several && shownVersion && shownVersion !== own
+      ? [all[shownVersion - 1]]
+      : images
+  // While it waits for Continue, an earlier version may stand in for it.
+  const chosen =
+    reviewing && shownVersion && shownVersion !== own ? shownVersion : null
 
   const answer = async () => {
     if (!part.interaction || continuing) return
@@ -234,11 +242,11 @@ export const StoryDesigns = memo(function StoryDesigns({
           )
         })}
       </div>
-      {reviewing && several && (
+      {several && (
         <div
           className={styles.storyVersions}
           role="group"
-          aria-label="Versions to continue with"
+          aria-label={reviewing ? "Versions to continue with" : "Versions"}
         >
           {all.map((image, index) => {
             const number = index + 1
@@ -249,8 +257,8 @@ export const StoryDesigns = memo(function StoryDesigns({
                 className={styles.storyVersionOption}
                 aria-label={`Version ${number}${number === own ? ", newest" : ""}`}
                 aria-pressed={number === shownVersion}
-                disabled={actions.resuming || continuing}
-                onClick={() => setPicked(number === own ? null : number)}
+                disabled={continuing}
+                onClick={() => setPicked(number)}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- a generated design in storage, of known size */}
                 <img

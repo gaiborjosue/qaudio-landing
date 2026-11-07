@@ -25,6 +25,8 @@ export type StoryVersions = {
   version: number
   /** Every version of its story in the chat, in order. */
   versions: StoryImage[]
+  /** The story's newest version: the one the chat shows. */
+  latest: boolean
 }
 
 /**
@@ -52,8 +54,11 @@ export function storyVersions(
     const versions = (typeof source === "string" && stories.get(source)) || []
     versions.push(image)
     stories.set(image.path, versions)
-    found[part.callId] = { version: versions.length, versions }
+    found[part.callId] = { version: versions.length, versions, latest: false }
   }
+  // Only known once every call is counted.
+  for (const item of Object.values(found))
+    item.latest = item.version === item.versions.length
   return found
 }
 
