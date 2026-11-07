@@ -1,5 +1,9 @@
 import type { NextConfig } from "next"
 import { withEve } from "eve/next"
+import { configureDevModelPath } from "./scripts/dev-model-path.mjs"
+
+const devCodex = configureDevModelPath()
+if (devCodex) console.info(`[dev:model] Local ChatGPT CLI: ${devCodex}`)
 
 // News and product images are served from the Supabase media bucket.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
