@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval"
 import { saleDiscountLabel, saveSale } from "../../lib/admin/sale"
 import { saleProposalSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 const count = (n: number) => `${n} product${n === 1 ? "" : "s"}`
 
@@ -26,7 +27,7 @@ export default defineTool({
   },
   async execute(input, ctx) {
     const lines = await saveSale(callerSupabase(ctx), input, failure)
-    return {
+    return refreshAfterSave(ctx, {
       saved: true,
       products: lines.map((line) => ({
         id: line.id,
@@ -36,6 +37,6 @@ export default defineTool({
       starts_at: input.starts_at,
       ends_at: input.ends_at,
       revalidate: ["catalog"],
-    }
+    })
   },
 })

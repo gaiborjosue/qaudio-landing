@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { weeklyHoursInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -39,6 +40,6 @@ export default defineTool({
         )
       }
     }
-    return { saved: true, revalidate: ["store-hours"] }
+    return refreshAfterSave(ctx, { saved: true, revalidate: ["store-hours"] })
   },
 })

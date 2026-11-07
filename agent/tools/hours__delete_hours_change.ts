@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { deleteHoursChangeInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -29,6 +30,6 @@ export default defineTool({
         "Schedule change: nothing removed; no change has that id."
       )
     }
-    return { removed: true, revalidate: ["store-hours"] }
+    return refreshAfterSave(ctx, { removed: true, revalidate: ["store-hours"] })
   },
 })

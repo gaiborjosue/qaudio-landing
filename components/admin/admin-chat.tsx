@@ -106,6 +106,8 @@ import { photoLine } from "@/lib/admin/photo-lines"
 import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
 import { responseUsage } from "@/lib/admin/response-usage"
+import { ChatSession } from "@/lib/admin/chat-session"
+import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
 import styles from "./admin.module.css"
 
@@ -149,7 +151,9 @@ export function AdminChat({
 }) {
   const router = useRouter()
   const [, startRefresh] = useTransition()
-  const refreshed = useRef(new Set<string>())
+  const chatSession = useRef(new ChatSession(sessionId))
+  const cacheRefresh = useRef(new ChatCacheRefresh())
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [voiceReset, setVoiceReset] = useState(0)
   const mediaDraft = useRef<string>("")
@@ -159,6 +163,17 @@ export function AdminChat({
     []
   )
   const [flows, setFlow] = useFlowSettings()
+
+  const refreshSavedContent = useCallback(() => {
+    startRefresh(async () => {
+      try {
+        if (await cacheRefresh.current.flush(refreshSiteContent))
+          router.refresh()
+      } catch {
+        setSessionError("Saved changes. Reload this chat to refresh the site.")
+      }
+    })
+  }, [cacheRefresh, router])
 
   const agent = useEveAgent({
     auth: { bearer: accessToken },
@@ -184,65 +199,79 @@ export function AdminChat({
           }
         : input,
     onSessionChange(session) {
+      chatSession.current.sessionId = session?.sessionId
       if (session) onSession(session.sessionId)
     },
-    // Saves run in the agent's own process, which can't reach Next's cache,
-    // so refresh the pages a finished turn changed (and this page's previews).
-    onFinish(snapshot) {
-      const tags = new Set<string>()
-      for (const message of snapshot.messages) {
-        for (const part of message.parts) {
-          if (part.type !== "tool" || part.state !== "completed") continue
-          if (refreshed.current.has(part.callId)) continue
-          refreshed.current.add(part.callId)
-          const output = part.output as { revalidate?: unknown } | undefined
-          if (!Array.isArray(output?.revalidate)) continue
-          for (const tag of output.revalidate) {
-            if (typeof tag === "string") tags.add(tag)
-          }
-        }
-      }
-      if (tags.size === 0) return
-      startRefresh(async () => {
-        await refreshSiteContent([...tags])
-        router.refresh()
-      })
+    // Tools notify Next directly. The browser refreshes its previews and can
+    // repair a missed notification, including when reading recorded events.
+    onEvent(event) {
+      cacheRefresh.current.observe(event)
     },
+    onFinish: refreshSavedContent,
   })
 
   const busy = agent.status === "busy"
   const resuming = agent.status === "resuming"
-  const { send, respond, cancel } = agent
+  const { send: sendMessage, respond: sendAnswer, cancel } = agent
+  const send = useCallback<Agent["send"]>(
+    (message, options) =>
+      chatSession.current.request(
+        () => sendMessage(message, options),
+        voiceReset
+      ),
+    [chatSession, sendMessage, voiceReset]
+  )
+  const respond = useCallback<Agent["respond"]>(
+    (answers, options) =>
+      chatSession.current.request(
+        () => sendAnswer(answers, options),
+        voiceReset
+      ),
+    [chatSession, sendAnswer, voiceReset]
+  )
+  useEffect(() => {
+    const session = chatSession.current
+    return () => session.disconnect()
+  }, [])
+  // Catch-up doesn't fire onFinish. Its completed calls still need a refresh.
+  useEffect(() => {
+    if (!resuming) refreshSavedContent()
+  }, [resuming, refreshSavedContent])
   // Stable while the reply streams, so finished turns don't re-render.
   const actions = useMemo<ChatActions>(
-    () => ({ send, respond, resuming }),
-    [send, respond, resuming]
+    () => ({ send, respond, resuming: resuming || ending }),
+    [send, respond, resuming, ending]
   )
 
   // Chats are disposable: long-term memory keeps what matters, so New chat
   // ends the server session instead of leaving it behind.
   const newChat = async () => {
-    setVoiceReset((current) => current + 1)
+    if (chatSession.current.ending) return
     setEnding(true)
+    setSessionError(null)
     try {
-      if (agent.session) {
-        const receipt = await agent.end()
-        await receipt.result()
-      }
-      if (mediaDraft.current)
-        await mediaSessionEvent(
-          browserSupabase(),
-          mediaDraft.current,
-          agent.session?.sessionId ?? null,
-          "ended"
-        )
+      await chatSession.current.retire(agent.end, (id) => {
+        if (mediaDraft.current) {
+          // Auxiliary cleanup mustn't hold the retired chat open. Its server
+          // hook and database fallback also cover a disconnected browser.
+          void mediaSessionEvent(
+            browserSupabase(),
+            mediaDraft.current,
+            id ?? null,
+            "ended"
+          ).catch(() => {})
+        }
+        agent.newSession()
+        mediaDraft.current = ""
+        setDraft("")
+        setVoiceReset(chatSession.current.version)
+        onSession(undefined)
+      })
     } catch {
-      // Already ended or unreachable; start fresh either way.
+      setSessionError("Couldn’t end this chat. Try New chat again.")
+    } finally {
+      setEnding(false)
     }
-    agent.newSession()
-    mediaDraft.current = ""
-    onSession(undefined)
-    setEnding(false)
   }
 
   // Quick actions send the owner's opening line, as if typed, and the agent
@@ -287,7 +316,7 @@ export function AdminChat({
               leadingIcon={<Plus size={15} aria-hidden="true" />}
               isLoading={ending}
               loadingText="Starting…"
-              disabled={ending}
+              disabled={ending || resuming}
               onClick={newChat}
             >
               New chat
@@ -312,9 +341,9 @@ export function AdminChat({
               onEdit={edit}
             />
 
-            {agent.error && (
+            {(sessionError || agent.error) && (
               <p className={styles.error} role="alert">
-                {agent.error.message}
+                {sessionError ?? agent.error?.message}
               </p>
             )}
 
@@ -1225,6 +1254,7 @@ const Composer = memo(function Composer({
   // Send pressed while photos are still uploading: it goes once they land.
   const [queued, setQueued] = useState(false)
   const sending = useRef(false)
+  const mounted = useRef(true)
   const previews = useRef(new Set<string>())
   /** Uploads still on the wire, by photo id, so removing one can stop it. */
   const uploads = useRef(new Map<string, AbortController>())
@@ -1257,8 +1287,10 @@ const Composer = memo(function Composer({
         : "Record a message"
 
   useEffect(() => {
+    mounted.current = true
     const urls = previews.current
     return () => {
+      mounted.current = false
       for (const url of urls) URL.revokeObjectURL(url)
       urls.clear()
     }
@@ -1417,6 +1449,7 @@ const Composer = memo(function Composer({
         setQueued(true)
         await Promise.all(waiting)
         setQueued(false)
+        if (!mounted.current) return
       }
       if (queuedPhotos.some((photo) => failedIds.current.has(photo.id))) {
         setNotice("A photo didn’t upload. Remove it, then add it again.")
@@ -1437,7 +1470,14 @@ const Composer = memo(function Composer({
       setPanelOpen(false)
       try {
         await send(message)
-      } catch {
+      } catch (error) {
+        // An upload from the previous chat mustn't send or restore its draft
+        // into the new conversation, even before React commits the reset.
+        if (
+          !mounted.current ||
+          (error instanceof DOMException && error.name === "AbortError")
+        )
+          return
         // Not accepted: put the message back to send again.
         for (const photo of sent) landed.current.set(photo.id, photo)
         setPhotos((current) => [

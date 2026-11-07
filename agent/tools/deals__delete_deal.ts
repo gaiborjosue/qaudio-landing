@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { deleteDealInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -27,6 +28,6 @@ export default defineTool({
     if (data.length === 0) {
       throw new Error("Deal: nothing deleted; no deal has that id.")
     }
-    return { deleted: true, revalidate: ["deals"] }
+    return refreshAfterSave(ctx, { deleted: true, revalidate: ["deals"] })
   },
 })

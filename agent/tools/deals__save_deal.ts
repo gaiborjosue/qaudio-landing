@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval"
 import { dealInputSchema } from "../../lib/admin/schemas"
 import { fromStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -75,12 +76,12 @@ export default defineTool({
       deal.status === "published" &&
       (!row.starts_at || Date.parse(row.starts_at) <= now) &&
       (!row.ends_at || Date.parse(row.ends_at) > now)
-    return {
+    return refreshAfterSave(ctx, {
       saved: true,
       id: saved.id,
       live,
       url: "/qdeal",
       revalidate: ["deals"],
-    }
+    })
   },
 })

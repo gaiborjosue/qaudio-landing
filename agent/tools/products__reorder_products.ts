@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval"
 import { saveProductOrder } from "../../lib/admin/product-order"
 import { reorderProductsInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -23,6 +24,10 @@ export default defineTool({
       input,
       failure
     )
-    return { saved: true, changed, revalidate: ["catalog"] }
+    return refreshAfterSave(ctx, {
+      saved: true,
+      changed,
+      revalidate: ["catalog"],
+    })
   },
 })
