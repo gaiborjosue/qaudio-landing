@@ -2,6 +2,7 @@ import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { deleteNewsPostInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -27,6 +28,10 @@ export default defineTool({
     if (data.length === 0) {
       throw new Error("News post: nothing deleted; no post has that id.")
     }
-    return { deleted: true, slug: data[0].slug, revalidate: ["news"] }
+    return refreshAfterSave(ctx, {
+      deleted: true,
+      slug: data[0].slug,
+      revalidate: ["news"],
+    })
   },
 })

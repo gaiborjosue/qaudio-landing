@@ -22,9 +22,7 @@ import {
 } from "@/lib/admin/schemas"
 import { writeCardLine } from "@/lib/admin/card-line"
 import { CATALOG_CACHE_TAG, getCatalogTaxonomy } from "@/lib/catalog-data"
-import { DEALS_CACHE_TAG } from "@/lib/deals-data"
-import { NEWS_CACHE_TAG } from "@/lib/news-data"
-import { STORE_HOURS_CACHE_TAG } from "@/lib/store-hours-data"
+import { siteCacheTags } from "@/lib/admin/site-cache"
 import { sessionSupabase } from "@/lib/supabase/server"
 
 export type FormState = { error: string } | { message: string } | null
@@ -107,25 +105,13 @@ export async function signOut() {
   redirect("/admin/login")
 }
 
-// Cache tags the admin agent's saves can refresh.
-const SITE_TAGS = new Set([
-  STORE_HOURS_CACHE_TAG,
-  CATALOG_CACHE_TAG,
-  NEWS_CACHE_TAG,
-  DEALS_CACHE_TAG,
-])
-
 /**
- * Shows the agent's approved saves on the site right away. The agent writes
- * as the admin (RLS) from its own process, which can't reach Next's cache, so
- * the admin chat calls this once a save completes.
+ * Refreshes the chat's previews after live or replayed saves. Agent writes
+ * also notify /api/admin/revalidate without depending on an open browser.
  */
 export async function refreshSiteContent(tags: string[]) {
   if (!(await getAdmin())) throw new Error("Sign in as an admin.")
-  if (!Array.isArray(tags)) return
-  for (const tag of new Set(tags)) {
-    if (typeof tag === "string" && SITE_TAGS.has(tag)) updateTag(tag)
-  }
+  for (const tag of siteCacheTags(tags)) updateTag(tag)
 }
 
 /**

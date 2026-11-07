@@ -3,6 +3,7 @@ import { always } from "eve/tools/approval"
 import { endSale } from "../../lib/admin/sale"
 import { endSaleInputSchema } from "../../lib/admin/schemas"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 const count = (n: number) => `${n} product${n === 1 ? "" : "s"}`
 
@@ -22,6 +23,10 @@ export default defineTool({
   },
   async execute(input, ctx) {
     const ended = await endSale(callerSupabase(ctx), input, failure)
-    return { saved: true, ended, revalidate: ["catalog"] }
+    return refreshAfterSave(ctx, {
+      saved: true,
+      ended,
+      revalidate: ["catalog"],
+    })
   },
 })

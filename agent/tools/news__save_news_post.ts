@@ -9,6 +9,7 @@ import { newsExcerpt, type NewsBlock } from "../../lib/news"
 import type { Json } from "../../lib/supabase/database.types"
 import { placeUploads } from "../lib/media"
 import { callerSupabase, failure } from "../lib/supabase"
+import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
@@ -85,7 +86,7 @@ export default defineTool({
       post.status === "published" &&
       publishedAt !== null &&
       Date.parse(publishedAt) <= Date.now()
-    return {
+    return refreshAfterSave(ctx, {
       saved: true,
       id: saved.id,
       slug: saved.slug,
@@ -98,6 +99,6 @@ export default defineTool({
         block.type === "image" ? [block.image.src] : []
       ),
       revalidate: ["news"],
-    }
+    })
   },
 })
