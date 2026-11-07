@@ -10,6 +10,7 @@ import {
 import { MIN_PLAN_TASKS } from "../../lib/admin/task-plan"
 import { FLOWS } from "../../lib/admin/flows"
 import { openRouterUsage } from "./model-usage"
+import { taskPlanningGate } from "./task-planning"
 
 // Only an exact opt-in in Eve's local dev process uses the ChatGPT login.
 // Production always uses OpenRouter, even if DEBUG_DEV_MODE was left on.
@@ -53,7 +54,10 @@ function openAiModel(id: typeof MAIN_MODEL_ID | typeof PLAN_MODEL_ID) {
 export const mainModel = openAiModel(MAIN_MODEL_ID)
 
 /** Three or more owner-requested tasks, not a preset flow's internal steps. */
-export const planModel = openAiModel(PLAN_MODEL_ID)
+export const planModel = wrapLanguageModel({
+  model: openAiModel(PLAN_MODEL_ID),
+  middleware: taskPlanningGate,
+})
 
 /** Simple chat and reads, copywriting, and context compaction. */
 export const fastModel = wrapLanguageModel({
@@ -84,7 +88,7 @@ export const mainChatModel = auto({
       model: planModel,
       reasoning: "medium",
       modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
-      description: `Use for a request with ${MIN_PLAN_TASKS} or more distinct owner-requested tasks outside preset flows, and short follow-ups continuing that unfinished multi-task request (approval choices, missing details, or corrections). Count requested outcomes, not preparation, tool calls, lookups, approval, or verification. For example, changing Saturday hours, editing a QDeal, and reordering speakers is 3 tasks; reading details then proposing and saving one hours change is only 1. A preset flow is already planned: its built-in steps NEVER count, even if it has 3 or more steps. Use Terra for a preset flow without at least 3 separately requested non-flow tasks. Do not select for simple questions or requests with only 1-2 non-flow tasks.`,
+      description: `Use for a request with ${MIN_PLAN_TASKS} or more distinct owner-requested tasks outside preset flows, including read-only questions, and short follow-ups continuing that unfinished multi-task request (approval choices, missing details, or corrections). Count requested outcomes, not preparation, tool calls, approval, or verification. Asking for Google Business hours, the latest website news, and whether the shop offers a product brand is 3 tasks, even though all are read-only. Changing Saturday hours, editing a QDeal, and reordering speakers is also 3 tasks; reading details then proposing and saving one hours change is only 1. A preset flow is already planned: its built-in steps NEVER count, even if it has 3 or more steps. Use Terra for a preset flow without at least 3 separately requested non-flow tasks. Do not select for a single question or requests with only 1-2 non-flow tasks.`,
     },
     [MAIN_MODEL_ID]: {
       model: mainModel,

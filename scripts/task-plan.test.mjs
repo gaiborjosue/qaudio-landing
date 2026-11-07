@@ -8,6 +8,8 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import ts from "typescript"
 import { conversationOf } from "eve/client"
+import { emptySessionView, foldEvents } from "eve/events"
+import { wrapLanguageModel } from "ai"
 
 const root = fileURLToPath(new URL("../", import.meta.url))
 const asModule = (source) => ({
@@ -85,6 +87,8 @@ const { TaskQueue } = await import("../components/admin/task-queue.tsx")
 const { FLOWS } = await import("../lib/admin/flows.ts")
 const { PLAN_MODEL_ID, MAIN_MODEL_ID, FAST_MODEL_ID } =
   await import("../lib/admin/model-cost.ts")
+const { REQUIRE_TASK_PLAN, taskPlanningInstruction, taskPlanningGate } =
+  await import("../agent/lib/task-planning.ts")
 
 const plan = (
   statuses = ["in_progress", "pending", "pending"],
@@ -121,6 +125,48 @@ const flow = (status = "active", state = "completed") => ({
     },
   ],
 })
+
+function planningEvents(entries = [], follows = "previous") {
+  const events = []
+  const emit = (type, data) =>
+    events.push({
+      type,
+      data,
+      meta: {
+        position: { line: events.length + 1, index: 0 },
+        at: "2026-11-07T04:09:38Z",
+        endOfLine: true,
+      },
+    })
+  for (const turnId of ["previous", "current"]) {
+    emit("turn.started", {
+      turnId,
+      cause: { deliveryId: `d-${turnId}` },
+      follows: turnId === "current" ? follows : null,
+    })
+    emit("model.requested", { runId: turnId, owner: { turnId } })
+    emit("model.started", { runId: turnId, modelId: PLAN_MODEL_ID, attempt: 0 })
+    for (const [index, entry] of entries.entries()) {
+      if ((entry.turn ?? "current") !== turnId) continue
+      const callId = `c-${index}`
+      emit("call.requested", {
+        callId,
+        owner: { runId: turnId },
+        capability: { kind: "tool", name: entry.name ?? PLAN_TOOL },
+        input: entry.input ?? entry.output ?? {},
+      })
+      if (entry.outcome === "pending") continue
+      emit("call.started", { callId })
+      emit("call.settled", {
+        callId,
+        outcome: entry.outcome ?? "completed",
+        output: entry.output,
+        ...(entry.outcome === "failed" && { error: { message: "Failed" } }),
+      })
+    }
+  }
+  return events
+}
 
 test("the plan schema enforces the exact 3-task threshold and bounded, unambiguous snapshots", () => {
   assert.equal(MIN_PLAN_TASKS, 3)
@@ -315,6 +361,199 @@ test("the Queue has accessible task sections, progress, blocked reasons, and onl
   assert.doesNotMatch(render(false), /data-status="running"/)
 })
 
+test("Sol requires a successful plan in this turn, including read-only requests and after replay", () => {
+  const viewOf = (entries = [], follows) =>
+    foldEvents(emptySessionView(), planningEvents(entries, follows))
+  const required = (
+    view,
+    model = PLAN_MODEL_ID,
+    turn = "current",
+    delegated = false
+  ) => taskPlanningInstruction(model, view, turn, delegated)
+  assert.equal(required(viewOf()), REQUIRE_TASK_PLAN)
+  assert.equal(required(viewOf(), "gpt-6.1-sol"), REQUIRE_TASK_PLAN)
+  assert.equal(required(viewOf(), MAIN_MODEL_ID), null)
+  assert.equal(required(viewOf(), FAST_MODEL_ID), null)
+  assert.equal(required(viewOf(), PLAN_MODEL_ID, null), null)
+  assert.equal(required(viewOf(), PLAN_MODEL_ID, "current", true), null)
+  for (const outcome of ["pending", "failed", "rejected", "interrupted"])
+    assert.equal(
+      required(viewOf([{ output: plan(), outcome }])),
+      REQUIRE_TASK_PLAN
+    )
+  assert.equal(
+    required(viewOf([{ output: { id: "invalid", tasks: [] } }])),
+    REQUIRE_TASK_PLAN
+  )
+  assert.equal(
+    required(viewOf([{ output: plan(), turn: "previous" }])),
+    REQUIRE_TASK_PLAN
+  )
+  const events = planningEvents([{ output: plan() }])
+  assert.equal(required(foldEvents(emptySessionView(), events)), null)
+  assert.equal(
+    required(
+      foldEvents(emptySessionView(), JSON.parse(JSON.stringify(events)))
+    ),
+    null
+  )
+
+  const active = {
+    name: "flow_progress",
+    input: { flow: "news-instagram" },
+    output: { flow: "news-instagram" },
+  }
+  assert.equal(required(viewOf([active])), null)
+  assert.equal(required(viewOf([{ ...active, turn: "previous" }])), null)
+  assert.equal(
+    required(viewOf([{ ...active, turn: "previous" }], null)),
+    REQUIRE_TASK_PLAN
+  )
+  assert.equal(
+    required(viewOf([{ ...active, outcome: "failed" }])),
+    REQUIRE_TASK_PLAN
+  )
+  assert.equal(
+    required(
+      viewOf([
+        active,
+        { ...active, input: { flow: "news-instagram", status: "done" } },
+      ])
+    ),
+    REQUIRE_TASK_PLAN
+  )
+})
+
+test("the reported three-question request must create a visible Queue before domain reads in generate and stream", async () => {
+  const request =
+    "What is my current schedule from my google business? also my latest news post from the website? and do I offer any paradigm products?"
+  const snapshot = {
+    id: "three-lookups",
+    tasks: [
+      {
+        id: "hours",
+        title: "Read Google Business hours",
+        status: "in_progress",
+      },
+      { id: "news", title: "Read latest website news", status: "pending" },
+      { id: "products", title: "Check Paradigm products", status: "pending" },
+    ],
+  }
+  const received = []
+  const wrapped = wrapLanguageModel({
+    middleware: taskPlanningGate,
+    model: {
+      specificationVersion: "v4",
+      provider: "test",
+      modelId: PLAN_MODEL_ID,
+      supportedUrls: {},
+      async doGenerate(params) {
+        received.push(params)
+        return {
+          content:
+            params.toolChoice?.type === "required"
+              ? [
+                  {
+                    type: "tool-call",
+                    toolCallId: "plan",
+                    toolName: PLAN_TOOL,
+                    input: JSON.stringify(snapshot),
+                  },
+                ]
+              : [{ type: "text", text: "An answer with no checklist" }],
+        }
+      },
+      async doStream(params) {
+        received.push(params)
+        return {
+          stream: new ReadableStream({
+            start(controller) {
+              controller.close()
+            },
+          }),
+        }
+      },
+    },
+  })
+  const instruction = taskPlanningInstruction(
+    PLAN_MODEL_ID,
+    foldEvents(emptySessionView(), planningEvents()),
+    "current"
+  )
+  const params = {
+    prompt: [
+      {
+        role: "system",
+        content: `Other trusted instructions.\n${instruction}`,
+      },
+      { role: "user", content: [{ type: "text", text: request }] },
+    ],
+    tools: [
+      "eve__search",
+      PLAN_TOOL,
+      "flow_progress",
+      "googlebusiness__get_location",
+    ].map((name) => ({
+      type: "function",
+      name,
+      inputSchema: { type: "object" },
+    })),
+    toolChoice: { type: "auto" },
+  }
+  const generated = await wrapped.doGenerate(params)
+  await wrapped.doStream(params)
+  for (const call of received) {
+    assert.deepEqual(call.toolChoice, { type: "required" })
+    assert.deepEqual(
+      call.tools.map((tool) => tool.name),
+      [PLAN_TOOL, "flow_progress"]
+    )
+  }
+  const toolCall = generated.content[0]
+  assert.equal(toolCall.toolName, PLAN_TOOL)
+  const output = await updatePlan.execute(
+    taskPlanSchema.parse(JSON.parse(toolCall.input))
+  )
+  const messages = conversationOf(planningEvents([{ output }])).messages
+  const projected = taskPlanState(messages)
+  assert.deepEqual(projected, snapshot)
+  const html = renderToStaticMarkup(
+    createElement(TaskQueue, { plan: projected, busy: true })
+  )
+  assert.match(html, /0 of 3 completed/)
+  for (const task of snapshot.tasks) assert.ok(html.includes(task.title))
+})
+
+test("the planning gate leaves other calls alone and fails explicitly if its helper is missing", async () => {
+  let received
+  const wrapped = wrapLanguageModel({
+    middleware: taskPlanningGate,
+    model: {
+      specificationVersion: "v4",
+      provider: "test",
+      modelId: PLAN_MODEL_ID,
+      supportedUrls: {},
+      async doGenerate(params) {
+        received = params
+        return { content: [] }
+      },
+    },
+  })
+  const params = {
+    prompt: [
+      { role: "user", content: [{ type: "text", text: REQUIRE_TASK_PLAN }] },
+    ],
+  }
+  await wrapped.doGenerate(params)
+  assert.equal(received, params)
+  await assert.rejects(
+    wrapped.doGenerate({
+      prompt: [{ role: "system", content: REQUIRE_TASK_PLAN }],
+    }),
+    /update_plan is unavailable/
+  )
+})
+
 test("Sol routing uses medium effort, shares the local ChatGPT guard, and never falls back from an auth error", async () => {
   const original = Object.fromEntries(
     ["DEBUG_DEV_MODE", "EVE_DEV", "NODE_ENV"].map((key) => [
@@ -419,12 +658,25 @@ test("the production Sol request uses OpenRouter medium reasoning and preserves 
     const { planModel } =
       await import("../agent/lib/models.ts?case=production-request")
     const result = await planModel.doGenerate({
-      prompt: [{ role: "user", content: [{ type: "text", text: "Test" }] }],
+      prompt: [
+        { role: "system", content: REQUIRE_TASK_PLAN },
+        { role: "user", content: [{ type: "text", text: "Test" }] },
+      ],
+      tools: ["eve__search", PLAN_TOOL, "flow_progress"].map((name) => ({
+        type: "function",
+        name,
+        inputSchema: { type: "object" },
+      })),
     })
     assert.equal(requests.length, 1)
     assert.equal(requests[0].model, PLAN_MODEL_ID)
     assert.equal(requests[0].reasoning.effort, "medium")
     assert.equal(requests[0].usage.include, true)
+    assert.equal(requests[0].tool_choice, "required")
+    assert.deepEqual(
+      requests[0].tools.map((tool) => tool.function.name),
+      [PLAN_TOOL, "flow_progress"]
+    )
     assert.equal(result.providerMetadata.openrouter.usage.cost, 0.002)
     assert.equal(result.providerMetadata.gateway.cost, 0.002)
   } finally {
