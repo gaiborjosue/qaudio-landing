@@ -1,8 +1,6 @@
 import { SessionNotActiveError } from "eve/client"
 
-type End = () => Promise<{
-  result(options: { signal: AbortSignal }): Promise<{ sessionEnded: boolean }>
-}>
+type End = () => Promise<{ sessionId: string }>
 
 /** Coordinates accepted input with an explicit, confirmed session retirement. */
 export class ChatSession {
@@ -59,8 +57,11 @@ export class ChatSession {
         try {
           signal.throwIfAborted()
           const receipt = await waitFor(end(), signal)
-          const result = await receipt.result({ signal })
-          if (!result.sessionEnded) throw new Error("The chat hasn't ended.")
+          // Eve's end endpoint waits for the session inbox to be released.
+          // Its accepted response confirms retirement. rc.1's result() uses
+          // a bounded stream that can omit the end delivery entirely.
+          if (receipt.sessionId !== sessionId)
+            throw new Error("A different chat was ended.")
         } catch (error) {
           // A definite inactive response is safe; network failures aren't.
           if (!SessionNotActiveError.is(error) || error.retryable) throw error
