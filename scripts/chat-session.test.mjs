@@ -1,16 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { SessionNotActiveError } from "eve/client"
+import { Client, SessionNotActiveError } from "eve/client"
 import { ChatSession } from "../lib/admin/chat-session.ts"
 
 const deferred = () => Promise.withResolvers()
-const ended = () =>
-  Promise.resolve({
-    result: async ({ signal }) => {
-      assert(signal instanceof AbortSignal)
-      return { sessionEnded: true }
-    },
-  })
+const ended = (sessionId = "original") => Promise.resolve({ sessionId })
 
 test("New chat waits for creation and accepted answers, then retires the returned ID", async () => {
   const session = new ChatSession()
@@ -26,7 +20,7 @@ test("New chat waits for creation and accepted answers, then retires the returne
   const retirement = session.retire(
     async () => {
       events.push(["end", session.sessionId])
-      return ended()
+      return ended(session.sessionId)
     },
     (id) => events.push(["reset", id])
   )
@@ -56,12 +50,7 @@ test("failed or unconfirmed endings preserve the session and allow a retry", asy
     async () => {
       throw new Error("lost request")
     },
-    async () => ({
-      result: async () => {
-        throw new Error("lost stream")
-      },
-    }),
-    async () => ({ result: async () => ({ sessionEnded: false }) }),
+    async () => ({ sessionId: "another-session" }),
     async () => {
       throw new SessionNotActiveError({ retryable: true })
     },
@@ -71,7 +60,7 @@ test("failed or unconfirmed endings preserve the session and allow a retry", asy
     assert.equal(resets, 0)
     assert.equal(session.ending, false)
   }
-  await session.retire(ended, reset)
+  await session.retire(() => ended(), reset)
   assert.equal(resets, 1)
 })
 
@@ -94,9 +83,12 @@ test("a definite inactive session and an unused chat can reset safely", async ()
 test("a delayed photo send from the retired chat cannot create a new session", async () => {
   const session = new ChatSession("original")
   const previousVersion = session.version
-  await session.retire(ended, () => {
-    session.sessionId = undefined
-  })
+  await session.retire(
+    () => ended(),
+    () => {
+      session.sessionId = undefined
+    }
+  )
   await assert.rejects(
     session.request(() => assert.fail("stale upload sent"), previousVersion),
     { name: "AbortError" }
@@ -127,35 +119,72 @@ test("an end timeout preserves the ID even when its late receipt succeeds", asyn
   await Promise.resolve()
   assert.equal(session.sessionId, "original")
   assert.equal(resets, 0)
-  await session.retire(ended, () => resets++)
+  await session.retire(
+    () => ended(),
+    () => resets++
+  )
   assert.equal(resets, 1)
 })
 
-test("unmount aborts the independent receipt read and never resets the chat", async () => {
+test("unmount aborts the retirement wait and never resets the chat", async () => {
   const session = new ChatSession("original")
-  const reading = deferred()
+  const posted = deferred()
+  const response = deferred()
   let resets = 0
-  let readSignal
   const retirement = session.retire(
-    async () => ({
-      result: ({ signal }) => {
-        readSignal = signal
-        reading.resolve()
-        return new Promise((_, reject) => {
-          signal.addEventListener("abort", () => reject(signal.reason), {
-            once: true,
-          })
-        })
-      },
-    }),
+    () => {
+      posted.resolve()
+      return response.promise
+    },
     () => resets++
   )
-  await reading.promise
+  await posted.promise
   session.disconnect()
   await assert.rejects(retirement)
-  assert.equal(readSignal.aborted, true)
+  response.resolve(await ended())
+  await Promise.resolve()
   assert.equal(resets, 0)
   assert.equal(session.sessionId, "original")
+})
+
+test("the real Eve client can confirm end even when its receipt stream has no end delivery", async (t) => {
+  const requests = []
+  t.mock.method(globalThis, "fetch", async (url, options) => {
+    requests.push([options.method, new URL(url).pathname])
+    if (options.method === "POST")
+      return Response.json({
+        ok: true,
+        sessionId: "original",
+        deliveryId: "end-original",
+      })
+    return new Response("", {
+      headers: {
+        "content-type": "application/x-ndjson",
+        "x-eve-stream-version": "27",
+        "x-eve-stream-tail-index": "-1",
+      },
+    })
+  })
+  const remote = new Client({ baseUrl: "https://eve.example" }).sessions.attach(
+    "original"
+  )
+  const receipt = await remote.end()
+  await assert.rejects(
+    receipt.result(),
+    /stream ended before the accepted delivery settled/
+  )
+  const before = requests.length
+  let resets = 0
+  await new ChatSession("original").retire(
+    () => Promise.resolve(receipt),
+    () => resets++
+  )
+  assert.equal(resets, 1)
+  assert.equal(
+    requests.length,
+    before,
+    "retirement must not read the broken receipt stream"
+  )
 })
 
 test("concurrent New chat clicks end and reset once, and failed sends don't block retirement", async () => {
