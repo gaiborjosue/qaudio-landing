@@ -1939,20 +1939,11 @@
   gap: 8px;
   font-size: 14px;
 }
-.timeField span {
+.timeField > span {
   color: #6b6b6b;
   font-size: 13px;
 }
-.timeField input {
+.timeField > div {
+  width: 136px;
   margin-left: auto;
-  padding: 7px 10px;
-  border: 1px solid #cfcfcf;
-  border-radius: 10px;
-  background: #fff;
-  font: inherit;
-  font-size: 14px;
-}
-.timeField input:focus-visible {
-  outline: 2px solid #111;
-  outline-offset: 1px;
 }

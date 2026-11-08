@@ -10,6 +10,7 @@ import {
   toStoreDateTime,
 } from "@/lib/admin/store-time"
 import styles from "./admin.module.css"
+import { Clock } from "./clock"
 
 const pad = (value: number) => String(value).padStart(2, "0")
 
@@ -116,7 +117,11 @@ export function SchedulePicker({
       role="group"
       aria-labelledby={`${id}-title`}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        // A clock menu is portaled out of the panel; its Escape closes only it.
+        if (
+          event.key === "Escape" &&
+          event.currentTarget.contains(event.target as Node)
+        ) {
           event.stopPropagation()
           setOpen(false)
         }
@@ -151,15 +156,10 @@ export function SchedulePicker({
           className={styles.calendar}
           autoFocus
         />
-        <label className={styles.timeField}>
+        <div className={styles.timeField}>
           Time <span>(store time)</span>
-          <input
-            type="time"
-            step={300}
-            value={time}
-            onChange={(event) => setTime(event.target.value)}
-          />
-        </label>
+          <Clock label="Go-live" value={time} onChange={setTime} />
+        </div>
         <div className={styles.options}>
           <button
             type="button"

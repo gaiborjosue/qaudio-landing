@@ -11,6 +11,7 @@ import {
   toStoreDateTime,
 } from "@/lib/admin/store-time"
 import styles from "./admin.module.css"
+import { Clock } from "./clock"
 
 const pad = (value: number) => String(value).padStart(2, "0")
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -112,25 +113,15 @@ export function DatesPrompt({
           {startsNow ? (
             <p className={styles.hint}>Starts now</p>
           ) : (
-            <label className={styles.timeField}>
+            <div className={styles.timeField}>
               Starts <span>(store time)</span>
-              <input
-                type="time"
-                step={300}
-                value={startTime}
-                onChange={(event) => setStartTime(event.target.value)}
-              />
-            </label>
+              <Clock label="Starts" value={startTime} onChange={setStartTime} />
+            </div>
           )}
-          <label className={styles.timeField}>
+          <div className={styles.timeField}>
             Ends <span>(store time)</span>
-            <input
-              type="time"
-              step={60}
-              value={endTime}
-              onChange={(event) => setEndTime(event.target.value)}
-            />
-          </label>
+            <Clock label="Ends" value={endTime} onChange={setEndTime} />
+          </div>
         </div>
         <div className={styles.options}>
           <button

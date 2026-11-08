@@ -39,6 +39,7 @@ import {
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { mediaUrl } from "@/lib/media"
 import adminStyles from "./admin.module.css"
+import { DateTimePicker } from "./date-time-picker"
 import styles from "./product-editor.module.css"
 import news from "./news-editor.module.css"
 
@@ -399,10 +400,11 @@ export function NewsEditor({
               <span className={styles.aside}>{timing}</span>
             </>,
             <span className={news.date}>
-              <input
-                type="datetime-local"
+              <DateTimePicker
+                label="Publication"
+                placeholder="Not set"
                 value={values.publishedAt}
-                onChange={(event) => set("publishedAt", event.target.value)}
+                onChange={(next) => set("publishedAt", next)}
                 {...invalid("published_at")}
               />
               {values.publishedAt && (

@@ -70,13 +70,3 @@
   color: #777;
   font-size: 12px;
 }
-.clock {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) max-content minmax(0, 1fr);
-  align-items: center;
-  gap: 3px;
-}
-.clock > button {
-  padding-inline: 7px;
-  font-size: 13px;
-}

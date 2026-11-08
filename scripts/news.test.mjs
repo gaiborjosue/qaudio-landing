@@ -346,6 +346,32 @@ test("News tab writes check the admin, validate, and refresh the news cache", ()
   assert.match(route, /readNewsPost\(\s*await sessionSupabase\(\)/)
 })
 
+test("admin dates use the site calendar and clock, never the browser's pickers", async () => {
+  const { DateTimePicker } = await import("../components/admin/date-time-picker.tsx")
+  const render = (value) =>
+    renderToStaticMarkup(
+      createElement(DateTimePicker, {
+        id: "published",
+        label: "Publication",
+        placeholder: "Not set",
+        value,
+        onChange() {},
+      })
+    )
+  const set = render("2026-11-08T09:05")
+  assert.match(set, /<button[^>]*id="published"/)
+  assert(set.includes("Nov 8, 2026, 9:05"))
+  assert(render("").includes("Not set"))
+  const { readdirSync } = await import("node:fs")
+  const dir = new URL("../components/admin/", import.meta.url)
+  for (const name of readdirSync(dir).filter((file) => file.endsWith(".tsx")))
+    assert.doesNotMatch(
+      readFileSync(new URL(name, dir), "utf8"),
+      /type="(datetime-local|date|time)"/,
+      name
+    )
+})
+
 test("News is next to Chat, reloadable, and stays mounted during exact-item handoff", () => {
   const source = (path) =>
     readFileSync(new URL(`../${path}`, import.meta.url), "utf8")

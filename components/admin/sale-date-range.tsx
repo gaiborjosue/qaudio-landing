@@ -7,16 +7,8 @@ import {
 } from "@/components/arc/date-range-picker/date-range-picker"
 import { calendarDay, saleDatesFromRange } from "@/lib/admin/sale-dates"
 import { toStoreDateTime } from "@/lib/admin/store-time"
-import { Choice } from "./choice"
+import { Clock } from "./clock"
 import styles from "./sale-date-range.module.css"
-
-const options = (count: number) =>
-  Array.from({ length: count }, (_, value) => {
-    const text = String(value).padStart(2, "0")
-    return { value: text, label: text }
-  })
-const HOURS = options(24)
-const MINUTES = options(60)
 
 const after = (day: Date, days: number) =>
   new Date(day.getFullYear(), day.getMonth(), day.getDate() + days)
@@ -44,39 +36,6 @@ const PRESETS: DateRangePreset[] = [
     }),
   },
 ]
-
-function Clock({
-  label,
-  value,
-  disabled,
-  onChange,
-}: {
-  label: string
-  value: string
-  disabled: boolean
-  onChange: (value: string) => void
-}) {
-  const [hour, minute] = value.split(":")
-  return (
-    <div className={styles.clock}>
-      <Choice
-        value={hour}
-        options={HOURS}
-        disabled={disabled}
-        aria-label={`${label} hour`}
-        onChange={(next) => onChange(`${next}:${minute}`)}
-      />
-      <span aria-hidden="true">:</span>
-      <Choice
-        value={minute}
-        options={MINUTES}
-        disabled={disabled}
-        aria-label={`${label} minute`}
-        onChange={(next) => onChange(`${hour}:${next}`)}
-      />
-    </div>
-  )
-}
 
 /**
  * The sale's days on the Arc date range picker, then its store-time start
