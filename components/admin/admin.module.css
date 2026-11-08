@@ -1621,7 +1621,7 @@
   }
 }
 
-@media (max-width: 880px) {
+@media (max-width: 1040px) {
   /* The switch drops to its own row under the logo and the account. */
   .topbar {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -1635,6 +1635,16 @@
 }
 
 @media (max-width: 640px) {
+  .switch {
+    width: 100%;
+    max-width: 380px;
+  }
+  .switchTab {
+    flex: 1;
+    min-width: 0;
+    padding-inline: 8px;
+    font-size: 13px;
+  }
   .log {
     padding: 18px 16px;
   }

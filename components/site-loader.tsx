@@ -6,6 +6,7 @@ import {
   type LiquidGlassLogoHandle,
 } from "@/components/liquid-glass-logo"
 import { liquidGlassLogoFinishTime } from "@/components/liquid-glass-logo-renderer"
+import { loaderNeedsMinimum, LOADER_SHOWN_KEY } from "@/lib/loader-timing"
 
 type Phase = "loading" | "finishing" | "leaving" | "done"
 
@@ -21,24 +22,43 @@ const FINISH_LIMIT_MS = 6000
  * sphere-to-tile entrance on white until the page has loaded, lets the current
  * pass land on the plain logo in its original black, then fades out. It is
  * server-rendered, so the white overlay covers the page before hydration.
+ * Repeat appearances within 60 seconds skip the entrance, hold, and fade
+ * once the page and fonts are ready; session storage survives full-page loads.
  */
 export function SiteLoader() {
   const [phase, setPhase] = useState<Phase>("loading")
   const logo = useRef<LiquidGlassLogoHandle>(null)
+  const finishEntrance = useRef<boolean | null>(null)
 
   useEffect(() => {
+    // Keep this mount's decision through Strict Mode's effect replay.
+    if (finishEntrance.current === null) {
+      const now = Date.now()
+      let lastShown: number | null = null
+      try {
+        const saved = window.sessionStorage.getItem(LOADER_SHOWN_KEY)
+        lastShown = saved === null ? null : Number(saved)
+        window.sessionStorage.setItem(LOADER_SHOWN_KEY, String(now))
+      } catch {
+        console.warn("Couldn’t remember the site loader display time.")
+      }
+      finishEntrance.current = loaderNeedsMinimum(lastShown, now)
+    }
     let cancelled = false
+    let onLoad: (() => void) | undefined
     const windowLoaded =
       document.readyState === "complete"
         ? Promise.resolve()
-        : new Promise<void>((resolve) =>
-            window.addEventListener("load", () => resolve(), { once: true })
-          )
+        : new Promise<void>((resolve) => {
+            onLoad = resolve
+            window.addEventListener("load", onLoad, { once: true })
+          })
     void Promise.all([windowLoaded, document.fonts?.ready]).then(() => {
-      if (!cancelled) setPhase("finishing")
+      if (!cancelled) setPhase(finishEntrance.current ? "finishing" : "done")
     })
     return () => {
       cancelled = true
+      if (onLoad) window.removeEventListener("load", onLoad)
     }
   }, [])
 

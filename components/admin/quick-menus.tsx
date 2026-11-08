@@ -35,6 +35,7 @@ import type { ProductRequest } from "@/components/admin/products-view"
 import { CreateMenu, type CreateMenuItem } from "@/components/ui/create-menu"
 import type { FlowId, FlowSettings } from "@/lib/admin/flows"
 import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
+import { newsStatus } from "@/lib/admin/news"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { formatPrice } from "@/lib/catalog"
 import { formatNewsDate } from "@/lib/news"
@@ -69,9 +70,11 @@ const QUICK_STARTS = [
 const day = (local: string) => formatNewsDate(local.slice(0, 10), "short")
 
 function newsMeta(post: AdminNewsItem, now: string) {
-  if (post.status !== "published" || !post.publishedAt) return "Draft"
-  if (post.publishedAt > now) return `Scheduled · ${day(post.publishedAt)}`
-  return day(post.publishedAt)
+  const status = newsStatus(post, now)
+  if (status === "draft" || !post.publishedAt) return "Draft"
+  return status === "scheduled"
+    ? `Scheduled · ${day(post.publishedAt)}`
+    : day(post.publishedAt)
 }
 
 function dealMeta(deal: AdminDealItem, now: string) {

@@ -109,6 +109,7 @@ import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
 import { responseUsage } from "@/lib/admin/response-usage"
 import { ChatSession } from "@/lib/admin/chat-session"
+import { newsChatMessage, type NewsChatStart } from "@/lib/admin/news"
 import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
 import styles from "./admin.module.css"
@@ -151,6 +152,7 @@ export function AdminChat({
   actionsTarget,
   onSession,
   onProduct,
+  onNewsChatReady,
 }: {
   active: boolean
   sessionId?: string
@@ -162,6 +164,7 @@ export function AdminChat({
   onSession: (sessionId?: string) => void
   /** Opens a product in the Products tab (the quick menus' Product items). */
   onProduct: (request: ProductRequest) => void
+  onNewsChatReady: (start: NewsChatStart | null) => void
 }) {
   const router = useRouter()
   const [, startRefresh] = useTransition()
@@ -171,6 +174,8 @@ export function AdminChat({
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [voiceReset, setVoiceReset] = useState(0)
+  const newsSending = useRef(false)
+  const [startingNews, setStartingNews] = useState(false)
   const mediaDraft = useRef<string>("")
   // Created on interaction, so hydration never invents a different draft id.
   const mediaDraftId = useCallback(
@@ -308,6 +313,32 @@ export function AdminChat({
   // words back in the field.
   const [draft, setDraft] = useState("")
   const field = useRef<HTMLTextAreaElement>(null)
+  const startNewsChat = useCallback<NewsChatStart>(
+    (post) => {
+      if (newsSending.current) return
+      newsSending.current = true
+      setStartingNews(true)
+      setSessionError(null)
+      void send(newsChatMessage(post))
+        .then(() => field.current?.focus())
+        .catch(() => {
+          setSessionError(
+            "Couldn’t start this news conversation. Try again from News."
+          )
+        })
+        .finally(() => {
+          newsSending.current = false
+          setStartingNews(false)
+        })
+    },
+    [send]
+  )
+  useEffect(() => {
+    onNewsChatReady(
+      busy || resuming || ending || startingNews ? null : startNewsChat
+    )
+    return () => onNewsChatReady(null)
+  }, [busy, resuming, ending, startingNews, startNewsChat, onNewsChatReady])
   const edit = useCallback((text: string) => {
     setDraft(text)
     field.current?.focus()
@@ -320,7 +351,7 @@ export function AdminChat({
 
   // What the quick actions need, kept as one object that changes only when
   // they do, so the composer doesn't redraw with every streamed update.
-  const disabled = resuming || ending
+  const disabled = resuming || ending || startingNews
   const quick = useMemo<QuickMenusProps>(
     () => ({ preview, ask, onProduct, flows, onFlow: setFlow, disabled }),
     [preview, ask, onProduct, flows, setFlow, disabled]
@@ -338,7 +369,7 @@ export function AdminChat({
               leadingIcon={<Plus size={15} aria-hidden="true" />}
               isLoading={ending}
               loadingText="Starting…"
-              disabled={ending || resuming}
+              disabled={ending || resuming || startingNews}
               onClick={newChat}
             >
               New chat

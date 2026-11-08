@@ -19,22 +19,31 @@ import type { DayHours } from "@/lib/store-hours"
 
 /**
  * Every news post, drafts and scheduled ones included, newest first, read
- * as the admin for the Edit menu.
+ * as the admin for the News tab and Edit menu.
  */
 export async function getAdminNews(): Promise<AdminNewsItem[]> {
   const supabase = await sessionSupabase()
-  const { data, error } = await supabase
-    .from("news_posts")
-    .select("id, title, status, published_at")
-    .order("published_at", { ascending: false, nullsFirst: true })
-    .limit(200)
-  if (error) throw new Error(`Admin news: ${error.message}`)
-  return data.map((post) => ({
-    id: post.id,
-    title: post.title,
-    status: post.status,
-    publishedAt: post.published_at && toStoreDateTime(post.published_at),
-  }))
+  const posts: AdminNewsItem[] = []
+  const pageSize = 200
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("news_posts")
+      .select("id, slug, title, status, published_at")
+      .order("published_at", { ascending: false, nullsFirst: true })
+      .order("id")
+      .range(offset, offset + pageSize - 1)
+    if (error) throw new Error(`Admin news: ${error.message}`)
+    posts.push(
+      ...data.map((post) => ({
+        id: post.id,
+        slug: post.slug,
+        title: post.title,
+        status: post.status,
+        publishedAt: post.published_at && toStoreDateTime(post.published_at),
+      }))
+    )
+    if (data.length < pageSize) return posts
+  }
 }
 
 /**
