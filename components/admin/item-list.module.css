@@ -1,0 +1,123 @@
+.list {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #e4e4e4;
+  border-radius: 16px;
+  background: #fff;
+}
+.heading {
+  margin: 0;
+  padding: 6px 8px 2px;
+  color: #6b6b6b;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px;
+  border-radius: 10px;
+}
+.row + .row {
+  border-top: 1px solid #f0f0f0;
+}
+/* The photo tile keeps its size beside long titles. */
+.row > :not(.text, .figure) {
+  flex: none;
+}
+.text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+}
+.title {
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+a.title {
+  text-decoration: underline;
+  text-decoration-color: #c8c8c8;
+  text-underline-offset: 3px;
+}
+a.title:hover {
+  text-decoration-color: currentColor;
+}
+a.title:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.detail {
+  color: #6b6b6b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+.tag {
+  padding: 1px 7px;
+  border: 1px solid #e0e0e0;
+  border-radius: 999px;
+  color: #444;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.figure {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.value {
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+}
+.was {
+  color: #8a8a8a;
+  font-size: 12px;
+}
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.placeholder {
+  height: 52px;
+  border-radius: 10px;
+  background: #f3f3f3;
+  animation: pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .placeholder {
+    animation: none;
+  }
+}

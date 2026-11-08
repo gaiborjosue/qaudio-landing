@@ -40,6 +40,7 @@ import type { ChatActions } from "@/components/admin/chat-actions"
 import { DatesPrompt } from "@/components/admin/dates-prompt"
 import { FlowStepper } from "@/components/admin/flow-stepper"
 import { useFlowSettings } from "@/components/admin/flows-menu"
+import { ItemList } from "@/components/admin/item-list"
 import {
   CopyAction,
   MessageAction,
@@ -103,6 +104,7 @@ import { toStoreDateTime } from "@/lib/admin/store-time"
 import { sentPhotos } from "@/lib/admin/chat-photos"
 import { enabledFlows, FLOW_TOOL, flowState } from "@/lib/admin/flows"
 import { PLAN_TOOL, taskPlanState } from "@/lib/admin/task-plan"
+import { LIST_TOOL, listText, showListInputSchema } from "@/lib/admin/show-list"
 import { photoLine } from "@/lib/admin/photo-lines"
 import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
@@ -464,6 +466,7 @@ const Conversation = memo(function Conversation({
                     versions={versions}
                     versionsKey={JSON.stringify(versions)}
                     getUsage={getUsage}
+                    live={busy && index === messages.length - 1}
                     finished={
                       !actions.resuming &&
                       message.metadata?.status === "complete" &&
@@ -611,10 +614,15 @@ function ownerSavedOrders(messages: readonly EveMessage[]) {
   return saved
 }
 
-/** A message's words; the owner's without the lines meant for the agent. */
+/** A message's words; the owner's without the lines meant for the agent,
+ * the agent's with its lists as Markdown. */
 function messageText(message: EveMessage) {
   return message.parts
     .flatMap((part) => {
+      if (part.type === "tool" && part.name === LIST_TOOL) {
+        const list = showListInputSchema.safeParse(part.input)
+        return list.success ? [listText(list.data)] : []
+      }
       if (part.type !== "text") return []
       return message.role === "user"
         ? part.text.replace(HIDDEN_LINE, "").trim()
@@ -627,12 +635,13 @@ function messageText(message: EveMessage) {
 type ReplyPart = EveMessage["parts"][number]
 
 /** A working step: a call that's neither a change card, the story designs,
- * nor an open question. Older chats' product editor and table calls read
- * as steps too. */
+ * a shown list, nor an open question. Older chats' product editor and table
+ * calls read as steps too. */
 const isStep = (part: ReplyPart): part is EveToolPart =>
   part.type === "tool" &&
   !SAVE_TOOLS.has(part.name) &&
   !isStoryTool(part.name) &&
+  part.name !== LIST_TOOL &&
   part.interaction?.status !== "open"
 
 /**
@@ -680,6 +689,8 @@ type MessageViewProps = {
   versions: Record<string, StoryVersions>
   versionsKey: string
   getUsage: (id: string) => ReturnType<typeof responseUsage>
+  /** The agent is still writing this message, so its open calls may arrive. */
+  live: boolean
   finished: boolean
   onEdit: (text: string) => void
 }
@@ -701,6 +712,7 @@ function sameMessage(a: MessageViewProps, b: MessageViewProps) {
     a.cardsKey === b.cardsKey &&
     a.versionsKey === b.versionsKey &&
     a.getUsage === b.getUsage &&
+    a.live === b.live &&
     a.finished === b.finished &&
     a.onEdit === b.onEdit
   )
@@ -713,6 +725,7 @@ const MessageView = memo(function MessageView({
   cards,
   versions,
   getUsage,
+  live,
   finished,
   onEdit,
 }: MessageViewProps) {
@@ -791,6 +804,16 @@ const MessageView = memo(function MessageView({
               )
             case "tool":
               if (part.kind === "control") return null
+              // Generative UI: the list the agent chose to show as rows.
+              if (part.name === LIST_TOOL)
+                return (
+                  <ItemList
+                    key={key}
+                    part={part}
+                    live={live}
+                    products={preview.products}
+                  />
+                )
               if (SAVE_TOOLS.has(part.name)) {
                 const card = cards[part.callId]
                 // The card the owner's choice replaced: the new one stands

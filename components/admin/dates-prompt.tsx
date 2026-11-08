@@ -4,7 +4,7 @@ import { useState } from "react"
 import type { DateRange } from "react-day-picker"
 import type { Interaction } from "eve/react"
 import type { ChatActions } from "@/components/admin/chat-actions"
-import { Calendar } from "@/components/ui/calendar"
+import { RangeCalendar } from "./range-calendar"
 import {
   formatStoreDateTime,
   STORE_DATETIME,
@@ -101,13 +101,11 @@ export function DatesPrompt({
       )}
       <p>{interaction.request.prompt}</p>
       <div className={styles.dates}>
-        <Calendar
-          mode="range"
+        <RangeCalendar
           selected={range}
           onSelect={setRange}
           defaultMonth={suggestedMonth}
           disabled={{ before: today }}
-          resetOnSelect
           className={styles.calendar}
         />
         <div className={styles.dateTimes}>

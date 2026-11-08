@@ -1,0 +1,196 @@
+/* The Arc date range picker's month (components/arc/date-range-picker), in
+   the same monochrome tokens as sale-date-range.module.css. */
+.root {
+  --cell: 36px;
+  --ink: #111;
+  --muted: #777;
+  --bar: rgb(17 17 17 / 0.1);
+  --hover: rgb(17 17 17 / 0.07);
+  width: fit-content;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.4;
+}
+.months {
+  position: relative;
+}
+.month {
+  display: grid;
+  width: calc(var(--cell) * 7);
+}
+.nav {
+  position: absolute;
+  z-index: 2;
+  inset: 0 0 auto;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.navButton {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #555;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 160ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.navButton:hover:not([aria-disabled="true"]) {
+  background: var(--hover);
+  color: var(--ink);
+}
+.navButton[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.35;
+}
+.caption {
+  display: flex;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+}
+.captionLabel {
+  font-weight: 500;
+  white-space: nowrap;
+}
+.grid {
+  border-collapse: collapse;
+  border-spacing: 0;
+}
+.weekday {
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+/* Each day is a cell; its ::before is its piece of the week's range bar,
+   and its button the round day (solid at either end of the range). */
+.day {
+  position: relative;
+  width: var(--cell);
+  height: var(--cell);
+  padding: 0;
+}
+.day::before {
+  position: absolute;
+  inset: 3px 0;
+  content: none;
+  background: var(--bar);
+}
+.rangeMiddle::before,
+.rangeStart::before,
+.rangeEnd::before {
+  content: "";
+}
+.rangeStart::before {
+  left: 50%;
+}
+.rangeEnd::before {
+  right: 50%;
+}
+/* A one-day range is just its round end. */
+.rangeStart.rangeEnd::before {
+  content: none;
+}
+/* The bar rounds off where a week, or the month, begins or ends. */
+.rangeMiddle:first-child::before,
+.hidden + .rangeMiddle::before {
+  left: 3px;
+  border-radius: 999px 0 0 999px;
+}
+.rangeMiddle:last-child::before,
+.rangeMiddle:has(+ .hidden)::before {
+  right: 3px;
+  border-radius: 0 999px 999px 0;
+}
+.rangeMiddle:first-child:last-child::before {
+  border-radius: 999px;
+}
+.rangeStart:last-child::before,
+.rangeStart:has(+ .hidden)::before,
+.rangeEnd:first-child::before,
+.hidden + .rangeEnd::before {
+  content: none;
+}
+/* Days of the next or previous month are blank, even inside the range. */
+.day.hidden::before {
+  content: none;
+}
+.dayButton {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: calc(var(--cell) - 6px);
+  height: calc(var(--cell) - 6px);
+  margin: 3px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color 160ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 120ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.dayButton:hover:not(:disabled) {
+  background: var(--hover);
+}
+.dayButton:active:not(:disabled) {
+  transform: scale(0.9);
+}
+/* Both ends of the range, and the first day picked before there is an end. */
+.rangeStart .dayButton,
+.rangeEnd .dayButton,
+.selected:not(.rangeMiddle) .dayButton {
+  background: var(--ink);
+  color: #fff;
+  font-weight: 500;
+}
+.today .dayButton::after {
+  position: absolute;
+  bottom: 2px;
+  left: 50%;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--ink);
+  content: "";
+}
+.rangeStart.today .dayButton::after,
+.rangeEnd.today .dayButton::after,
+.selected.today:not(.rangeMiddle) .dayButton::after {
+  background: #fff;
+}
+.disabled .dayButton {
+  color: var(--muted);
+  cursor: default;
+  opacity: 0.5;
+}
+.navButton:focus-visible,
+.dayButton:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .navButton,
+  .dayButton {
+    transition: none;
+  }
+  .dayButton:active:not(:disabled) {
+    transform: none;
+  }
+}

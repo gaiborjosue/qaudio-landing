@@ -1273,7 +1273,6 @@ export function ProductEditor({
                         end={values.sale_ends}
                         disabled={disabled || saving}
                         id={fieldId("sale_dates")}
-                        aria-labelledby={`${fieldId("sale_dates")}-label`}
                         onChange={({ start, end }) =>
                           setValues((current) => ({
                             ...current,

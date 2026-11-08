@@ -153,6 +153,7 @@ assert.deepEqual(
     "design_story",
     "edit_story",
     "flow_progress",
+    "show_list",
     "update_plan",
     "view_photos",
     "web_fetch",
@@ -513,5 +514,5 @@ assert.deepEqual(
   ["products/sample.webp", "uploads/sample.webp"]
 )
 console.log(
-  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 8 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
+  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 9 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
 )

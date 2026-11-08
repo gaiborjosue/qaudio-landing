@@ -1,72 +1,51 @@
-.trigger {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 11px;
-  border: 1px solid #cfcfcf;
-  border-radius: 10px;
-  background: #fff;
-  color: #111;
-  font: inherit;
-  font-size: 13px;
-  text-align: left;
-  cursor: pointer;
+/* The Arc picker's tokens, monochrome and scoped here instead of Arc's
+   global foundation.css (which would restyle focus rings site-wide). */
+.range {
+  --foreground: #111;
+  --text-secondary: #555;
+  --text-muted: #777;
+  --surface-raised: #fff;
+  --surface-muted: #f4f4f4;
+  --border: #cfcfcf;
+  --border-subtle: #ececec;
+  --border-strong: #9a9a9a;
+  --accent: #111;
+  --accent-strong: #000;
+  --accent-subtle: rgb(17 17 17 / 0.1);
+  --accent-foreground: #fff;
+  --shadow-resting: none;
+  --shadow-floating: 0 10px 32px rgb(0 0 0 / 0.1);
+  --font-body: inherit;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --tracking-body: normal;
+  --leading-body: 1.4;
+  --control-height-sm: 32px;
+  --control-height-md: 40px;
+  --radius-control: 8px;
+  --radius-pill: 9999px;
+  --duration-instant: 120ms;
+  --duration-fast: 160ms;
+  --duration-considered: 480ms;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  display: grid;
+  gap: 12px;
 }
-.trigger svg {
-  flex: none;
-}
-.trigger:focus-visible,
-.done:focus-visible,
-.now input:focus-visible {
+.range :focus-visible {
   outline: 2px solid #111;
   outline-offset: 2px;
 }
-.trigger:disabled {
-  opacity: 0.5;
+.range button:disabled {
   cursor: default;
 }
-.positioner {
-  z-index: 60;
-}
-.popup {
-  width: min(320px, calc(100vw - 24px));
-  max-height: var(--available-height);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: 12px;
-  border: 1px solid #dedede;
-  border-radius: 14px;
-  background: #fff;
-  color: #111;
-  box-shadow: 0 10px 32px rgb(0 0 0 / 0.1);
-  transform-origin: var(--transform-origin);
-  transition:
-    opacity 150ms ease,
-    transform 150ms ease;
-}
-.popup[data-starting-style],
-.popup[data-ending-style] {
-  opacity: 0;
-  transform: translateY(-3px);
-}
-.title {
-  margin: 0 0 8px;
-  font-size: 13px;
-  font-weight: 500;
-}
-.calendar {
-  width: 100%;
-  padding: 0;
-  --cell-size: 2.25rem;
+/* Arc greys disabled days and arrows itself, but not its trigger. */
+.picker > button:disabled {
+  opacity: 0.5;
 }
 .times {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #ececec;
 }
 .timeField {
   display: grid;
@@ -100,21 +79,4 @@
 .clock > button {
   padding-inline: 7px;
   font-size: 13px;
-}
-.done {
-  display: block;
-  margin: 12px 0 0 auto;
-  padding: 7px 14px;
-  border: 0;
-  border-radius: 8px;
-  background: #111;
-  color: #fff;
-  font: inherit;
-  font-size: 13px;
-  cursor: pointer;
-}
-@media (prefers-reduced-motion: reduce) {
-  .popup {
-    transition: none;
-  }
 }

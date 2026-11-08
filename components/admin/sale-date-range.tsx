@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
-import type { DateRange } from "react-day-picker"
-import { Popover } from "@base-ui/react/popover"
-import { CalendarDays } from "lucide-react"
-import { Calendar } from "@/components/ui/calendar"
+import { useRef } from "react"
+import {
+  DateRangePicker,
+  type DateRangePreset,
+} from "@/components/arc/date-range-picker/date-range-picker"
 import { calendarDay, saleDatesFromRange } from "@/lib/admin/sale-dates"
-import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
+import { toStoreDateTime } from "@/lib/admin/store-time"
 import { Choice } from "./choice"
 import styles from "./sale-date-range.module.css"
 
@@ -17,6 +17,33 @@ const options = (count: number) =>
   })
 const HOURS = options(24)
 const MINUTES = options(60)
+
+const after = (day: Date, days: number) =>
+  new Date(day.getFullYear(), day.getMonth(), day.getDate() + days)
+
+// Sales run forward from today, so the shortcuts look ahead.
+const PRESETS: DateRangePreset[] = [
+  { label: "Today", range: (today) => ({ start: today, end: today }) },
+  {
+    label: "7 days",
+    range: (today) => ({ start: today, end: after(today, 6) }),
+  },
+  {
+    label: "14 days",
+    range: (today) => ({ start: today, end: after(today, 13) }),
+  },
+  {
+    label: "30 days",
+    range: (today) => ({ start: today, end: after(today, 29) }),
+  },
+  {
+    label: "Rest of month",
+    range: (today) => ({
+      start: today,
+      end: new Date(today.getFullYear(), today.getMonth() + 1, 0),
+    }),
+  },
+]
 
 function Clock({
   label,
@@ -52,128 +79,90 @@ function Clock({
 }
 
 /**
- * The days the saved dates cover: nothing until an end is picked (an empty
- * start means "now", not a picked day), so the owner starts the range.
+ * The sale's days on the Arc date range picker, then its store-time start
+ * (or Now) and end. Days show only once an end is picked; an empty start
+ * means "now", so the range starts today.
  */
-function savedRange(start: string, end: string, today: string) {
-  if (end) return { from: calendarDay(start || today), to: calendarDay(end) }
-  return start ? { from: calendarDay(start), to: undefined } : undefined
-}
-
-/** A range on the existing shadcn calendar, with store-time hour/minute selects. */
 export function SaleDateRange({
   start,
   end,
   onChange,
-  disabled,
-  ...aria
+  disabled = false,
+  id,
 }: {
   start: string
   end: string
   onChange: (dates: { start: string; end: string }) => void
   disabled?: boolean
   id: string
-  "aria-labelledby": string
 }) {
-  const [open, setOpen] = useState(false)
+  const root = useRef<HTMLDivElement>(null)
   const now = toStoreDateTime(new Date())
   const today = now.slice(0, 10)
-  // The calendar keeps the owner's own clicks (a start picked today reads as
-  // "now", which the saved dates can't show), and follows the dates when
-  // they change elsewhere: the Now box, or the sale removed.
-  const [range, setRange] = useState<DateRange | undefined>(() =>
-    savedRange(start, end, today)
-  )
-  const [seen, setSeen] = useState({ start, end })
-  if (seen.start !== start || seen.end !== end) {
-    setSeen({ start, end })
-    setRange(savedRange(start, end, today))
-  }
-  const pick = (next: DateRange | undefined) => {
-    const dates = saleDatesFromRange(next, start, end, today)
-    setRange(next)
-    setSeen(dates)
-    onChange(dates)
-  }
-  const summary = `${start ? formatStoreDateTime(start) : "Now"} – ${end ? formatStoreDateTime(end) : "Pick end date"}`
+  const value = end
+    ? { start: calendarDay(start || today), end: calendarDay(end) }
+    : null
   return (
-    <Popover.Root open={open && !disabled} onOpenChange={setOpen}>
-      <Popover.Trigger
-        type="button"
-        className={styles.trigger}
+    <div ref={root} className={styles.range}>
+      <DateRangePicker
+        id={id}
+        className={styles.picker}
+        label="Sale dates"
+        placeholder="Pick the dates"
+        value={value}
+        presets={PRESETS}
+        minDate={calendarDay(today)}
+        months={1}
         disabled={disabled}
-        {...aria}
-      >
-        <CalendarDays size={16} aria-hidden="true" />
-        <span>{summary}</span>
-      </Popover.Trigger>
-      <Popover.Portal>
-        <Popover.Positioner
-          side="bottom"
-          align="start"
-          sideOffset={6}
-          collisionPadding={12}
-          className={styles.positioner}
-        >
-          <Popover.Popup className={styles.popup}>
-            <Popover.Title className={styles.title}>
-              Sale dates · Store time
-            </Popover.Title>
-            <Calendar
-              mode="range"
-              selected={range}
-              defaultMonth={range?.from ?? calendarDay(today)}
-              disabled={{ before: calendarDay(today) }}
-              resetOnSelect
-              onSelect={pick}
-              className={styles.calendar}
-              autoFocus
+        // Keep the panel inside the product sheet, not just the window.
+        boundary={() => root.current?.closest("form") ?? null}
+        onChange={(range) =>
+          onChange(
+            saleDatesFromRange(
+              { from: range.start, to: range.end },
+              start,
+              end,
+              today
+            )
+          )
+        }
+      />
+      <div className={styles.times}>
+        <div className={styles.timeField}>
+          <span>Starts</span>
+          <label className={styles.now}>
+            <input
+              type="checkbox"
+              checked={!start}
+              disabled={disabled}
+              onChange={(event) =>
+                onChange({ start: event.target.checked ? "" : now, end })
+              }
             />
-            <div className={styles.times}>
-              <div className={styles.timeField}>
-                <span>Starts</span>
-                <label className={styles.now}>
-                  <input
-                    type="checkbox"
-                    checked={!start}
-                    onChange={(event) =>
-                      onChange({ start: event.target.checked ? "" : now, end })
-                    }
-                  />
-                  Now
-                </label>
-                <Clock
-                  label="Sale starts"
-                  value={start.slice(11) || "00:00"}
-                  disabled={!start}
-                  onChange={(time) =>
-                    onChange({ start: `${start.slice(0, 10)}T${time}`, end })
-                  }
-                />
-              </div>
-              <div className={styles.timeField}>
-                <span>Ends</span>
-                <span className={styles.timeHint}>24-hour time</span>
-                <Clock
-                  label="Sale ends"
-                  value={end.slice(11) || "23:59"}
-                  disabled={!end}
-                  onChange={(time) =>
-                    onChange({ start, end: `${end.slice(0, 10)}T${time}` })
-                  }
-                />
-              </div>
-            </div>
-            <button
-              type="button"
-              className={styles.done}
-              onClick={() => setOpen(false)}
-            >
-              Done
-            </button>
-          </Popover.Popup>
-        </Popover.Positioner>
-      </Popover.Portal>
-    </Popover.Root>
+            Now
+          </label>
+          <Clock
+            label="Sale starts"
+            value={start.slice(11) || "00:00"}
+            disabled={disabled || !start}
+            onChange={(time) =>
+              onChange({ start: `${start.slice(0, 10)}T${time}`, end })
+            }
+          />
+        </div>
+        <div className={styles.timeField}>
+          <span>Ends</span>
+          <span className={styles.timeHint}>24-hour time</span>
+          <Clock
+            label="Sale ends"
+            value={end.slice(11) || "23:59"}
+            disabled={disabled || !end}
+            onChange={(time) =>
+              onChange({ start, end: `${end.slice(0, 10)}T${time}` })
+            }
+          />
+        </div>
+      </div>
+    </div>
   )
 }
