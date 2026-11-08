@@ -1,6 +1,6 @@
 # Demo and production launch
 
-The canonical website is **https://www.qaudio.com**. The owner tests the replacement at **https://demo.qaudio.com** before the live website changes. Preparing or deploying the demo does not authorize the production domain switch.
+The canonical website is **https://www.qaudio.com**. The owner tests the replacement on a demo hostname chosen at deployment, before the live website changes. **https://demo.qaudio.com is an example throughout this runbook**, not a requirement: a generated Vercel URL or another custom hostname works too. Substitute the actual demo origin in callback URLs, environment variables, and verification commands. Preparing or deploying the demo does not authorize the production domain switch.
 
 ## Code and indexing
 
@@ -14,7 +14,7 @@ The canonical website is **https://www.qaudio.com**. The owner tests the replace
 
 ## Verify locally
 
-Node 24+ and the existing `.env.local` are required. A local production run needs both the Eve and Next builds:
+Node 24 and the existing `.env.local` are required. The Node major is pinned in `package.json` so Vercel does not automatically move the app to a newer major. A local production run needs both the Eve and Next builds:
 
 ```sh
 pnpm lint
@@ -39,6 +39,8 @@ Webflow snapshots, import reports, originals, assets, and manifests belong on `/
 
 ## Prepare the demo deployment
 
+The existing `withEve` wrapper in `next.config.ts` deploys Next.js and Eve as separately built services in one Vercel project. Public pages and `/admin` go to Next.js; `/eve/v1/*` goes to the authenticated agent service on the same origin. Each project release includes both services, and Vercel Workflow stores/resumes agent runs. Supabase and OpenRouter remain their existing external services.
+
 1. Confirm the Vercel account/team and project for this repository. Keep the existing Next.js/Eve hosting integration; use Vercel's normal Next build command (`pnpm build`). `pnpm build:local` is for local/self-hosted production verification.
 2. Configure the existing required environment variables for both the Next frontend and the Eve service. See `.env.example`; never upload `.env.local` as a source file. In particular:
    - Supabase URL and publishable key for public reads and signed-in sessions.
@@ -49,11 +51,21 @@ Webflow snapshots, import reports, originals, assets, and manifests belong on `/
    - `ADMIN_CHAT_ENVIRONMENT=demo` on both Next and Eve, so the demo has its own current-chat pointer.
    - `ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED=false` until live Google writes are specifically intended and approved.
 3. Preserve Supabase's existing authentication settings. Add the demo password-reset/invite callback URL to the redirect allowlist, alongside the final production callback. The generated reset target is `https://demo.qaudio.com/auth/confirm?next=/admin/set-password`; production uses the same path on `https://www.qaudio.com`. Test the existing PKCE/token-hash email templates and recovery flow before handing over the demo.
-4. Connect **only `demo.qaudio.com`** using the DNS target Vercel returns for that project. Preserve unrelated DNS records, especially email MX/TXT records. Confirm HTTPS before owner testing.
+4. Use the generated Vercel hostname, or connect **only the chosen demo hostname** using the DNS target Vercel returns for that project. Preserve unrelated DNS records, especially email MX/TXT records. Confirm HTTPS before owner testing.
 5. Check the actual demo response for `X-Robots-Tag: noindex, nofollow`; do not rely on Vercel's automatic preview defaults for a custom domain. Optional Deployment Protection can restrict who sees the demo; `noindex` alone does not make it private. An authenticated/protected preview may need Vercel's authenticated fetch tooling for remote checks.
 6. Run the launch checks against the demo and complete the owner review below. Do not submit the demo sitemap to search engines.
 
 The demo's Supabase edits persist in whichever database it is configured to use. Connected Instagram/Google accounts are real external services regardless of hostname. Use drafts or mocks for testing unless the owner explicitly approves a live external action; normal agent approval cards still apply.
+
+For CLI source deployments, `.vercelignore` excludes `.env.local`, local Eve conversations/traces, dependencies, and generated build output. Upload environment values with `vercel env add` through stdin, using `secret` for provider credentials and `config` for non-secret settings. Select variables explicitly rather than copying every local variable: do not deploy import-only Supabase secret keys, local Vercel tokens, unused AI Gateway keys, or development model overrides. Environment changes require a new deployment to take effect.
+
+### Hosted demo project
+
+- Project: `gaiborjosues-projects/qaudio`; demo: **https://qaudio.vercel.app**.
+- GitHub: `gaiborjosue/qaudio-landing`; Vercel's production branch is `master`. Other branches produce protected previews.
+- Production and Preview share the selected existing provider credentials. The production demo uses `SITE_ORIGIN=https://qaudio.vercel.app` and `ADMIN_CHAT_ENVIRONMENT=demo`; previews use their automatic origin and chat namespace. Hosted development model overrides and Google Business writes are disabled.
+- Existing Vercel Deployment Protection is preserved. The stable demo alias is publicly reachable with `noindex`; signed-in admin authorization still protects the dashboard, agent, and writes.
+- Neither `qaudio.com` nor `www.qaudio.com` is attached. Supabase's demo recovery/invite redirect allowlist and the signed-in owner acceptance checks still need verification before handover is considered complete. Password login uses the existing admin account.
 
 ## Owner review on demo
 
