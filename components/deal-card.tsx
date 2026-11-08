@@ -1,5 +1,6 @@
 import Image from "next/image"
 import type { Deal, DealItem } from "@/lib/deals-data"
+import { isPrivateMediaUrl } from "@/lib/media"
 import styles from "./deal-card.module.css"
 
 const CONDITIONS: Record<NonNullable<DealItem["condition"]>, string> = {
@@ -32,6 +33,8 @@ export function DealCard({ deal }: { deal: Deal }) {
         <Image
           className={styles.poster}
           src={deal.image.src}
+          unoptimized={isPrivateMediaUrl(deal.image.src)}
+          crossOrigin="anonymous"
           alt={deal.image.alt}
           width={deal.image.width}
           height={deal.image.height}

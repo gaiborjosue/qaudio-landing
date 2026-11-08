@@ -45,7 +45,9 @@ export async function getAdminDeals(): Promise<AdminDealItem[]> {
   const supabase = await sessionSupabase()
   const { data, error } = await supabase
     .from("deals")
-    .select("id, title, status, starts_at, ends_at")
+    .select(
+      "id, title, status, starts_at, ends_at, image_path, image_width, image_height, image_alt"
+    )
     .order("sort_order")
     .order("created_at")
   if (error) throw new Error(`Admin deals: ${error.message}`)
@@ -55,6 +57,15 @@ export async function getAdminDeals(): Promise<AdminDealItem[]> {
     status: deal.status,
     startsAt: deal.starts_at && toStoreDateTime(deal.starts_at),
     endsAt: deal.ends_at && toStoreDateTime(deal.ends_at),
+    image:
+      deal.image_path && deal.image_width && deal.image_height
+        ? {
+            src: mediaUrl(deal.image_path),
+            width: deal.image_width,
+            height: deal.image_height,
+            alt: deal.image_alt,
+          }
+        : null,
   }))
 }
 

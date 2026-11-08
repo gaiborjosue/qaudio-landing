@@ -137,7 +137,7 @@ async function withWrites(work) {
     process.env.NODE_ENV,
     process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED,
   ]
-  process.env.NODE_ENV = "production"
+  process.env.NODE_ENV = "development"
   process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED = "true"
   try {
     return await work()
@@ -213,22 +213,24 @@ test("location read is GET-only and excludes raw listing metadata", async () => 
     /isn't connected/
   )
 })
-test("development and default production refuse every write before network I/O", async () => {
+test("writes depend on the explicit flag, not production mode; disabled writes stop before I/O", async () => {
   for (const env of [
     {},
-    { NODE_ENV: "development", ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED: "true" },
+    { NODE_ENV: "development", ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED: "false" },
     { NODE_ENV: "production" },
     { NODE_ENV: "production", ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED: "TRUE" },
   ])
     assert.throws(() => api.assertGoogleBusinessWrites(env), /read-only/)
-  assert.doesNotThrow(() =>
-    api.assertGoogleBusinessWrites({
-      NODE_ENV: "production",
+  for (const nodeEnv of [undefined, "development", "production", "test"]) {
+    const env = {
+      NODE_ENV: nodeEnv,
       ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED: "true",
-    })
-  )
-  const old = process.env.NODE_ENV
-  process.env.NODE_ENV = "development"
+    }
+    assert.equal(api.googleBusinessWritesEnabled(env), true)
+    assert.doesNotThrow(() => api.assertGoogleBusinessWrites(env))
+  }
+  const old = process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED
+  process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED = "false"
   try {
     const noNetwork = () =>
       assert.fail("read-only writes must never reach the network")
@@ -250,8 +252,9 @@ test("development and default production refuse every write before network I/O",
       /read-only/
     )
   } finally {
-    if (old === undefined) delete process.env.NODE_ENV
-    else process.env.NODE_ENV = old
+    if (old === undefined)
+      delete process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED
+    else process.env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED = old
   }
 })
 test("date ranges expand inclusively, retain unrelated holidays and restore regular hours", () => {

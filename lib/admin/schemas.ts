@@ -516,6 +516,21 @@ export const deleteNewsPostInputSchema = z.object({
 })
 
 // QDeal promotions and the products each lists.
+export const dealImageInputSchema = z.object({
+  path: mediaPath
+    .refine(
+      (path) =>
+        ["uploads/", "deals/", "products/", "news/", "instagram/"].some(
+          (folder) => path.startsWith(folder)
+        ) && /\.(webp|jpe?g|png|gif)$/i.test(path),
+      "Use an uploaded photo or a saved deals/, products/, news/, or instagram/ image."
+    )
+    .describe("The photo's storage path, never a URL."),
+  width: z.int().positive(),
+  height: z.int().positive(),
+  alt: z.string().trim().min(1).max(500).describe("What the image shows."),
+})
+
 export const dealInputSchema = z
   .object({
     id: z
@@ -524,6 +539,12 @@ export const dealInputSchema = z
       .describe("An existing deal's id to edit it; omit to add a new one."),
     title: z.string().trim().min(1).max(200),
     summary: z.string().max(600).describe('Short line under the title, or "".'),
+    image: dealImageInputSchema
+      .nullable()
+      .optional()
+      .describe(
+        "One optional image or flyer, with its exact path and dimensions. Omit to keep an existing image; null removes it."
+      ),
     note: z
       .string()
       .max(200)
@@ -560,7 +581,9 @@ export const dealInputSchema = z
         })
       )
       .max(50)
-      .describe("The deal's products in display order (the whole list)."),
+      .describe(
+        "The whole product list in display order. Use [] for an image or text deal without product rows."
+      ),
   })
   .refine(
     (deal) => !deal.starts_at || !deal.ends_at || deal.starts_at < deal.ends_at,

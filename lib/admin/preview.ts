@@ -193,6 +193,7 @@ export type AdminDealItem = {
   status: string
   startsAt: string | null
   endsAt: string | null
+  image?: Deal["image"]
 }
 
 /**
@@ -236,12 +237,26 @@ export function newsFromInput(input: NewsPostInput): {
 }
 
 /** The proposed deal as the QDeal page's card renders it. */
-export function dealFromInput(input: DealInput): Deal {
+export function dealFromInput(
+  input: DealInput,
+  existingImage?: Deal["image"]
+): Deal {
   return {
     id: input.id ?? "preview",
     title: input.title,
     summary: input.summary,
     note: input.note,
+    image:
+      input.image === undefined
+        ? (existingImage ?? null)
+        : input.image
+          ? {
+              src: mediaUrl(input.image.path),
+              width: input.image.width,
+              height: input.image.height,
+              alt: input.image.alt,
+            }
+          : null,
     items: input.items.map((item, index) => ({
       id: String(index),
       brand: item.brand,

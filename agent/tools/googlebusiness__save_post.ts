@@ -14,7 +14,7 @@ import { retainInstagramMedia } from "../../lib/admin/media-lifecycle"
 export default defineTool({
   deferred: true,
   description:
-    "Create a standard Google Business update, or replace a Tune draft/scheduled post by id and revision. Text up to 1,500 characters, optional single photo and HTTPS call-to-action. Owner picks now, draft or schedule (up to 7 days) on the approval card. No events, offers or video yet. Writes and uploads are blocked in development.",
+    "Create a standard Google Business update, or replace a Tune draft/scheduled post by id and revision. Text up to 1,500 characters, optional single photo and HTTPS call-to-action. Owner picks now, draft or schedule (up to 7 days) on the approval card. No events, offers or video yet. Writes and uploads require the server write opt-in in any environment.",
   inputSchema: googleBusinessPostInputSchema,
   approval: {
     request: always(),

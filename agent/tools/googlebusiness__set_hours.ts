@@ -8,7 +8,7 @@ import { idempotencyKey } from "../lib/instagram"
 export default defineTool({
   deferred: true,
   description:
-    "Update Google Business regular hours and/or dated special hours after approval. Does not change website hours. Read get_location first; pass its exact target and revision. Preserves unmentioned dates. Use regular to remove a dated override. Google has no appointment-only hours: ask for exact times. Writes are blocked in development and require a production opt-in.",
+    "Update Google Business regular hours and/or dated special hours after approval. Does not change website hours. Read get_location first; pass its exact target and revision. Preserves unmentioned dates. Use regular to remove a dated override. Google has no appointment-only hours: ask for exact times. Requires the server write opt-in in any environment.",
   inputSchema: googleBusinessHoursInputSchema,
   approval: {
     request: always(),

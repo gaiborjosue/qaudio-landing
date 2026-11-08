@@ -10,7 +10,7 @@ import { callerSupabase } from "../lib/supabase"
 export default defineTool({
   deferred: true,
   description:
-    "Delete a Tune Google Business draft, scheduled, failed or cancelled post after approval. Copy target, id and revision from current reads. Published posts must be removed in Google Business. Writes blocked in development.",
+    "Delete a Tune Google Business draft, scheduled, failed or cancelled post after approval. Copy target, id and revision from current reads. Published posts must be removed in Google Business. Requires the server write opt-in in any environment.",
   inputSchema: deleteGoogleBusinessPostInputSchema,
   approval: {
     request: always(),

@@ -9,7 +9,7 @@ import { failure, type AdminSupabase } from "./supabase"
 export function placeUploads(
   supabase: AdminSupabase,
   paths: Iterable<string>,
-  folder: "products" | "news" | "instagram"
+  folder: "products" | "news" | "deals" | "instagram"
 ) {
   return placeAs(supabase, paths, folder, failure)
 }

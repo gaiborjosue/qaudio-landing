@@ -30,6 +30,7 @@ import {
 } from "eve/react"
 import { idle, turn, type SessionView } from "eve/events"
 import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
+import { cleanupLocalChatHistory } from "@/app/admin/chat-actions"
 import { ApprovalActions } from "@/components/admin/approval-actions"
 import {
   ChangePreview,
@@ -153,6 +154,7 @@ export function AdminChat({
   const router = useRouter()
   const [, startRefresh] = useTransition()
   const chatSession = useRef(new ChatSession(sessionId))
+  const lastHistorySession = useRef(sessionId)
   const cacheRefresh = useRef(new ChatCacheRefresh())
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
@@ -201,7 +203,15 @@ export function AdminChat({
         : input,
     onSessionChange(session) {
       chatSession.current.sessionId = session?.sessionId
-      if (session) onSession(session.sessionId)
+      if (session) {
+        onSession(session.sessionId)
+        if (lastHistorySession.current !== session.sessionId) {
+          lastHistorySession.current = session.sessionId
+          void cleanupLocalChatHistory({ currentSessionId: session.sessionId }).catch(() => {
+            console.warn("Couldn't request local chat history cleanup.")
+          })
+        }
+      }
     },
     // Tools notify Next directly. The browser refreshes its previews and can
     // repair a missed notification, including when reading recorded events.
@@ -252,6 +262,9 @@ export function AdminChat({
     setSessionError(null)
     try {
       await chatSession.current.retire(agent.end, (id) => {
+        void cleanupLocalChatHistory(id ? { endedSessionId: id } : {}).catch(() => {
+          console.warn("Couldn't request local chat history cleanup.")
+        })
         if (mediaDraft.current) {
           // Auxiliary cleanup mustn't hold the retired chat open. Its server
           // hook and database fallback also cover a disconnected browser.

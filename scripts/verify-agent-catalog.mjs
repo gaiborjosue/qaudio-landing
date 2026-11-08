@@ -512,6 +512,65 @@ assert.deepEqual(
   slides.map((match) => match[1]),
   ["products/sample.webp", "uploads/sample.webp"]
 )
+// QDeal flyers use authenticated browser loading before approval, alongside
+// optional text/products. Removing an image must also remove it from preview.
+const flyer = {
+  path: "uploads/chat/00000000-0000-4000-8000-000000000081/00000000-0000-4000-8000-000000000081.webp",
+  width: 1200,
+  height: 1800,
+  alt: "Closeout flyer",
+}
+const dealInput = fixtures.save_deal[1]
+const renderDeal = (input, preview = data) =>
+  renderToStaticMarkup(
+    createElement(ChangePreview, {
+      tool: "deals__save_deal",
+      input,
+      data: preview,
+    })
+  )
+const imageDeal = renderDeal({ ...dealInput, image: flyer })
+assert(
+  imageDeal.includes(
+    `src="/api/admin/media?path=${encodeURIComponent(flyer.path)}"`
+  )
+)
+assert(!imageDeal.includes("/_next/image"))
+assert(/crossorigin="anonymous"/i.test(imageDeal))
+assert(
+  imageDeal.includes('width="1200"') && imageDeal.includes('height="1800"')
+)
+assert(!imageDeal.includes("<ul"))
+const mixedDeal = renderDeal({
+  ...dealInput,
+  image: flyer,
+  summary: "Limited stock",
+  items: [
+    {
+      brand: "Sample",
+      name: "Amplifier",
+      condition: "demo",
+      price_cents: 50000,
+    },
+  ],
+})
+for (const content of ["Closeout flyer", "Limited stock", "Amplifier", "$500"])
+  assert(mixedDeal.includes(content))
+assert(!renderDeal(dealInput).includes("<img"))
+const priorDeal = {
+  ...dealInput,
+  id,
+  startsAt: null,
+  endsAt: null,
+  image: { src: "/flyer.webp", width: 1200, height: 1800, alt: "Saved flyer" },
+}
+const priorData = { ...data, deals: [priorDeal] }
+assert(
+  renderDeal({ ...dealInput, id }, priorData).includes('alt="Saved flyer"')
+)
+assert(
+  !renderDeal({ ...dealInput, id, image: null }, priorData).includes("<img")
+)
 console.log(
-  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 8 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus a sale card and an arranged carousel. No site data read or written."
+  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 8 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus sale, carousel, and QDeal image/text/product previews. No site data read or written."
 )
