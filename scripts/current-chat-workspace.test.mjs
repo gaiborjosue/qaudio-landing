@@ -13,6 +13,8 @@ const stubs = {
     "export const requireAdmin = async () => ({ id: 'signed-in-admin' })",
   "@/lib/catalog-data":
     "export const getCatalogTaxonomy = async () => ({categories:[], brands:[]})",
+  "@/lib/admin/store-time":
+    "export const toStoreDateTime = () => '2026-11-08T00:24'",
   "@/lib/admin/current-chat":
     "export const readCurrentChat = (db, user) => globalThis.__workspaceCurrentChat(db, user)",
   "@/lib/supabase/server":
@@ -75,6 +77,11 @@ test("opening /admin on another device redirects to the signed-in admin's existi
   const products = await AdminWorkspace({ view: "products" })
   assert.equal(products.props.sessionId, session)
   assert.equal(products.props.initialView, "products")
+  const news = await AdminWorkspace({ view: "news" })
+  assert.equal(news.props.sessionId, session)
+  assert.equal(news.props.chatGeneration, generation)
+  assert.equal(news.props.initialView, "news")
+  assert.equal(news.props.newsNow, "2026-11-08T00:24")
 })
 
 test("failed saved-pointer loads render a fresh chat rather than the error boundary", async (t) => {

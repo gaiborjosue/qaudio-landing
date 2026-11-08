@@ -1,0 +1,38 @@
+.filter select {
+  padding: 9px 12px;
+  border: 1px solid #cfcfcf;
+  border-radius: 999px;
+  background: #fff;
+  color: #4a4a4a;
+  font: inherit;
+  font-size: 14px;
+}
+.filter select:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.table .title {
+  min-width: 220px;
+  max-width: 520px;
+  color: #111;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.status {
+  display: inline-block;
+  padding: 3px 8px;
+  border: 1px solid #dedede;
+  border-radius: 999px;
+  color: #4a4a4a;
+  font-size: 12px;
+}
+.date,
+.tune {
+  white-space: nowrap;
+}
+.date {
+  color: #666;
+  font-variant-numeric: tabular-nums;
+}

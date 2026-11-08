@@ -177,9 +177,10 @@ export function shopProduct<T extends AdminProduct>(product: T, now: Date): T {
   }
 }
 
-/** A news post as the Edit menu lists it; dates are store time. */
+/** A news post in the News tab and Edit menu; dates are store time. */
 export type AdminNewsItem = {
   id: string
+  slug: string
   title: string
   status: string
   /** "YYYY-MM-DDTHH:MM", or null for an undated draft. */

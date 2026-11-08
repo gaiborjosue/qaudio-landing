@@ -15,6 +15,9 @@ import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
 import { ConnectionsMenu } from "@/components/admin/connections-menu"
 import { MetadataView } from "@/components/admin/metadata-view"
+import { NewsView } from "@/components/admin/news-view"
+import type { NewsChatStart } from "@/lib/admin/news"
+import type { AdminNewsItem } from "@/lib/admin/preview"
 import type { MetadataData } from "@/lib/admin/metadata"
 import type { PreviewData } from "@/components/admin/change-preview"
 import {
@@ -24,10 +27,11 @@ import {
 } from "@/components/admin/products-view"
 import styles from "./admin.module.css"
 
-export type AdminView = "chat" | "products" | "metadata"
+export type AdminView = "chat" | "news" | "products" | "metadata"
 
 const VIEWS: { id: AdminView; label: string }[] = [
   { id: "chat", label: "Chat" },
+  { id: "news", label: "News" },
   { id: "products", label: "Products" },
   { id: "metadata", label: "Metadata" },
 ]
@@ -46,11 +50,11 @@ function setAddress(path: string) {
 
 /**
  * The admin workspace: a header with the logo and Tune on the left, the
- * Chat / Products / Metadata switch in the middle, and chat/sign-out actions on the right, over
- * the chat with Tune or the Products tab. All three stay mounted, so switching
+ * workspace switch in the middle, and chat/sign-out actions on the right.
+ * All tabs stay mounted, so switching
  * keeps the conversation and the table's filters and unsaved changes. The
  * address follows along (/admin or /admin/s/<session>, and
- * /admin/products), so a reload opens the same view.
+ * /admin/news, /admin/products, or /admin/metadata), so a reload opens the same view.
  */
 export function AdminShell({
   initialView,
@@ -59,6 +63,7 @@ export function AdminShell({
   chatRestoreFailed,
   preview,
   metadata,
+  newsNow,
 }: {
   initialView: AdminView
   sessionId?: string
@@ -67,6 +72,7 @@ export function AdminShell({
   /** Current site data the chat's previews and the Products tab build on. */
   preview: PreviewData
   metadata: MetadataData
+  newsNow: string
 }) {
   const id = useId()
   const root = useRef<HTMLDivElement>(null)
@@ -81,20 +87,32 @@ export function AdminShell({
   const [chatActions, setChatActions] = useState<HTMLDivElement | null>(null)
   const [sheet, setSheet] = useState<ProductSheet | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [newsChat, setNewsChat] = useState<NewsChatStart | null>(null)
+  const onNewsChatReady = useCallback((start: NewsChatStart | null) => {
+    setNewsChat(() => start)
+  }, [])
 
   const address = (next: AdminView) =>
-    next === "metadata"
-      ? "/admin/metadata"
-      : next === "products"
-        ? productFiltersHref(productFilters)
-        : session.current
-          ? `/admin/s/${encodeURIComponent(session.current)}`
-          : "/admin"
+    next === "news"
+      ? "/admin/news"
+      : next === "metadata"
+        ? "/admin/metadata"
+        : next === "products"
+          ? productFiltersHref(productFilters)
+          : session.current
+            ? `/admin/s/${encodeURIComponent(session.current)}`
+            : "/admin"
 
   const show = (next: AdminView) => {
     current.current = next
     setView(next)
     setAddress(address(next))
+  }
+
+  const tuneNews = (post?: AdminNewsItem) => {
+    if (!newsChat) return
+    show("chat")
+    newsChat(post)
   }
 
   // Stable, so the chat's agent can hold on to it.
@@ -192,6 +210,22 @@ export function AdminShell({
             actionsTarget={chatActions}
             onSession={onSession}
             onProduct={openProduct}
+            onNewsChatReady={onNewsChatReady}
+          />
+        </div>
+        <div
+          id={panelId("news")}
+          role="tabpanel"
+          aria-labelledby={tabId("news")}
+          className={`${styles.panel} ${styles.productsPanel}`}
+          hidden={view !== "news"}
+        >
+          <NewsView
+            posts={preview.news}
+            active={view === "news"}
+            disabled={!newsChat}
+            onTune={tuneNews}
+            initialNow={newsNow}
           />
         </div>
         <div
@@ -233,7 +267,7 @@ export function AdminShell({
 }
 
 /**
- * Chat / Products / Metadata: a pill switch, built as tabs. Arrow keys, Home, and End
+ * The workspace pill switch, built as tabs. Arrow keys, Home, and End
  * move between them; the dark pill slides to the chosen one (instant under
  * reduced motion).
  */

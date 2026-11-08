@@ -11,10 +11,11 @@ import { getCatalogTaxonomy } from "@/lib/catalog-data"
 import { redirect } from "next/navigation"
 import { readCurrentChat } from "@/lib/admin/current-chat"
 import { sessionSupabase } from "@/lib/supabase/server"
+import { toStoreDateTime } from "@/lib/admin/store-time"
 
 /**
  * The signed-in admin's workspace: the chat with the site agent and the
- * Products and Metadata tabs, with the current hours, catalog, news, and deals their
+ * News, Products, and Metadata tabs, with the current hours, catalog, news, and deals their
  * previews, table, and Edit menu build on. Reads cookies, so it renders
  * inside <Suspense>.
  */
@@ -65,6 +66,7 @@ export async function AdminWorkspace({
       chatRestoreFailed={savedChat.failed && !requestedId}
       preview={{ schedule, taxonomy, products, news, deals }}
       metadata={metadata}
+      newsNow={toStoreDateTime(new Date())}
     />
   )
 }
