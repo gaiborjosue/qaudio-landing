@@ -185,6 +185,8 @@ export type AdminNewsItem = {
   status: string
   /** "YYYY-MM-DDTHH:MM", or null for an undated draft. */
   publishedAt: string | null
+  /** Publishing needs a cover photo. */
+  hasCover?: boolean
 }
 
 /** A QDeal promotion as the Edit menu lists it; dates are store time. */

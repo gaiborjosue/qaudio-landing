@@ -28,7 +28,7 @@ export async function getAdminNews(): Promise<AdminNewsItem[]> {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("news_posts")
-      .select("id, slug, title, status, published_at")
+      .select("id, slug, title, status, published_at, cover_path")
       .order("published_at", { ascending: false, nullsFirst: true })
       .order("id")
       .range(offset, offset + pageSize - 1)
@@ -40,6 +40,7 @@ export async function getAdminNews(): Promise<AdminNewsItem[]> {
         title: post.title,
         status: post.status,
         publishedAt: post.published_at && toStoreDateTime(post.published_at),
+        hasCover: post.cover_path !== null,
       }))
     )
     if (data.length < pageSize) return posts

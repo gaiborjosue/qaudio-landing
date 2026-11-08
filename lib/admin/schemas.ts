@@ -506,6 +506,18 @@ export const newsPostInputSchema = z
     }
   })
 
+/**
+ * A status changed in the News tab's table. Publishing a post that isn't
+ * live yet sends published_at "now"; Draft and Scheduled keep the date.
+ */
+export const newsQuickEditSchema = z.object({
+  id: z.uuid(),
+  status: z.enum(["draft", "published"]),
+  published_at: z.literal("now").optional(),
+})
+
+export const newsQuickEditsSchema = z.array(newsQuickEditSchema).min(1).max(200)
+
 export const deleteNewsPostInputSchema = z.object({
   id: z.uuid(),
   title: z
@@ -889,6 +901,7 @@ export type ProductQuickEdit = z.infer<typeof productQuickEditSchema>
 export type NewsBlockInput = z.infer<typeof newsBlockSchema>
 export type NewsPostInput = z.infer<typeof newsPostInputSchema>
 export type DeleteNewsPostInput = z.infer<typeof deleteNewsPostInputSchema>
+export type NewsQuickEdit = z.infer<typeof newsQuickEditSchema>
 export type DealInput = z.infer<typeof dealInputSchema>
 export type DeleteDealInput = z.infer<typeof deleteDealInputSchema>
 export type InstagramPhotoInput = z.infer<typeof instagramPhotoSchema>

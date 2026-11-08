@@ -1,38 +1,39 @@
-.filter select {
-  padding: 9px 12px;
-  border: 1px solid #cfcfcf;
-  border-radius: 999px;
-  background: #fff;
-  color: #4a4a4a;
-  font: inherit;
-  font-size: 14px;
+/* The News tab (news-view.tsx). The table, its save bar, and the sheet
+   share the Products tab's styles (product-table.module.css and
+   products-view.module.css); these are the news-only pieces. */
+
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
 }
-.filter select:focus-visible {
-  outline: 2px solid #111;
-  outline-offset: 2px;
+.table {
+  min-width: 640px;
 }
-.table .title {
+.table .post {
   min-width: 220px;
-  max-width: 520px;
-  color: #111;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-.status {
-  display: inline-block;
-  padding: 3px 8px;
-  border: 1px solid #dedede;
-  border-radius: 999px;
-  color: #4a4a4a;
-  font-size: 12px;
-}
-.date,
-.tune {
-  white-space: nowrap;
+  font-weight: 400;
 }
 .date {
-  color: #666;
+  color: #4a4a4a;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.actionsColumn {
+  width: 120px;
+}
+
+/* The sheet while its post loads, or if it can't. */
+.loading {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 24px;
+  color: #4a4a4a;
+  font-size: 14px;
+}
+.loading p {
+  margin: 0;
 }

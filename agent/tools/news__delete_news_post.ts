@@ -1,6 +1,7 @@
 import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { deleteNewsPostInputSchema } from "../../lib/admin/schemas"
+import { deleteNewsPost } from "../../lib/admin/news-save"
 import { callerSupabase, failure } from "../lib/supabase"
 import { refreshAfterSave } from "../lib/site-cache"
 
@@ -18,19 +19,13 @@ export default defineTool({
     complete: (input) => `Deleted “${input.title}”`,
   },
   async execute({ id }, ctx) {
-    const supabase = callerSupabase(ctx)
-    const { data, error } = await supabase
-      .from("news_posts")
-      .delete()
-      .eq("id", id)
-      .select("id, slug")
-    if (error) throw failure("News post", error)
-    if (data.length === 0) {
+    const slug = await deleteNewsPost(callerSupabase(ctx), id, failure)
+    if (slug === null) {
       throw new Error("News post: nothing deleted; no post has that id.")
     }
     return refreshAfterSave(ctx, {
       deleted: true,
-      slug: data[0].slug,
+      slug,
       revalidate: ["news"],
     })
   },

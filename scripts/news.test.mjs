@@ -15,6 +15,13 @@ const stubs = {
   "@/lib/supabase/server":
     "export const sessionSupabase = async () => globalThis.__newsDb",
   "@/lib/supabase/public": "export const publicSupabase = () => {}",
+  "next/navigation": "export const useRouter = () => ({ refresh() {} })",
+  "next/image":
+    "import { createElement } from 'react'; export default ({ fill, preload, ...props }) => createElement('img', props)",
+  "next/link":
+    "import { createElement } from 'react'; export default ({ prefetch, ...props }) => createElement('a', props)",
+  "@/app/admin/news/actions":
+    "export const saveNewsFromEditor = async () => ({}); export const saveNewsTableEdits = async () => ({}); export const deleteNewsFromAdmin = async () => ({})",
 }
 registerHooks({
   resolve(specifier, context, next) {
@@ -23,6 +30,8 @@ registerHooks({
         url: `data:text/javascript,${encodeURIComponent(stubs[specifier])}`,
         shortCircuit: true,
       }
+    if (context.parentURL?.startsWith("data:"))
+      return next(specifier, { ...context, parentURL: import.meta.url })
     let candidate
     if (specifier.startsWith("@/"))
       candidate = resolve(root, specifier.slice(2))
@@ -49,7 +58,8 @@ registerHooks({
       if (url.endsWith(".css"))
         return {
           format: "module",
-          source: "export default {}",
+          source:
+            "export default new Proxy({}, { get: (_, key) => typeof key === 'string' ? key : undefined })",
           shortCircuit: true,
         }
       if (url.endsWith(".tsx"))
@@ -73,6 +83,13 @@ const { filterNews, newsChatMessage, newsStatus } =
   await import("../lib/admin/news.ts")
 const { getAdminNews } = await import("../lib/admin/data.ts")
 const { NewsView } = await import("../components/admin/news-view.tsx")
+const {
+  blocksToMarkdown,
+  inputFromNews,
+  markdownToBlocks,
+  parseInline,
+  valuesFromNews,
+} = await import("../lib/admin/news-editor.ts")
 const now = "2026-11-07T12:00"
 const post = (id, status, publishedAt, title = "Listening night") => ({
   id,
@@ -127,6 +144,7 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
     title: "News",
     status: i === 0 ? "draft" : "published",
     published_at: i === 0 ? null : "2026-11-07T17:00:00Z",
+    cover_path: i === 0 ? null : "news/cover.webp",
   }))
   const calls = []
   globalThis.__newsDb = {
@@ -134,7 +152,10 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
       assert.equal(table, "news_posts")
       const query = {
         select(columns) {
-          assert.equal(columns, "id, slug, title, status, published_at")
+          assert.equal(
+            columns,
+            "id, slug, title, status, published_at, cover_path"
+          )
           return query
         },
         order(...args) {
@@ -154,8 +175,12 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
   }
   const result = await getAdminNews()
   assert.equal(result.length, 401)
-  assert.deepEqual(result[0], post("0", "draft", null, "News"))
+  assert.deepEqual(result[0], {
+    ...post("0", "draft", null, "News"),
+    hasCover: false,
+  })
   assert.equal(result[400].publishedAt, now)
+  assert.equal(result[400].hasCover, true)
   assert.deepEqual(
     calls.filter(([kind]) => kind === "range"),
     [
@@ -190,7 +215,7 @@ test("admin news surfaces database failures rather than showing a partial collec
   await assert.rejects(getAdminNews(), /Admin news: Read failed/)
 })
 
-test("news table renders every post with semantic headers and monochrome Tune actions", () => {
+test("news table renders every post with direct edit, status, Tune, and delete", () => {
   const render = (items, disabled = false) =>
     renderToStaticMarkup(
       createElement(NewsView, {
@@ -204,21 +229,121 @@ test("news table renders every post with semantic headers and monochrome Tune ac
   const html = render(posts)
   assert.equal((html.match(/scope="col"/g) ?? []).length, 4)
   assert.equal((html.match(/scope="row"/g) ?? []).length, posts.length)
-  assert.equal((html.match(/Edit with Tune/g) ?? []).length, posts.length)
-  assert(html.includes("5 of 5 posts"))
+  assert.equal((html.match(/title="Edit with Tune"/g) ?? []).length, posts.length)
+  assert.equal((html.match(/aria-label="Edit [^"]*"/g) ?? []).length, posts.length * 2)
+  assert.equal((html.match(/aria-label="Delete /g) ?? []).length, posts.length)
+  assert.equal((html.match(/aria-label="Status of /g) ?? []).length, posts.length)
+  assert(html.includes("Write with Tune"))
+  assert(html.includes("New post"))
+  assert(html.includes("5 posts · 3 not live"))
   assert(html.includes("Scheduled"))
   assert(html.includes("Draft"))
   assert(html.includes("Published"))
   assert(html.includes("/news/post-live"))
   assert.match(html, /datetime="2026-11-07T12:00"/i)
-  assert(html.includes('aria-label="Edit “Listening night” with Tune"'))
-  assert(html.includes('aria-label="News posts" tabindex="0"'))
+  assert(html.includes('aria-label="Edit Listening night with Tune"'))
   assert(!html.includes("linear-gradient"))
+  // Only Tune waits for the chat; direct editing never does.
   assert.equal(
     (render(posts, true).match(/<button\b[^>]*\sdisabled=""/g) ?? []).length,
     posts.length + 1
   )
   assert(render([]).includes("No news posts yet."))
+})
+
+test("news Markdown round-trips every block type and escapes literal markers", () => {
+  const body = [
+    {
+      type: "paragraph",
+      content: [
+        "Doors at 7, ",
+        { text: "bring vinyl", strong: true },
+        " and see ",
+        { text: "the [map]", href: "/visit" },
+        ". 2 * 3 \\ done",
+      ],
+    },
+    { type: "heading", text: "What to expect" },
+    {
+      type: "list",
+      items: [["Tubes"], [{ text: "Free coffee", strong: true }, "\nall night"]],
+    },
+    { type: "quote", text: "Best night.\nTruly." },
+    {
+      type: "image",
+      image: { src: "news/room.webp", width: 1600, height: 900, alt: "The room [lit]" },
+      caption: 'Shot "live"',
+    },
+    { type: "paragraph", content: ["# not a heading\n- not a list"] },
+  ]
+  const markdown = blocksToMarkdown(body)
+  const photos = { "news/room.webp": { width: 1600, height: 900 } }
+  assert.deepEqual(markdownToBlocks(markdown, photos), { blocks: body, problem: undefined })
+  assert.match(markdown, /^## What to expect$/m)
+  assert.match(markdown, /^!\[The room \[lit\\]\]\(news\/room\.webp "Shot \\"live\\""\)$/m)
+})
+
+test("news Markdown keeps unsafe links as text and flags photos it can't save", () => {
+  assert.deepEqual(parseInline("see [it](javascript:alert(1)) now"), [
+    "see [it](javascript:alert(1)) now",
+  ])
+  assert.deepEqual(parseInline("**bold [link](https://q.audio)**"), [
+    { text: "bold ", strong: true },
+    { text: "link", strong: true, href: "https://q.audio" },
+  ])
+  assert.equal(markdownToBlocks("![A](uploads/x.webp)", {}).problem, "photo-size")
+  assert.equal(
+    markdownToBlocks("![](uploads/x.webp)", {
+      "uploads/x.webp": { width: 1, height: 1 },
+    }).problem,
+    "photo-alt"
+  )
+})
+
+test("the post form saves an untouched article exactly and publishes now without a date", () => {
+  const record = {
+    id: "8b0c4b9e-4f40-4bb8-9c43-5f0f2c1b7a11",
+    slug: "listening-night",
+    title: "Listening night",
+    body: [{ type: "paragraph", content: ["Hi ", { text: "there", strong: false }] }],
+    cover: { path: "news/c.webp", width: 10, height: 10, alt: "Room", fit: "cover" },
+    status: "draft",
+    published_at: null,
+  }
+  const values = valuesFromNews(record)
+  assert.deepEqual(values.photos, { "news/c.webp": { width: 10, height: 10 } })
+  const untouched = inputFromNews({ ...values, title: " New " }, record).input
+  assert.equal(untouched.body, record.body)
+  assert.equal(untouched.title, "New")
+  assert.equal(untouched.published_at, null)
+  const published = inputFromNews({ ...values, status: "published" }, record)
+  assert.equal(published.input.published_at, "now")
+  const scheduled = inputFromNews(
+    { ...values, status: "published", publishedAt: "2026-12-01T09:00" },
+    record
+  )
+  assert.equal(scheduled.input.published_at, "2026-12-01T09:00")
+  const edited = inputFromNews({ ...values, body: "Hi **there**" }, record)
+  assert.deepEqual(edited.input.body, [
+    { type: "paragraph", content: ["Hi ", { text: "there", strong: true }] },
+  ])
+})
+
+test("News tab writes check the admin, validate, and refresh the news cache", () => {
+  const source = (path) =>
+    readFileSync(new URL(`../${path}`, import.meta.url), "utf8")
+  const actions = source("app/admin/news/actions.ts")
+  const route = source("app/api/admin/news/route.ts")
+  for (const name of ["saveNewsFromEditor", "saveNewsTableEdits", "deleteNewsFromAdmin"]) {
+    const body = actions.split(`export async function ${name}`)[1].split("\nexport ")[0]
+    assert.match(body, /if \(!\(await getAdmin\(\)\)\)/, name)
+    assert.match(body, /\.safeParse\(/, name)
+    assert.match(body, /await sessionSupabase\(\)/, name)
+    assert.match(body, /updateTag\(NEWS_CACHE_TAG\)/, name)
+  }
+  assert.match(route, /status: 401/)
+  assert.match(route, /private, no-store/)
+  assert.match(route, /readNewsPost\(\s*await sessionSupabase\(\)/)
 })
 
 test("News is next to Chat, reloadable, and stays mounted during exact-item handoff", () => {
