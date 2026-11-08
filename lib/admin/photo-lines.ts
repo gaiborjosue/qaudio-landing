@@ -29,6 +29,7 @@ export const VIEWABLE_FOLDERS = [
   "uploads/",
   "products/",
   "news/",
+  "deals/",
   "instagram/",
 ] as const
 

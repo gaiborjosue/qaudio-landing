@@ -33,7 +33,7 @@ type Seen =
 export function viewPhotosFor(caller?: CallerContext) {
   return defineTool({
     description:
-      "Look at photos in the media library by path: the ones the owner attached (their `Photo uploaded:` lines), or a product's, news post's, or Instagram post's saved photos. Call it before you describe, judge, or use a photo, and again to look at one later in the chat.",
+      "Look at photos in the media library by path: the ones the owner attached (their `Photo uploaded:` lines), or a product's, news post's, QDeal's, or Instagram post's saved photos. Call it before you describe, judge, or use a photo, and again to look at one later in the chat.",
     inputSchema: z.object({
       paths: z
         .array(
@@ -41,7 +41,7 @@ export function viewPhotosFor(caller?: CallerContext) {
             .string()
             .refine(
               isViewablePath,
-              "A photo path under uploads/, products/, news/, or instagram/."
+              "A photo path under uploads/, products/, news/, deals/, or instagram/."
             )
         )
         .min(1)

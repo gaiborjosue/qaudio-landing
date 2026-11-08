@@ -54,14 +54,11 @@ async function safe<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-/** No live writes in development, even if the production opt-in is present. */
+/** The explicit server opt-in applies in development and production alike. */
 export function googleBusinessWritesEnabled(
   env: Record<string, string | undefined> = process.env
 ) {
-  return (
-    env.NODE_ENV === "production" &&
-    env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED === "true"
-  )
+  return env.ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED === "true"
 }
 
 export function assertGoogleBusinessWrites(
@@ -69,7 +66,7 @@ export function assertGoogleBusinessWrites(
 ) {
   if (!googleBusinessWritesEnabled(env)) {
     throw new GoogleBusinessError(
-      "Google Business is read-only. Writes require production and ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED=true. No change was sent."
+      "Google Business is read-only. Set ZERNIO_GOOGLE_BUSINESS_WRITES_ENABLED=true on the agent service to enable approved changes. No change was sent."
     )
   }
 }

@@ -25,6 +25,7 @@ export async function placeUploads(
   folder:
     | "products"
     | "news"
+    | "deals"
     | "instagram"
     | "categories"
     | "brands"

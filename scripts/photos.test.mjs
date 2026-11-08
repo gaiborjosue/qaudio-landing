@@ -95,6 +95,7 @@ test("view_photos opens only media photos", () => {
     upload,
     "products/orbit-front.webp",
     "news/cover.jpg",
+    "deals/flyer.webp",
     "instagram/a.jpeg",
   ])
     assert.equal(lines.isViewablePath(path), true, path)

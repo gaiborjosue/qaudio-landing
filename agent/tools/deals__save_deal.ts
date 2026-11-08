@@ -4,11 +4,12 @@ import { dealInputSchema } from "../../lib/admin/schemas"
 import { fromStoreDateTime } from "../../lib/admin/store-time"
 import { callerSupabase, failure } from "../lib/supabase"
 import { refreshAfterSave } from "../lib/site-cache"
+import { placeUploads } from "../lib/media"
 
 export default defineTool({
   deferred: true,
   description:
-    "Add a QDeal promotion, or replace an existing one by id. Send the complete deal, including its whole product list in display order. The owner sees the deal card preview and must approve before anything is saved.",
+    "Add a QDeal promotion, or replace an existing one by id. Supports one image/flyer, text, product rows, or a combination; items may be empty. Send the whole product list in display order and reuse the existing image unless asked to change it (null removes it; omission preserves it). The owner previews the deal card and must approve before anything is saved.",
   inputSchema: dealInputSchema,
   approval: {
     request: always(),
@@ -21,8 +22,13 @@ export default defineTool({
     start: ({ id, title }) => (id ? `Edit “${title}”` : `Add “${title}”`),
     complete: (input) => `Saved “${input.title}”`,
   },
-  async execute({ id, items, starts_at, ends_at, ...deal }, ctx) {
+  async execute({ id, items, image, starts_at, ends_at, ...deal }, ctx) {
     const supabase = callerSupabase(ctx)
+    const place = await placeUploads(
+      supabase,
+      image ? [image.path] : [],
+      "deals"
+    )
     const row = {
       ...deal,
       title: deal.title.trim(),
@@ -30,10 +36,17 @@ export default defineTool({
       note: deal.note.trim(),
       starts_at: starts_at && fromStoreDateTime(starts_at),
       ends_at: ends_at && fromStoreDateTime(ends_at),
+      ...(image !== undefined && {
+        image_path: image ? place(image.path) : null,
+        image_width: image?.width ?? null,
+        image_height: image?.height ?? null,
+        image_alt: image?.alt.trim() ?? "",
+      }),
     }
+    const columns = "id, image_path, image_width, image_height, image_alt"
     const result = id
-      ? await supabase.from("deals").update(row).eq("id", id).select("id")
-      : await supabase.from("deals").insert(row).select("id")
+      ? await supabase.from("deals").update(row).eq("id", id).select(columns)
+      : await supabase.from("deals").insert(row).select(columns)
     if (result.error) throw failure("Deal", result.error)
     const saved = result.data[0]
     if (!saved) {
@@ -79,6 +92,15 @@ export default defineTool({
     return refreshAfterSave(ctx, {
       saved: true,
       id: saved.id,
+      image:
+        saved.image_path && saved.image_width && saved.image_height
+          ? {
+              path: saved.image_path,
+              width: saved.image_width,
+              height: saved.image_height,
+              alt: saved.image_alt,
+            }
+          : null,
       live,
       url: "/qdeal",
       revalidate: ["deals"],

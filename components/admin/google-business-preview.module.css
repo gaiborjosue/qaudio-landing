@@ -44,3 +44,114 @@
 .action span {
   color: #666;
 }
+
+.hoursPreview {
+  container-type: inline-size;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.hoursHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #e8e8e8;
+  background: #fafafa;
+}
+.hoursHeader > svg {
+  flex-shrink: 0;
+  color: #666;
+}
+.destination,
+.business {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.destination {
+  color: #666;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.business {
+  margin-top: 2px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.hoursGroup {
+  padding: 18px 20px 6px;
+}
+.hoursGroup + .hoursGroup {
+  border-top: 1px solid #e8e8e8;
+}
+.hoursHeading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 6px;
+  color: #666;
+  font-size: 12px;
+  font-weight: 500;
+}
+.hoursList {
+  margin: 0;
+}
+.hoursRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 10px 16px;
+  padding: 12px 0;
+}
+.hoursRow + .hoursRow {
+  border-top: 1px solid #efefef;
+}
+.hoursRow dt,
+.hoursRow dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.hoursRow dd {
+  text-align: right;
+}
+.hoursDate {
+  display: block;
+  font-weight: 500;
+}
+.hoursDetail {
+  display: block;
+  margin-top: 3px;
+  color: #666;
+  font-size: 12px;
+}
+.newHours {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.closedHours {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1px solid #e1e1e1;
+  border-radius: 5px;
+  background: #f4f4f4;
+  font-size: 12px;
+  font-weight: 500;
+}
+@container (max-width: 320px) {
+  .hoursHeader {
+    padding: 16px;
+  }
+  .hoursGroup {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+  .hoursRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+  .hoursRow dd {
+    text-align: left;
+  }
+}
