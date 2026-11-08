@@ -1,5 +1,14 @@
 import "server-only"
-import { lstat, mkdir, open, readFile, readdir, realpath, rm, unlink } from "node:fs/promises"
+import {
+  lstat,
+  mkdir,
+  open,
+  readFile,
+  readdir,
+  realpath,
+  rm,
+  unlink,
+} from "node:fs/promises"
 import { isAbsolute, join, relative, resolve, sep } from "node:path"
 import { setTimeout as delay } from "node:timers/promises"
 
@@ -27,15 +36,21 @@ export function localChatCleanupEnabled(env = process.env) {
   return env.NODE_ENV === "development" && !env.VERCEL
 }
 
-const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "ENOENT"
+const missing = (error: unknown) =>
+  (error as NodeJS.ErrnoException)?.code === "ENOENT"
 async function exists(path: string) {
-  try { await lstat(path); return true } catch (error) {
+  try {
+    await lstat(path)
+    return true
+  } catch (error) {
     if (missing(error)) return false
     throw error
   }
 }
 async function entries(path: string) {
-  try { return await readdir(path, { withFileTypes: true }) } catch (error) {
+  try {
+    return await readdir(path, { withFileTypes: true })
+  } catch (error) {
     if (missing(error)) return []
     throw error
   }
@@ -61,7 +76,8 @@ async function checkPath(root: string, target: string) {
 async function checkTree(root: string, target: string) {
   await checkPath(root, target)
   for (const entry of await entries(target)) {
-    if (entry.isSymbolicLink()) throw new Error("Local chat cleanup refuses linked paths.")
+    if (entry.isSymbolicLink())
+      throw new Error("Local chat cleanup refuses linked paths.")
     if (entry.isDirectory()) await checkTree(root, join(target, entry.name))
   }
 }
@@ -73,7 +89,11 @@ async function readRun(workflow: string, id: string): Promise<LocalRun | null> {
   await checkPath(workflow, path)
   try {
     const value = await json(path)
-    if (value.runId !== id || typeof value.status !== "string" || typeof value.workflowName !== "string")
+    if (
+      value.runId !== id ||
+      typeof value.status !== "string" ||
+      typeof value.workflowName !== "string"
+    )
       throw new Error("Unrecognized local workflow record.")
     return value as LocalRun
   } catch (error) {
@@ -84,17 +104,29 @@ async function readRun(workflow: string, id: string): Promise<LocalRun | null> {
 
 /** Acquire a separate pruning lock; never touch Eve's locks for live workflows. */
 async function acquireLock(path: string) {
-  try { return await open(path, "wx") } catch (error) {
+  try {
+    return await open(path, "wx")
+  } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error
     try {
       const lock = await json(path)
-      if (typeof lock.pid !== "number" || !Number.isInteger(lock.pid) || lock.pid <= 0) return null
-      try { process.kill(lock.pid, 0); return null } catch (probe) {
+      if (
+        typeof lock.pid !== "number" ||
+        !Number.isInteger(lock.pid) ||
+        lock.pid <= 0
+      )
+        return null
+      try {
+        process.kill(lock.pid, 0)
+        return null
+      } catch (probe) {
         if ((probe as NodeJS.ErrnoException).code !== "ESRCH") return null
       }
       await unlink(path)
       return await open(path, "wx")
-    } catch { return null }
+    } catch {
+      return null
+    }
   }
 }
 
@@ -113,7 +145,8 @@ export async function pruneLocalChatHistory({
   const empty = { chatsRemoved: 0, runsRemoved: 0, tracesRemoved: 0 }
   if (!localChatCleanupEnabled(env)) return empty
   for (const id of [currentSessionId, endedSessionId])
-    if (id !== undefined && !RUN_ID.test(id)) throw new Error("Invalid local chat ID.")
+    if (id !== undefined && !RUN_ID.test(id))
+      throw new Error("Invalid local chat ID.")
   const app = await realpath(resolve(appRoot))
   const eve = join(app, ".eve")
   const workflow = join(eve, ".workflow-data")
@@ -121,8 +154,13 @@ export async function pruneLocalChatHistory({
   await checkPath(app, workflow)
   await checkPath(app, traces)
   if (!(await exists(join(workflow, "runs")))) return empty
-  if ((await readFile(join(workflow, "version.txt"), "utf8")).trim() !== LOCAL_WORLD)
-    throw new Error("Review local chat cleanup for this Workflow World version.")
+  if (
+    (await readFile(join(workflow, "version.txt"), "utf8")).trim() !==
+    LOCAL_WORLD
+  )
+    throw new Error(
+      "Review local chat cleanup for this Workflow World version."
+    )
 
   const lockPath = join(eve, "local-chat-retention.lock")
   await checkPath(app, lockPath)
@@ -145,7 +183,8 @@ export async function pruneLocalChatHistory({
     const runs = new Map<string, LocalRun>()
     for (const entry of await entries(join(workflow, "runs"))) {
       const id = entry.name.replace(/\.json$/, "")
-      if (!entry.isFile() || !entry.name.endsWith(".json") || !RUN_ID.test(id)) continue
+      if (!entry.isFile() || !entry.name.endsWith(".json") || !RUN_ID.test(id))
+        continue
       const run = await readRun(workflow, id)
       if (run) runs.set(id, run)
     }
@@ -155,7 +194,10 @@ export async function pruneLocalChatHistory({
       for (const key of ["$rootRunId", "$parentRunId"]) {
         const linked = run.attributes?.[key]
         if (!linked || linked === run.runId) continue
-        if (!runs.has(linked)) { unresolved.add(run.runId); continue }
+        if (!runs.has(linked)) {
+          unresolved.add(run.runId)
+          continue
+        }
         edges.get(run.runId)!.add(linked)
         edges.get(linked)!.add(run.runId)
       }
@@ -174,17 +216,33 @@ export async function pruneLocalChatHistory({
         ids.push(next)
         queue.push(...edges.get(next)!)
       }
-      const roots = ids.map((key) => runs.get(key)!).filter((run) =>
-        run.workflowName === "workflow//eve//workflowEntry" &&
-        run.attributes?.["$eve.type"] === "session" &&
-        run.attributes?.["$eve.trigger"] === "channel:eve" &&
-        !run.attributes?.["$parentRunId"]
+      const roots = ids
+        .map((key) => runs.get(key)!)
+        .filter(
+          (run) =>
+            run.workflowName === "workflow//eve//workflowEntry" &&
+            run.attributes?.["$eve.type"] === "session" &&
+            run.attributes?.["$eve.trigger"] === "channel:eve" &&
+            !run.attributes?.["$parentRunId"]
+        )
+      if (
+        !roots.length ||
+        ids.some(
+          (key) =>
+            key === currentSessionId ||
+            unresolved.has(key) ||
+            !TERMINAL.has(runs.get(key)!.status)
+        )
       )
-      if (!roots.length || ids.some((key) => key === currentSessionId || unresolved.has(key) || !TERMINAL.has(runs.get(key)!.status))) continue
-      const ended = Math.max(...roots.map((run) => Date.parse(run.completedAt ?? "")))
+        continue
+      const ended = Math.max(
+        ...roots.map((run) => Date.parse(run.completedAt ?? ""))
+      )
       if (Number.isFinite(ended)) finished.push({ ids, ended })
     }
-    finished.sort((a, b) => b.ended - a.ended || b.ids[0].localeCompare(a.ids[0]))
+    finished.sort(
+      (a, b) => b.ended - a.ended || b.ids[0].localeCompare(a.ids[0])
+    )
     const discard = finished.slice(LOCAL_CHAT_BUFFER)
     const removed = new Set(discard.flatMap((chat) => chat.ids))
     if (!removed.size) return empty
@@ -199,18 +257,24 @@ export async function pruneLocalChatHistory({
     const streamIds = async (id: string) => {
       const path = join(workflow, "streams", "runs", `${id}.json`)
       await checkPath(workflow, path)
-      try { return [...(await readFile(path, "utf8")).matchAll(/strm_[A-Za-z0-9_-]+/g)].map((match) => match[0]) } catch (error) {
+      try {
+        return [
+          ...(await readFile(path, "utf8")).matchAll(/strm_[A-Za-z0-9_-]+/g),
+        ].map((match) => match[0])
+      } catch (error) {
         if (missing(error)) return []
         throw error
       }
     }
     const protectedStreams = new Set<string>()
-    for (const id of runs.keys()) if (!removed.has(id))
-      for (const stream of await streamIds(id)) protectedStreams.add(stream)
+    for (const id of runs.keys())
+      if (!removed.has(id))
+        for (const stream of await streamIds(id)) protectedStreams.add(stream)
     for (const id of removed) {
       for (const folder of ["events", "steps"]) await add(workflow, folder, id)
-      for (const stream of await streamIds(id)) if (!protectedStreams.has(stream))
-        await add(workflow, "streams", "chunks", stream)
+      for (const stream of await streamIds(id))
+        if (!protectedStreams.has(stream))
+          await add(workflow, "streams", "chunks", stream)
       await add(workflow, "streams", "runs", `${id}.json`)
     }
     for (const folder of ["hooks", "hooks/by-run", "waits"]) {
@@ -220,7 +284,13 @@ export async function pruneLocalChatHistory({
         const path = join(workflow, folder, entry.name)
         await checkPath(workflow, path)
         const record = await json(path)
-        if (typeof record.runId === "string" && removed.has(record.runId)) await add(workflow, folder, entry.name)
+        const owner =
+          typeof record.runId === "string"
+            ? record.runId
+            : folder === "hooks/by-run"
+              ? entry.name.match(/^(wrun_[0-9A-Z]{26})-/)?.[1]
+              : undefined
+        if (owner && removed.has(owner)) await add(workflow, folder, entry.name)
       }
     }
 
@@ -228,13 +298,21 @@ export async function pruneLocalChatHistory({
     for (const trace of await entries(traces)) {
       if (!trace.isDirectory() || !TRACE_ID.test(trace.name)) continue
       const associated = new Set<string>()
-      for (const run of runs.values()) if (run.attributes?.["$eve.trace_id"] === trace.name) associated.add(run.runId)
+      for (const run of runs.values())
+        if (run.attributes?.["$eve.trace_id"] === trace.name)
+          associated.add(run.runId)
       const tracePath = join(traces, trace.name)
       await checkTree(traces, tracePath)
       for (const span of await entries(join(tracePath, "segments"))) {
         if (!span.isFile() || !span.name.endsWith(".json")) continue
-        const raw = await readFile(join(tracePath, "segments", span.name), "utf8")
-        for (const match of raw.matchAll(/"stringValue"\s*:\s*"(wrun_[0-9A-Z]{26})"/g)) associated.add(match[1])
+        const raw = await readFile(
+          join(tracePath, "segments", span.name),
+          "utf8"
+        )
+        for (const match of raw.matchAll(
+          /"stringValue"\s*:\s*"(wrun_[0-9A-Z]{26})"/g
+        ))
+          associated.add(match[1])
       }
       if (associated.size && [...associated].every((id) => removed.has(id))) {
         await add(traces, trace.name)
@@ -252,11 +330,18 @@ export async function pruneLocalChatHistory({
     }
     for (const id of removed) {
       const run = await readRun(workflow, id)
-      if (!run || !TERMINAL.has(run.status)) throw new Error("Local chat changed during cleanup.")
+      if (!run || !TERMINAL.has(run.status))
+        throw new Error("Local chat changed during cleanup.")
     }
-    for (const target of targets) await rm(target, { recursive: true, force: true })
-    for (const id of removed) await rm(join(workflow, "runs", `${id}.json`), { force: true })
-    return { chatsRemoved: discard.length, runsRemoved: removed.size, tracesRemoved }
+    for (const target of targets)
+      await rm(target, { recursive: true, force: true })
+    for (const id of removed)
+      await rm(join(workflow, "runs", `${id}.json`), { force: true })
+    return {
+      chatsRemoved: discard.length,
+      runsRemoved: removed.size,
+      tracesRemoved,
+    }
   } finally {
     await lock.close()
     await unlink(lockPath)

@@ -115,6 +115,18 @@ import styles from "./admin.module.css"
 
 type Agent = UseEveAgentReturn
 
+function requestLocalHistoryCleanup(
+  input: {
+    currentSessionId?: string
+    endedSessionId?: string
+  } = {}
+) {
+  if (process.env.NODE_ENV !== "development") return
+  void cleanupLocalChatHistory(input).catch(() => {
+    console.warn("Couldn't request local chat history cleanup.")
+  })
+}
+
 // Shown at the top of every chat, as if the assistant opened it. The owner is
 // the only admin; the agent's instructions know not to greet a second time.
 const WELCOME =
@@ -207,9 +219,7 @@ export function AdminChat({
         onSession(session.sessionId)
         if (lastHistorySession.current !== session.sessionId) {
           lastHistorySession.current = session.sessionId
-          void cleanupLocalChatHistory({ currentSessionId: session.sessionId }).catch(() => {
-            console.warn("Couldn't request local chat history cleanup.")
-          })
+          requestLocalHistoryCleanup({ currentSessionId: session.sessionId })
         }
       }
     },
@@ -262,9 +272,7 @@ export function AdminChat({
     setSessionError(null)
     try {
       await chatSession.current.retire(agent.end, (id) => {
-        void cleanupLocalChatHistory(id ? { endedSessionId: id } : {}).catch(() => {
-          console.warn("Couldn't request local chat history cleanup.")
-        })
+        requestLocalHistoryCleanup(id ? { endedSessionId: id } : {})
         if (mediaDraft.current) {
           // Auxiliary cleanup mustn't hold the retired chat open. Its server
           // hook and database fallback also cover a disconnected browser.
