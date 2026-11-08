@@ -5,11 +5,30 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { ProductCatalog } from "@/components/product-catalog"
 import { getCatalogTaxonomy, getProducts } from "@/lib/catalog-data"
+import { StructuredData } from "@/components/structured-data"
+import { breadcrumbs, pageMetadata } from "@/lib/seo"
 import styles from "@/components/product-catalog.module.css"
 
-export const metadata: Metadata = { title: "Shop" }
-
 type SearchParams = Promise<{ brand?: string | string[] }>
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: SearchParams
+}): Promise<Metadata> {
+  const { brand: value } = await searchParams
+  const slug = Array.isArray(value) ? value[0] : value
+  const { brands } = await getCatalogTaxonomy()
+  const brand = brands.find((item) => item.slug === slug)
+  if (slug && !brand) notFound()
+  return pageMetadata({
+    title: brand ? `${brand.name} Hi-Fi` : "Shop",
+    description: brand
+      ? `Explore ${brand.name} at Q Audio in Cambridge, Massachusetts. Browse the collection and contact us for personal advice.`
+      : "Explore new, demo, and used hi-fi equipment at Q Audio in Cambridge, Massachusetts. Browse turntables, speakers, amplifiers, and more.",
+    path: brand ? `/shop?brand=${encodeURIComponent(brand.slug)}` : "/shop",
+  })
+}
 
 // The brand filter comes from the URL, so the listing renders per request
 // (from cached data) inside Suspense while the shell around it prerenders.
@@ -36,6 +55,20 @@ async function ShopListing({ searchParams }: { searchParams: SearchParams }) {
   const products = await getProducts(undefined, brand?.slug)
   return (
     <>
+      <StructuredData
+        value={breadcrumbs([
+          { name: "Home", path: "/" },
+          { name: "Shop", path: "/shop" },
+          ...(brand
+            ? [
+                {
+                  name: brand.name,
+                  path: `/shop?brand=${encodeURIComponent(brand.slug)}`,
+                },
+              ]
+            : []),
+        ])}
+      />
       <div className={styles.heading}>
         {brand?.logo_path ? (
           <Image

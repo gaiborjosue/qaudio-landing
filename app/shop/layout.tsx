@@ -1,5 +1,6 @@
 import { Suspense } from "react"
 import { SiteHeader } from "@/components/site-header"
+import { FooterBar } from "@/components/footer-bar"
 
 export default function ShopLayout({
   children,
@@ -16,6 +17,7 @@ export default function ShopLayout({
       {/* The slot renders nothing visible; Suspense keeps its (intercepted,
           URL-dependent) route out of the prerendered shell. */}
       <Suspense>{modal}</Suspense>
+      <FooterBar />
     </>
   )
 }

@@ -1,10 +1,11 @@
 import Link from "next/link"
 import styles from "./footer-bar.module.css"
+import { INSTAGRAM_URL } from "@/lib/site"
 
-// Add published menu pages here; keep navigation hidden until they exist.
-const footerLinks: { href: string; label: string }[] = []
-
-const INSTAGRAM_URL = "https://www.instagram.com/qaudiohifi"
+const footerLinks = [
+  { href: "/in-store-policies", label: "Policies" },
+  { href: "/how-to-order", label: "How to order" },
+]
 
 export function FooterBar() {
   return (

@@ -6,13 +6,15 @@ import { DealCard } from "@/components/deal-card"
 import { FooterBar } from "@/components/footer-bar"
 import { SiteNav } from "@/components/site-nav"
 import { getDeals } from "@/lib/deals-data"
+import { pageMetadata } from "@/lib/seo"
 import styles from "./qdeal.module.css"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "QDeal",
+  path: "/qdeal",
   description:
     "Closeouts, price matching and honest advice from Q Audio in Cambridge, Massachusetts.",
-}
+})
 
 export default async function QDealPage() {
   const deals = await getDeals()

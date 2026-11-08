@@ -1,0 +1,55 @@
+.page {
+  --section-title-inset: 44px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100svh;
+}
+
+.main {
+  flex: 1;
+  width: min(100% - 44px, 680px);
+  margin: 0 auto;
+  padding-top: 148px;
+  font-size: 15px;
+  line-height: 1.8;
+}
+
+.main h1 {
+  margin: 0 0 48px;
+  font-family: var(--font-display), Arial, sans-serif;
+  font-size: clamp(40px, 5vw, 64px);
+  font-weight: 500;
+  letter-spacing: -0.055em;
+  line-height: 1.1;
+}
+
+.main h2 {
+  margin: 36px 0 12px;
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.025em;
+}
+
+.main section {
+  scroll-margin-top: 110px;
+}
+
+.main a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.main a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
+}
+
+.main ul {
+  padding-left: 22px;
+}
+
+@media (max-width: 640px) {
+  .main {
+    padding-top: 112px;
+  }
+}

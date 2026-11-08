@@ -2,6 +2,7 @@ import "server-only"
 import { cacheLife, cacheTag } from "next/cache"
 import {
   NEWS_PAGE_SIZE,
+  NEWS_ARCHIVE_PAGE_SIZE,
   type NewsBlock,
   type NewsCover,
   type NewsImage,
@@ -245,7 +246,7 @@ async function fetchPostRow(slug: string) {
   const { data, error } = await publicSupabase()
     .from("news_posts")
     .select(
-      "id, slug, title, excerpt, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at"
+      "id, slug, title, excerpt, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at, updated_at"
     )
     .eq("slug", slug)
     .maybeSingle()
@@ -262,5 +263,57 @@ export async function getNewsPost(slug: string): Promise<NewsPost | null> {
   const body = Array.isArray(row.body)
     ? row.body.map(toBlock).filter((block) => block !== null)
     : []
-  return { ...summary, body }
+  return {
+    ...summary,
+    body,
+    publishedAt: row.published_at!,
+    modifiedAt: row.updated_at,
+  }
+}
+
+/** A server-rendered archive page; the existing feed still scrolls progressively. */
+export async function getNewsArchivePage(page: number): Promise<NewsPage> {
+  "use cache"
+  cacheNews()
+  const offset = (page - 1) * NEWS_ARCHIVE_PAGE_SIZE
+  const { data, error } = await publicSupabase()
+    .from("news_posts")
+    .select(
+      "id, slug, title, excerpt, cover_path, cover_width, cover_height, cover_alt, cover_fit, published_at"
+    )
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .order("published_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + NEWS_ARCHIVE_PAGE_SIZE)
+  if (error) throw new Error(`News archive: ${error.message}`)
+  const rows = data.slice(0, NEWS_ARCHIVE_PAGE_SIZE)
+  const last = rows.at(-1)
+  return {
+    items: rows.map(toSummary).filter((item) => item !== null),
+    nextCursor:
+      data.length > NEWS_ARCHIVE_PAGE_SIZE && last ? encodeCursor(last) : null,
+  }
+}
+
+export async function getNewsSitemapEntries() {
+  "use cache"
+  cacheNews()
+  const { data, error } = await publicSupabase()
+    .from("news_posts")
+    .select("slug, updated_at, cover_path, cover_width, cover_height")
+    .eq("status", "published")
+    .lte("published_at", new Date().toISOString())
+    .order("slug")
+  if (error) throw new Error(`News sitemap: ${error.message}`)
+  return data
+    .filter(
+      (post) =>
+        isMediaPath(post.cover_path) && post.cover_width && post.cover_height
+    )
+    .map((post) => ({
+      slug: post.slug,
+      modifiedAt: post.updated_at,
+      images: [mediaUrl(post.cover_path!)],
+    }))
 }

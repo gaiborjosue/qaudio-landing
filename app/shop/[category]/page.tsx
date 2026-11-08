@@ -5,6 +5,8 @@ import { Suspense } from "react"
 import { ProductCatalog } from "@/components/product-catalog"
 import { UsedEquipmentPromise } from "@/components/used-equipment-promise"
 import { getCatalogTaxonomy, getProducts } from "@/lib/catalog-data"
+import { StructuredData } from "@/components/structured-data"
+import { breadcrumbs, pageMetadata } from "@/lib/seo"
 import styles from "@/components/product-catalog.module.css"
 
 export async function generateStaticParams() {
@@ -20,9 +22,12 @@ export async function generateMetadata({
   const { category: slug } = await params
   const { categories } = await getCatalogTaxonomy()
   const category = categories.find((item) => item.slug === slug)
-  // Unknown slugs show the not-found page (streamed, so it can't set the
-  // title itself).
-  return { title: category ? category.name : "Page not found" }
+  if (!category) notFound()
+  return pageMetadata({
+    title: category.name,
+    description: `Explore ${category.name.toLowerCase()} at Q Audio, an independent hi-fi store in Cambridge, Massachusetts. Call or visit for personal advice.`,
+    path: `/shop/${category.slug}`,
+  })
 }
 
 export default function CategoryPage({
@@ -53,6 +58,13 @@ async function CategoryListing({
   const products = await getProducts(category.slug)
   return (
     <>
+      <StructuredData
+        value={breadcrumbs([
+          { name: "Home", path: "/" },
+          { name: "Shop", path: "/shop" },
+          { name: category.name, path: `/shop/${category.slug}` },
+        ])}
+      />
       <div className={styles.heading}>
         <Image
           className={styles.categoryArt}

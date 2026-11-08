@@ -1,13 +1,21 @@
 import type { Metadata } from "next"
 import { Suspense } from "react"
 import { getProduct } from "@/lib/catalog-data"
+import { pageMetadata, productDescription } from "@/lib/seo"
 
 type Props = { params: Promise<{ slug: string }> }
 
 // The tab title follows the open product.
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct((await params).slug)
-  return product ? { title: product.name } : {}
+  return product
+    ? pageMetadata({
+        title: product.name,
+        description: productDescription(product),
+        path: `/products/${product.slug}`,
+        image: product.images[0],
+      })
+    : {}
 }
 
 // Intercepts /products/<slug> when it's opened from a shop list, so the list

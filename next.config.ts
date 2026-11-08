@@ -1,6 +1,8 @@
 import type { NextConfig } from "next"
 import { withEve } from "eve/next"
 import { configureDevModelPath } from "./scripts/dev-model-path.mjs"
+import { indexingHeaders } from "./lib/indexing"
+import { SITE_ORIGIN } from "./lib/site"
 
 const devCodex = configureDevModelPath()
 if (devCodex) console.info(`[dev:model] Local ChatGPT CLI: ${devCodex}`)
@@ -80,6 +82,10 @@ const nextConfig: NextConfig = {
   },
   headers: async () => [
     { source: "/:path*", headers: securityHeaders },
+    ...indexingHeaders(
+      process.env.VERCEL_ENV === "preview" ||
+        process.env.VERCEL_ENV === "development"
+    ),
     {
       source: "/admin/:path*",
       headers: [
@@ -94,6 +100,18 @@ const nextConfig: NextConfig = {
   // Keep the live qaudio.com address working; the menu links straight to the
   // Used Equipment category.
   redirects: async () => [
+    {
+      source: "/:path*",
+      has: [{ type: "host", value: "qaudio.com" }],
+      destination: `${SITE_ORIGIN}/:path*`,
+      permanent: true,
+    },
+    { source: "/search", destination: "/shop", permanent: true },
+    {
+      source: "/mail-order-policies",
+      destination: "/in-store-policies#shipping",
+      permanent: true,
+    },
     { source: "/used", destination: "/shop/used-equipment", permanent: true },
     // Observed on the live Webflow homepage/sitemap, archived on the migration
     // SSD. Alias only the renamed source slugs; taxonomy still lives in the DB.

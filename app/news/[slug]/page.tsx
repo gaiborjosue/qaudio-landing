@@ -6,6 +6,8 @@ import { Suspense } from "react"
 import { NewsBody } from "@/components/news-body"
 import { formatNewsDate } from "@/lib/news"
 import { getNewsPost, getNewsSlugs } from "@/lib/news-data"
+import { StructuredData } from "@/components/structured-data"
+import { articleStructuredData, breadcrumbs, pageMetadata } from "@/lib/seo"
 import styles from "../news.module.css"
 
 type Props = { params: Promise<{ slug: string }> }
@@ -19,10 +21,21 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const post = await getNewsPost((await params).slug)
-  if (!post) return { title: "Page not found" }
-  return {
+  if (!post) notFound()
+  const metadata = pageMetadata({
     title: post.title,
     description: post.excerpt,
+    path: `/news/${post.slug}`,
+    image: post.cover,
+  })
+  return {
+    ...metadata,
+    openGraph: {
+      ...metadata.openGraph,
+      type: "article",
+      publishedTime: post.publishedAt,
+      modifiedTime: post.modifiedAt,
+    },
   }
 }
 
@@ -42,6 +55,14 @@ async function NewsArticle({ params }: Props) {
 
   return (
     <article aria-labelledby="article-title">
+      <StructuredData value={articleStructuredData(post)} />
+      <StructuredData
+        value={breadcrumbs([
+          { name: "Home", path: "/" },
+          { name: "News", path: "/news" },
+          { name: post.title, path: `/news/${post.slug}` },
+        ])}
+      />
       <Link className={styles.back} href="/news">
         <span aria-hidden="true">←</span>All news
       </Link>

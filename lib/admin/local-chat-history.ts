@@ -147,7 +147,11 @@ export async function pruneLocalChatHistory({
   for (const id of [currentSessionId, endedSessionId])
     if (id !== undefined && !RUN_ID.test(id))
       throw new Error("Invalid local chat ID.")
-  const app = await realpath(resolve(appRoot))
+  // Cleanup is guarded to local development above. Never trace this tree into
+  // a hosted bundle, which could otherwise include local chats and assets.
+  const app = await realpath(
+    /* turbopackIgnore: true */ resolve(/* turbopackIgnore: true */ appRoot)
+  )
   const eve = join(app, ".eve")
   const workflow = join(eve, ".workflow-data")
   const traces = join(eve, "traces", "v1")

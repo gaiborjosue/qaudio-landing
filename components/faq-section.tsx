@@ -199,18 +199,6 @@ const FAQS: Faq[] = [
     ),
   },
   {
-    question:
-      "I have a random question. May I ask you about something? This is probably a very long question, because we really need to test if the multi-line question feature works on all devices.",
-    answer: (
-      <>
-        <p>We have a random answer. Go ahead.</p>
-        <p>
-          Call us at <Phone />
-        </p>
-      </>
-    ),
-  },
-  {
     question: "I can't make it to the store. Can you ship equipment to me?",
     answer: (
       <>

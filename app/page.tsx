@@ -12,6 +12,8 @@ import { ContactFooter } from "@/components/contact-footer"
 import { SiteNav } from "@/components/site-nav"
 import { getStoreSchedule } from "@/lib/store-hours-data"
 import { getCatalogTaxonomy } from "@/lib/catalog-data"
+import { StructuredData } from "@/components/structured-data"
+import { storeStructuredData } from "@/lib/seo"
 
 export default async function Page() {
   const [schedule, { categories, brands }] = await Promise.all([
@@ -20,6 +22,7 @@ export default async function Page() {
   ])
   return (
     <main id="top" className="landing">
+      <StructuredData value={storeStructuredData(schedule)} />
       <a className="skip-link" href="#hero-title">
         Skip to content
       </a>

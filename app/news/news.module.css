@@ -30,6 +30,45 @@
   line-height: 1;
 }
 
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 40px 0 64px;
+  font-size: 12px;
+}
+
+.pagination a,
+.archive a {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.pagination a:focus-visible,
+.archive a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 6px;
+}
+
+.archive {
+  padding: 0;
+  list-style: none;
+}
+
+.archive li {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 16px;
+  padding: 20px 0;
+  border-bottom: 1px solid #dedede;
+  line-height: 1.6;
+}
+
+.archive time {
+  color: #656565;
+  font-size: 11px;
+}
+
 /* Article pages */
 .back {
   display: inline-block;

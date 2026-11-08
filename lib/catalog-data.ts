@@ -145,3 +145,20 @@ export async function getProductSlugs(): Promise<string[]> {
   if (error) throw new Error(`Product slugs: ${error.message}`)
   return data.map(({ slug }) => slug)
 }
+
+/** Published sitemap entries use real modification dates, under the catalog tag. */
+export async function getProductSitemapEntries() {
+  "use cache"
+  cacheCatalog()
+  const { data, error } = await publicSupabase()
+    .from("products")
+    .select("slug, updated_at, product_images(path)")
+    .eq("status", "published")
+    .order("slug")
+  if (error) throw new Error(`Product sitemap: ${error.message}`)
+  return data.map((product) => ({
+    slug: product.slug,
+    modifiedAt: product.updated_at,
+    images: product.product_images.map(({ path }) => mediaUrl(path)),
+  }))
+}

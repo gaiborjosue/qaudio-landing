@@ -1,14 +1,17 @@
 import type { Metadata } from "next"
+import Link from "next/link"
 import { CableHeading } from "@/components/cable-heading"
 import { NewsFeed } from "@/components/news-feed"
 import { getNewsCount, getNewsPage } from "@/lib/news-data"
+import { pageMetadata } from "@/lib/seo"
 import styles from "./news.module.css"
 
-export const metadata: Metadata = {
+export const metadata: Metadata = pageMetadata({
   title: "News",
+  path: "/news",
   description:
     "Arrivals, promotions and listening notes from Q Audio in Cambridge, Massachusetts.",
-}
+})
 
 export default async function NewsPage() {
   const [firstPage, total] = await Promise.all([
@@ -27,6 +30,9 @@ export default async function NewsPage() {
         total={total}
         labelledBy="news-title"
       />
+      <nav className={styles.pagination} aria-label="News archive">
+        <Link href="/news/archive">Archive</Link>
+      </nav>
     </>
   )
 }

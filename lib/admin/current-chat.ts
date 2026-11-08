@@ -51,7 +51,8 @@ export function currentChatEnvironment(
     return `preview:${digest(`${env.VERCEL_PROJECT_ID ?? ""}:${branch}`)}`
   }
   if (env.NODE_ENV === "development" || env.VERCEL_ENV === "development")
-    return `local:${digest(`${hostname()}:${resolve(localRoot)}`)}`
+    // Development identity only; this path is not a deployable file dependency.
+    return `local:${digest(`${hostname()}:${resolve(/* turbopackIgnore: true */ localRoot)}`)}`
   return "production"
 }
 

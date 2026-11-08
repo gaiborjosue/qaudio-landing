@@ -1,5 +1,6 @@
 import assert from "node:assert/strict"
 import { registerHooks } from "node:module"
+import { existsSync } from "node:fs"
 import test from "node:test"
 import { unstable_getResponseFromNextConfig } from "next/experimental/testing/server.js"
 import { hasLocalMatch } from "next/dist/shared/lib/match-local-pattern.js"
@@ -12,6 +13,10 @@ registerHooks({
         url: "data:text/javascript,export const withEve = config => config",
         shortCircuit: true,
       }
+    if (specifier.startsWith(".") && context.parentURL?.endsWith(".ts")) {
+      const url = new URL(`${specifier}.ts`, context.parentURL)
+      if (existsSync(url)) return { url: url.href, shortCircuit: true }
+    }
     return next(specifier, context)
   },
 })

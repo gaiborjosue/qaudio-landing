@@ -5,8 +5,13 @@ import { notFound } from "next/navigation"
 import { Suspense } from "react"
 import { ProductPageView } from "@/components/product-catalog"
 import { getProduct, getProductSlugs } from "@/lib/catalog-data"
-import type { Product } from "@/lib/catalog"
-import { storeClock } from "@/lib/store-hours"
+import { StructuredData } from "@/components/structured-data"
+import {
+  breadcrumbs,
+  pageMetadata,
+  productDescription,
+  productStructuredData,
+} from "@/lib/seo"
 import styles from "@/components/product-catalog.module.css"
 
 type Props = { params: Promise<{ slug: string }> }
@@ -21,19 +26,13 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const product = await getProduct((await params).slug)
-  if (!product) return { title: "Page not found" }
-  const image = product.images[0]
-  return {
+  if (!product) notFound()
+  return pageMetadata({
     title: product.name,
-    description: product.short_description,
-    openGraph: {
-      title: product.name,
-      description: product.short_description,
-      images: image
-        ? [{ url: image.src, width: image.width, height: image.height }]
-        : [],
-    },
-  }
+    description: productDescription(product),
+    path: `/products/${product.slug}`,
+    image: product.images[0],
+  })
 }
 
 // The App Shell (header and menu) is shared by every product, so the
@@ -64,43 +63,18 @@ async function ProductContent({ params }: Props) {
         {product.category.name}
       </Link>
       <ProductPageView product={product} />
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: productJsonLd(product) }}
+      <StructuredData value={productStructuredData(product)} />
+      <StructuredData
+        value={breadcrumbs([
+          { name: "Home", path: "/" },
+          { name: "Shop", path: "/shop" },
+          {
+            name: product.category.name,
+            path: `/shop/${product.category.slug}`,
+          },
+          { name: product.name, path: `/products/${product.slug}` },
+        ])}
       />
     </>
   )
-}
-
-// schema.org Product data for search results. Escaping "<" keeps the JSON
-// from closing the script element early.
-function productJsonLd(product: Product) {
-  return JSON.stringify({
-    "@context": "https://schema.org",
-    "@type": "Product",
-    name: product.name,
-    description: product.short_description,
-    image: product.images.map((image) => image.src),
-    ...(product.brand && {
-      brand: { "@type": "Brand", name: product.brand.name },
-    }),
-    category: product.category.name,
-    ...(product.price_cents !== null &&
-      product.availability !== "sold" &&
-      product.availability !== "unavailable" && {
-        offers: {
-          "@type": "Offer",
-          price: (product.price_cents / 100).toFixed(2),
-          priceCurrency: "USD",
-          // A sale price holds until its last day (store time).
-          ...(product.sale && {
-            priceValidUntil: storeClock(new Date(product.sale.ends_at)).date,
-          }),
-          itemCondition:
-            product.condition === "New"
-              ? "https://schema.org/NewCondition"
-              : "https://schema.org/UsedCondition",
-        },
-      }),
-  }).replace(/</g, "\\u003c")
 }

@@ -34,6 +34,9 @@ export type NewsPost = {
   title: string
   /** Publication date in store time, "YYYY-MM-DD". */
   date: string
+  /** Original timestamps for article metadata; display dates remain store-time. */
+  publishedAt: string
+  modifiedAt: string
   excerpt: string
   cover: NewsCover
   body: NewsBlock[]
@@ -52,6 +55,27 @@ export type NewsPage = {
 }
 
 export const NEWS_PAGE_SIZE = 3
+export const NEWS_ARCHIVE_PAGE_SIZE = 24
+
+export function newsArchiveHref(page: number) {
+  return page === 1 ? "/news/archive" : `/news/archive?page=${page}`
+}
+
+/** Invalid or out-of-range archive queries must never become indexable pages. */
+export function newsArchivePage(
+  value: string | string[] | undefined,
+  total: number
+) {
+  if (
+    value !== undefined &&
+    (typeof value !== "string" || !/^[1-9]\d{0,5}$/.test(value))
+  )
+    return null
+  const page = value === undefined ? 1 : Number(value)
+  return page <= Math.max(1, Math.ceil(total / NEWS_ARCHIVE_PAGE_SIZE))
+    ? page
+    : null
+}
 
 /** Most cards one feed request may return, e.g. when restoring a long feed. */
 export const NEWS_MAX_PAGE_SIZE = 24

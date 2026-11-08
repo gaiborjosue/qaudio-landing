@@ -1,8 +1,10 @@
 # Q Audio
 
-A monochrome hi-fi storefront prototype for Q Audio in Cambridge, Massachusetts.
+The Q Audio storefront and admin workspace for Cambridge, Massachusetts, built with Next.js, Supabase, and Eve.
 
 Run `pnpm install`, configure `.env` or `.env.local` from `.env.example`, then start with `pnpm dev` (Node 24+). Exact `DEBUG_DEV_MODE=true` uses the local ChatGPT subscription for Terra and Sol; other values and production use OpenRouter. Haiku and image generation retain their existing providers and keys.
+
+For local production verification, `pnpm build:local` builds both Eve and Next; then run `pnpm start:check --port 3100` for storefront/API smoke checks with the agent transport disabled, preserving development chat storage. Vercel keeps the normal `pnpm build` command. The [demo and production runbook](docs/launch.md) covers SEO, indexing, old URLs, account configuration, owner review, and the approved domain switch. Run `pnpm test:seo` for indexing/schema checks and `pnpm check:launch --url http://localhost:3100 --mode demo --crawl` against the running build. Full agent acceptance belongs on the hosted demo.
 
 On Windows, dev startup discovers the newest versioned native Codex desktop CLI under `%LOCALAPPDATA%/OpenAI/Codex/bin` and puts its directory first on the dev process's PATH before Eve starts. This survives desktop updates and new terminals without a hard-coded version folder or a global PATH change. Startup prints the selected executable. If signed out, invoke that executable with `login` (PowerShell: `& '<printed path>' login`), then restart dev. An already-running Eve broker needs a full Ctrl+C / `pnpm dev` restart to pick up the new path; a browser refresh cannot replace its cached credential-store choice. When the versioned desktop CLI is absent, the existing PATH and Eve's own `/login` remain available; the legacy unversioned desktop binary is ignored because it can lack Eve's app-server protocol. Credentials stay with Codex/Eve, and authentication errors never fall back to a paid API. Run `pnpm test:dev` to check CLI discovery and its development-only guards.
 

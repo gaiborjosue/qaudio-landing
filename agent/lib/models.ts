@@ -19,8 +19,7 @@ const useChatGpt =
   process.env.EVE_DEV === "1" &&
   process.env.NODE_ENV !== "production"
 
-// Haiku and non-development OpenAI models use OpenRouter (OPENROUTER_API_KEY).
-// Only the routing decision uses AI Gateway through eve's auto().
+// Jev, Haiku, and non-development OpenAI models share OPENROUTER_API_KEY.
 const openrouter = createOpenRouter({
   compatibility: "strict",
   headers: { "X-Title": "Q Audio admin" },
@@ -75,9 +74,9 @@ export const fastModel = wrapLanguageModel({
 export const MAIN_CONTEXT_TOKENS = 200_000
 export const FAST_CONTEXT_TOKENS = 1_000_000
 
-/** Decide once per turn; never route generation through Gateway model strings. */
+/** Decide once per turn through OpenRouter; keep generation providers explicit. */
 export const mainChatModel = auto({
-  model: "typesafe-ai/jev",
+  model: openrouter.evaluationModel("typesafe/jev-1.14"),
   fallback: {
     model: mainModel,
     reasoning: "medium",
