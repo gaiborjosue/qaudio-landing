@@ -30,7 +30,13 @@ import {
 } from "eve/react"
 import { idle, turn, type SessionView } from "eve/events"
 import { refreshSiteContent, saveArrangedOrder } from "@/app/admin/actions"
-import { cleanupLocalChatHistory } from "@/app/admin/chat-actions"
+import {
+  cleanupLocalChatHistory,
+  prepareAdminChat,
+  resetAdminChat,
+  recoverAdminChat,
+} from "@/app/admin/chat-actions"
+import type { CurrentChat, CurrentChatInput } from "@/lib/admin/current-chat"
 import { ApprovalActions } from "@/components/admin/approval-actions"
 import {
   ChangePreview,
@@ -149,6 +155,8 @@ async function accessToken() {
 export function AdminChat({
   active,
   sessionId,
+  chatGeneration,
+  chatRestoreFailed,
   preview,
   actionsTarget,
   onSession,
@@ -156,6 +164,8 @@ export function AdminChat({
 }: {
   active: boolean
   sessionId?: string
+  chatGeneration: string | null
+  chatRestoreFailed: boolean
   /** Current site data the change previews build on. */
   preview: PreviewData
   /** Where New chat goes: the workspace header. */
@@ -168,6 +178,13 @@ export function AdminChat({
   const router = useRouter()
   const [, startRefresh] = useTransition()
   const chatSession = useRef(new ChatSession(sessionId))
+  const currentChatGeneration = useRef(chatGeneration)
+  const [restoring, setRestoring] = useState(
+    Boolean(sessionId) || chatRestoreFailed
+  )
+  const recoveryInput = useRef<CurrentChatInput | null>(null)
+  const recovery = useRef<Promise<CurrentChat> | null>(null)
+  const restorationDone = useRef(false)
   const lastHistorySession = useRef(sessionId)
   const cacheRefresh = useRef(new ChatCacheRefresh())
   const [sessionError, setSessionError] = useState<string | null>(null)
@@ -196,7 +213,6 @@ export function AdminChat({
     auth: { bearer: accessToken },
     ...(sessionId && {
       initialSession: { sessionId, streamIndex: 0 },
-      resume: true,
     }),
     // One person works in this chat, so nothing starts work here but this
     // page: the stream stays open only while the agent works, and every
@@ -205,16 +221,35 @@ export function AdminChat({
     followWhile: (view) => !idle(view),
     // Every message says which flows are on; the eve channel tells the
     // model and checks them (lib/admin/flows.ts). Answers keep their turn's.
-    prepareSend: (input) =>
-      input.message !== undefined
-        ? {
-            ...input,
-            clientContext: {
-              flows: enabledFlows(flows),
-              mediaSession: mediaDraftId(),
-            },
-          }
-        : input,
+    prepareSend: async (input) => {
+      if (input.message === undefined) return input
+      if (recoveryInput.current) {
+        const recovered = await (recovery.current ??
+          recoverAdminChat(recoveryInput.current))
+        currentChatGeneration.current = recovered.generation
+        if (recovered.session_id) {
+          window.location.replace(
+            `/admin/s/${encodeURIComponent(recovered.session_id)}`
+          )
+          throw new Error("Opening your current chat.")
+        }
+        recoveryInput.current = null
+        recovery.current = null
+      }
+      const current = await prepareAdminChat({
+        generation: currentChatGeneration.current,
+        sessionId: chatSession.current.sessionId ?? null,
+      })
+      currentChatGeneration.current = current.generation
+      return {
+        ...input,
+        clientContext: {
+          chatGeneration: current.generation,
+          flows: enabledFlows(flows),
+          mediaSession: mediaDraftId(),
+        },
+      }
+    },
     onSessionChange(session) {
       chatSession.current.sessionId = session?.sessionId
       if (session) {
@@ -233,8 +268,62 @@ export function AdminChat({
     onFinish: refreshSavedContent,
   })
 
+  // Resume once on mount. A failed history read resets the local store and
+  // its pointer, never replays input or treats a later tool/send error as a load failure.
+  const { resume, newSession } = agent
+  useEffect(() => {
+    if (restorationDone.current || (!sessionId && !chatRestoreFailed)) return
+    let active = true
+    const fallback = async () => {
+      if (!active) return
+      const input = recoveryInput.current ?? {
+        generation: currentChatGeneration.current,
+        sessionId: sessionId ?? null,
+      }
+      if (!recoveryInput.current) {
+        recoveryInput.current = input
+        newSession()
+        chatSession.current.sessionId = undefined
+        onSession(undefined)
+      }
+      const pending = recovery.current ?? recoverAdminChat(input)
+      recovery.current = pending
+      try {
+        const recovered = await pending
+        if (!active) return
+        currentChatGeneration.current = recovered.generation
+        recoveryInput.current = null
+        if (recovered.session_id)
+          window.location.replace(
+            `/admin/s/${encodeURIComponent(recovered.session_id)}`
+          )
+      } catch {
+        // Keep the blank chat. The first send retries pointer recovery if offline.
+      } finally {
+        if (recovery.current === pending) recovery.current = null
+      }
+    }
+    const restore = async () => {
+      try {
+        if (chatRestoreFailed) await fallback()
+        else await resume()
+      } catch {
+        await fallback()
+      } finally {
+        if (active) {
+          restorationDone.current = true
+          setRestoring(false)
+        }
+      }
+    }
+    void restore()
+    return () => {
+      active = false
+    }
+  }, [sessionId, chatRestoreFailed, resume, newSession, onSession])
+
   const busy = agent.status === "busy"
-  const resuming = agent.status === "resuming"
+  const resuming = agent.status === "resuming" || restoring
   const { send: sendMessage, respond: sendAnswer, cancel } = agent
   const send = useCallback<Agent["send"]>(
     (message, options) =>
@@ -273,7 +362,12 @@ export function AdminChat({
     setEnding(true)
     setSessionError(null)
     try {
-      await chatSession.current.retire(agent.end, (id) => {
+      await chatSession.current.retire(agent.end, async (id) => {
+        const current = await resetAdminChat({
+          generation: currentChatGeneration.current,
+          sessionId: id ?? null,
+        })
+        currentChatGeneration.current = current.generation
         requestLocalHistoryCleanup(id ? { endedSessionId: id } : {})
         if (mediaDraft.current) {
           // Auxiliary cleanup mustn't hold the retired chat open. Its server

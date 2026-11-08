@@ -55,11 +55,15 @@ function setAddress(path: string) {
 export function AdminShell({
   initialView,
   sessionId,
+  chatGeneration,
+  chatRestoreFailed,
   preview,
   metadata,
 }: {
   initialView: AdminView
   sessionId?: string
+  chatGeneration: string | null
+  chatRestoreFailed: boolean
   /** Current site data the chat's previews and the Products tab build on. */
   preview: PreviewData
   metadata: MetadataData
@@ -182,6 +186,8 @@ export function AdminShell({
           <AdminChat
             active={view === "chat"}
             sessionId={sessionId}
+            chatGeneration={chatGeneration}
+            chatRestoreFailed={chatRestoreFailed}
             preview={preview}
             actionsTarget={chatActions}
             onSession={onSession}

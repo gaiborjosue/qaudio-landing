@@ -8,6 +8,9 @@ import {
 } from "@/lib/admin/data"
 import { requireAdmin } from "@/lib/admin/auth"
 import { getCatalogTaxonomy } from "@/lib/catalog-data"
+import { redirect } from "next/navigation"
+import { readCurrentChat } from "@/lib/admin/current-chat"
+import { sessionSupabase } from "@/lib/supabase/server"
 
 /**
  * The signed-in admin's workspace: the chat with the site agent and the
@@ -22,22 +25,44 @@ export async function AdminWorkspace({
   view?: AdminView
   sessionId?: Promise<string>
 }) {
-  await requireAdmin()
-  const [id, schedule, taxonomy, products, news, deals, metadata] =
-    await Promise.all([
-      sessionId,
-      getAdminSchedule(),
-      getCatalogTaxonomy(),
-      getAdminProducts(),
-      getAdminNews(),
-      getAdminDeals(),
-      getAdminMetadata(),
-    ])
+  const admin = await requireAdmin()
+  const [
+    requestedId,
+    savedChat,
+    schedule,
+    taxonomy,
+    products,
+    news,
+    deals,
+    metadata,
+  ] = await Promise.all([
+    sessionId,
+    readCurrentChat(await sessionSupabase(), admin.id).then(
+      (chat) => ({ chat, failed: false }),
+      () => ({ chat: null, failed: true })
+    ),
+    getAdminSchedule(),
+    getCatalogTaxonomy(),
+    getAdminProducts(),
+    getAdminNews(),
+    getAdminDeals(),
+    getAdminMetadata(),
+  ])
+  const currentChat = savedChat.chat
+  if (!requestedId && view === "chat" && currentChat?.session_id)
+    redirect(`/admin/s/${encodeURIComponent(currentChat.session_id)}`)
+  const id = requestedId ?? currentChat?.session_id ?? undefined
   return (
     <AdminShell
       key={id ?? "new"}
       initialView={view}
       sessionId={id}
+      chatGeneration={
+        !requestedId || requestedId === currentChat?.session_id
+          ? (currentChat?.generation ?? null)
+          : null
+      }
+      chatRestoreFailed={savedChat.failed && !requestedId}
       preview={{ schedule, taxonomy, products, news, deals }}
       metadata={metadata}
     />

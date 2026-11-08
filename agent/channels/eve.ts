@@ -17,6 +17,7 @@ import {
 } from "../../lib/admin/flows"
 import { photoContext, photoLines } from "../../lib/admin/photo-lines"
 import { readStoryEdit } from "../../lib/admin/story-edits"
+import { CHAT_GENERATION_ATTRIBUTE } from "../../lib/admin/current-chat"
 import {
   MEDIA_SESSION_ATTRIBUTE,
   UUID,
@@ -90,6 +91,12 @@ export default eveChannel({
   onMessage: async (ctx, message) => {
     const auth = defaultEveAuth(ctx)
     const clientContext = ctx.eve.clientContext
+    const chatGeneration =
+      clientContext &&
+      typeof clientContext === "object" &&
+      !Array.isArray(clientContext)
+        ? (clientContext as Record<string, unknown>).chatGeneration
+        : undefined
     const mediaSession =
       clientContext &&
       typeof clientContext === "object" &&
@@ -127,6 +134,10 @@ export default eveChannel({
         attributes: {
           ...auth.attributes,
           [FLOW_ATTRIBUTE]: flows,
+          ...(typeof chatGeneration === "string" &&
+            UUID.test(chatGeneration) && {
+              [CHAT_GENERATION_ATTRIBUTE]: chatGeneration,
+            }),
           ...(typeof mediaSession === "string" &&
             UUID.test(mediaSession) && {
               [MEDIA_SESSION_ATTRIBUTE]: mediaSession,

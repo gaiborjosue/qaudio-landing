@@ -3,6 +3,13 @@
 import { after } from "next/server"
 import { z } from "zod"
 import { getAdmin } from "@/lib/admin/auth"
+import { sessionSupabase } from "@/lib/supabase/server"
+import {
+  currentChatInputSchema,
+  prepareCurrentChat,
+  resetCurrentChat,
+  recoverCurrentChat,
+} from "@/lib/admin/current-chat"
 import {
   localChatCleanupEnabled,
   pruneLocalChatHistory,
@@ -15,6 +22,28 @@ const cleanupInput = z
     endedSessionId: sessionId.optional(),
   })
   .strict()
+
+export async function prepareAdminChat(input: unknown) {
+  if (!(await getAdmin())) throw new Error("Sign in as an admin.")
+  const parsed = currentChatInputSchema.safeParse(input)
+  if (!parsed.success) throw new Error("Invalid current chat request.")
+  return prepareCurrentChat(await sessionSupabase(), parsed.data)
+}
+
+export async function resetAdminChat(input: unknown) {
+  if (!(await getAdmin())) throw new Error("Sign in as an admin.")
+  const parsed = currentChatInputSchema.safeParse(input)
+  if (!parsed.success) throw new Error("Invalid current chat request.")
+  return resetCurrentChat(await sessionSupabase(), parsed.data)
+}
+
+export async function recoverAdminChat(input: unknown) {
+  const admin = await getAdmin()
+  if (!admin) throw new Error("Sign in as an admin.")
+  const parsed = currentChatInputSchema.safeParse(input)
+  if (!parsed.success) throw new Error("Invalid current chat request.")
+  return recoverCurrentChat(await sessionSupabase(), admin.id, parsed.data)
+}
 
 /** Local run files only; cleanup failure never prevents a fresh chat. */
 export async function cleanupLocalChatHistory(input: unknown = {}) {

@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_chat_sessions: {
+        Row: {
+          environment: string
+          generation: string
+          session_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          environment: string
+          generation?: string
+          session_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          environment?: string
+          generation?: string
+          session_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       catalog_brands: {
         Row: {
           featured: boolean
@@ -567,6 +591,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_chat_session: {
+        Args: {
+          p_environment: string
+          p_event: string
+          p_generation?: string
+          p_session_id?: string
+        }
+        Returns: {
+          generation: string
+          session_id: string
+        }[]
+      }
       attach_media_uploads: {
         Args: { p_paths: string[]; p_session: string }
         Returns: undefined
