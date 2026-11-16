@@ -186,9 +186,10 @@ export function AdminShell({
               <button
                 type="submit"
                 className={`${styles.quiet} ${styles.signOut}`}
+                aria-label="Sign out"
               >
                 <LogOut size={15} aria-hidden="true" />
-                Sign out
+                <span className={styles.mobileButtonLabel}>Sign out</span>
               </button>
             </form>
           </div>

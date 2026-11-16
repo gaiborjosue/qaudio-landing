@@ -1,6 +1,6 @@
 import { calls, parts, runs, type SessionView } from "eve/events"
 import { flowById, flowProgressSchema, FLOW_TOOL, type Flow } from "./flows"
-import { FAST_MODEL_ID, validCost } from "./model-cost"
+import { validCost } from "./model-cost"
 import { previewToolName } from "./tool-names"
 
 type Message = {
@@ -140,12 +140,12 @@ export function responseUsage(
         !scope.calls.has(call.callId)
       )
         continue
-      // Parent-session runs exclude child runs. Delegated usage is counted
-      // once on the owning call; copywriter is fixed to Haiku, with no tools.
+      // Parent-session runs exclude child runs. Count their cost once, but
+      // don't label historical calls with today's configured model.
       if (call.usage)
         add(
           call.name === "copywriter"
-            ? FAST_MODEL_ID
+            ? "Copywriter (model unavailable)"
             : "Delegated models (attribution unavailable)",
           call.usage.costUsd
         )

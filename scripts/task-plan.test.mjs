@@ -591,6 +591,7 @@ test("Sol routing uses medium effort, shares the local ChatGPT guard, and never 
       assert.equal(mainChatModel.options[PLAN_MODEL_ID].reasoning, "medium")
       assert.equal(mainChatModel.options[MAIN_MODEL_ID].model, mainModel)
       assert.equal(mainChatModel.options[FAST_MODEL_ID].model, fastModel)
+      assert.equal(mainChatModel.options[FAST_MODEL_ID].reasoning, "xhigh")
       assert.match(
         mainChatModel.options[FAST_MODEL_ID].description,
         /Google Business/
@@ -620,7 +621,7 @@ test("Sol routing uses medium effort, shares the local ChatGPT guard, and never 
   }
 })
 
-test("the production Sol request uses OpenRouter medium reasoning and preserves its cost receipt", async () => {
+test("production requests use Sol medium and Ember xhigh through OpenRouter with cost receipts", async () => {
   const keys = ["NODE_ENV", "DEBUG_DEV_MODE", "EVE_DEV", "OPENROUTER_API_KEY"]
   const original = Object.fromEntries(
     keys.map((key) => [key, process.env[key]])
@@ -634,12 +635,13 @@ test("the production Sol request uses OpenRouter medium reasoning and preserves 
     process.env.OPENROUTER_API_KEY = "test-only-placeholder"
     globalThis.fetch = async (url, init) => {
       assert.equal(new URL(url).hostname, "openrouter.ai")
-      requests.push(JSON.parse(init.body))
+      const request = JSON.parse(init.body)
+      requests.push(request)
       return Response.json({
         id: "test",
         object: "chat.completion",
         created: 1,
-        model: PLAN_MODEL_ID,
+        model: request.model,
         choices: [
           {
             index: 0,
@@ -655,7 +657,7 @@ test("the production Sol request uses OpenRouter medium reasoning and preserves 
         },
       })
     }
-    const { planModel } =
+    const { planModel, fastModel } =
       await import("../agent/lib/models.ts?case=production-request")
     const result = await planModel.doGenerate({
       prompt: [
@@ -679,6 +681,15 @@ test("the production Sol request uses OpenRouter medium reasoning and preserves 
     )
     assert.equal(result.providerMetadata.openrouter.usage.cost, 0.002)
     assert.equal(result.providerMetadata.gateway.cost, 0.002)
+    const fastResult = await fastModel.doGenerate({
+      prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
+    })
+    assert.equal(requests.length, 2)
+    assert.equal(requests[1].model, "meta/muse-ember")
+    assert.equal(requests[1].reasoning.effort, "xhigh")
+    assert.equal(requests[1].usage.include, true)
+    assert.equal(fastResult.providerMetadata.openrouter.usage.cost, 0.002)
+    assert.equal(fastResult.providerMetadata.gateway.cost, 0.002)
   } finally {
     globalThis.fetch = originalFetch
     for (const [key, value] of Object.entries(original)) {

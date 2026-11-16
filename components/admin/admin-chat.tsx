@@ -462,6 +462,7 @@ export function AdminChat({
             <HaloButton
               type="button"
               buttonClassName={styles.newChat}
+              aria-label={ending ? "Starting…" : "New chat"}
               leadingIcon={<Plus size={15} aria-hidden="true" />}
               isLoading={ending}
               loadingText="Starting…"

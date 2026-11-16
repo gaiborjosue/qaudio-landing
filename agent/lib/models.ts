@@ -19,7 +19,7 @@ const useChatGpt =
   process.env.EVE_DEV === "1" &&
   process.env.NODE_ENV !== "production"
 
-// Jev, Haiku, and non-development OpenAI models share OPENROUTER_API_KEY.
+// Jev, Ember, and non-development OpenAI models share OPENROUTER_API_KEY.
 const openrouter = createOpenRouter({
   compatibility: "strict",
   headers: { "X-Title": "Q Audio admin" },
@@ -61,6 +61,7 @@ export const planModel = wrapLanguageModel({
 /** Simple chat and reads, copywriting, and context compaction. */
 export const fastModel = wrapLanguageModel({
   model: openrouter.chat(FAST_MODEL_ID, {
+    reasoning: { effort: "xhigh" },
     usage: { include: true },
   }),
   middleware: openRouterUsage,
@@ -97,6 +98,7 @@ export const mainChatModel = auto({
     },
     [FAST_MODEL_ID]: {
       model: fastModel,
+      reasoning: "xhigh",
       modelContextWindowTokens: MAIN_CONTEXT_TOKENS,
       description:
         "Use only for clearly simple, read-only work: greetings, thanks, explanations or summaries of information already in the conversation, and a bounded lookup or listing in one domain (hours, products, news, deals, Instagram, or Google Business). Loading the domain skill and discovering its read tool is fine. Do not use for 3 or more distinct requested tasks, changes, follow-ups supplying details for unfinished work, image interpretation, research, or complex tool workflows. Read current site data when needed; never rely on memory for it.",
