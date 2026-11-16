@@ -27,7 +27,7 @@ const { responseUsage, formatCost } =
   await import("../lib/admin/response-usage.ts")
 const { openRouterUsage } = await import("../agent/lib/model-usage.ts")
 const MAIN = "openai/gpt-6.1-terra"
-const FAST = "anthropic/claude-haiku-5.5"
+const FAST = "meta/muse-ember"
 const GPT = "openai/gpt-image-2.6-flare"
 const FLUX = "black-forest-labs/flux-3-image-klein"
 
@@ -141,7 +141,22 @@ test("a response includes all its model steps and delegated copywriting, excludi
   assert.equal(formatCost(result.totalUsd), "$0.0150")
   assert.deepEqual(result.models, [
     { model: MAIN, costUsd: 0.01, partial: false },
-    { model: FAST, costUsd: 0.005, partial: false },
+    { model: FAST, costUsd: 0.002, partial: false },
+    { model: "Copywriter (model unavailable)", costUsd: 0.003, partial: false },
+  ])
+})
+
+test("historical Haiku receipts keep their model when the configured copywriter changes", () => {
+  const oldModel = "anthropic/claude-haiku-5.5"
+  const view = viewOf(
+    [{ turn: "old", model: oldModel, cost: 0.002 }],
+    [{ turn: "old", id: "copy", name: "copywriter", cost: 0.003 }]
+  )
+  const result = responseUsage("old", [message("old", "old")], view)
+  assert.equal(formatCost(result.totalUsd), "$0.0050")
+  assert.deepEqual(result.models, [
+    { model: oldModel, costUsd: 0.002, partial: false },
+    { model: "Copywriter (model unavailable)", costUsd: 0.003, partial: false },
   ])
 })
 
