@@ -47,3 +47,7 @@ next-env.d.ts
 # Python migration-tool bytecode; exports/assets/reports live on the SSD.
 __pycache__/
 *.pyc
+
+
+.vscode/
+.codegraph/
