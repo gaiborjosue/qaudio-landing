@@ -1635,6 +1635,18 @@
 }
 
 @media (max-width: 640px) {
+  .signOut,
+  .newChat:not([aria-busy="true"]) {
+    width: 38px;
+    height: 38px;
+    justify-content: center;
+    padding: 0;
+  }
+  .mobileButtonLabel,
+  /* Halo's animated label sits beside the leading icon inside its content span. */
+  .newChat:not([aria-busy="true"]) > span > span {
+    display: none;
+  }
   .switch {
     width: 100%;
     max-width: 380px;
