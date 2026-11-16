@@ -1,0 +1,14 @@
+# Upload source only. Local Eve state can contain private conversations.
+.eve
+.output
+.next
+node_modules
+.git
+.vercel
+coverage
+supabase/.temp
+.env*
+!.env.example
+*.tsbuildinfo
+*.log
+.DS_Store

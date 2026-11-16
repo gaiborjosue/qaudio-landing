@@ -12,6 +12,16 @@ export function FooterBar() {
     <div className={styles.bar}>
       <div className={styles.content}>
         <small>© 1980 – 2026 Q Audio, Cambridge, MA</small>
+        <small className={styles.credit}>
+          Webmaster:{" "}
+          <a
+            href="https://edwardgaibor.me"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Edward Gaibor
+          </a>
+        </small>
         <div className={styles.end}>
           {footerLinks.length > 0 ? (
             <nav aria-label="Footer">
