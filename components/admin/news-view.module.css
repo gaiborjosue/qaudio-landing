@@ -15,6 +15,16 @@
   min-width: 220px;
   font-weight: 400;
 }
+/* Only the selected status control carries the post's color cue. */
+.table .published {
+  background: #e8f6ec;
+}
+.table .scheduled {
+  background: #e9f1fe;
+}
+.table .draft {
+  background: #f0f0f0;
+}
 .date {
   color: #4a4a4a;
   font-size: 13px;

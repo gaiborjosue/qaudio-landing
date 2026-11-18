@@ -481,6 +481,7 @@ export function NewsView({
                               ) : (
                                 <Choice
                                   small
+                                  className={styles[status]}
                                   value={status}
                                   options={statusOptions(post, now)}
                                   aria-label={`Status of ${post.title}`}
