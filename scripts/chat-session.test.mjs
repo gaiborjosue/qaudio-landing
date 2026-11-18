@@ -1,7 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { Client, SessionNotActiveError } from "eve/client"
-import { ChatSession } from "../lib/admin/chat-session.ts"
+import { ClientError, Client, SessionNotActiveError } from "eve/client"
+import {
+  ChatSession,
+  isDormantDevelopmentEnd,
+} from "../lib/admin/chat-session.ts"
 
 const deferred = () => Promise.withResolvers()
 const ended = (sessionId = "original") => Promise.resolve({ sessionId })
@@ -78,6 +81,41 @@ test("a definite inactive session and an unused chat can reset safely", async ()
     () => resets++
   )
   assert.equal(resets, 2)
+})
+
+test("a dormant local run is left behind only when the caller allows it", async () => {
+  const dormant = () =>
+    Promise.reject(
+      new ClientError(
+        500,
+        JSON.stringify({ error: "Failed to end the session.", ok: false })
+      )
+    )
+  const other = () =>
+    Promise.reject(
+      new ClientError(500, JSON.stringify({ error: "Failed to compact." }))
+    )
+  let resets = 0
+  const session = new ChatSession("dormant")
+  await assert.rejects(session.retire(dormant, () => resets++))
+  await assert.rejects(
+    session.retire(other, () => resets++, undefined, isDormantDevelopmentEnd)
+  )
+  assert.equal(resets, 0)
+  await session.retire(
+    dormant,
+    (id) => {
+      assert.equal(id, "dormant")
+      resets++
+    },
+    undefined,
+    isDormantDevelopmentEnd
+  )
+  assert.equal(resets, 1)
+  assert.equal(
+    isDormantDevelopmentEnd(new Error("Failed to end the session.")),
+    false
+  )
 })
 
 test("a delayed photo send from the retired chat cannot create a new session", async () => {

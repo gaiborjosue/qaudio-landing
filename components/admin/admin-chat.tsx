@@ -116,7 +116,7 @@ import { photoLine } from "@/lib/admin/photo-lines"
 import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
 import { responseUsage } from "@/lib/admin/response-usage"
-import { ChatSession } from "@/lib/admin/chat-session"
+import { ChatSession, isDormantDevelopmentEnd } from "@/lib/admin/chat-session"
 import { newsChatMessage, type NewsChatStart } from "@/lib/admin/news"
 import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
@@ -377,29 +377,38 @@ export function AdminChat({
     setEnding(true)
     setSessionError(null)
     try {
-      await chatSession.current.retire(agent.end, async (id) => {
-        const current = await resetAdminChat({
-          generation: currentChatGeneration.current,
-          sessionId: id ?? null,
-        })
-        currentChatGeneration.current = current.generation
-        requestLocalHistoryCleanup(id ? { endedSessionId: id } : {})
-        if (mediaDraft.current) {
-          // Auxiliary cleanup mustn't hold the retired chat open. Its server
-          // hook and database fallback also cover a disconnected browser.
-          void mediaSessionEvent(
-            browserSupabase(),
-            mediaDraft.current,
-            id ?? null,
-            "ended"
-          ).catch(() => {})
-        }
-        agent.newSession()
-        mediaDraft.current = ""
-        setDraft("")
-        setVoiceReset(chatSession.current.version)
-        onSession(undefined)
-      })
+      await chatSession.current.retire(
+        agent.end,
+        async (id) => {
+          const current = await resetAdminChat({
+            generation: currentChatGeneration.current,
+            sessionId: id ?? null,
+          })
+          currentChatGeneration.current = current.generation
+          requestLocalHistoryCleanup(id ? { endedSessionId: id } : {})
+          if (mediaDraft.current) {
+            // Auxiliary cleanup mustn't hold the retired chat open. Its server
+            // hook and database fallback also cover a disconnected browser.
+            void mediaSessionEvent(
+              browserSupabase(),
+              mediaDraft.current,
+              id ?? null,
+              "ended"
+            ).catch(() => {})
+          }
+          agent.newSession()
+          mediaDraft.current = ""
+          setDraft("")
+          setVoiceReset(chatSession.current.version)
+          onSession(undefined)
+        },
+        undefined,
+        // After eve dev restarts, the old chat's run can't be ended; start
+        // a new one anyway rather than getting stuck on it.
+        process.env.NODE_ENV === "development"
+          ? isDormantDevelopmentEnd
+          : undefined
+      )
     } catch {
       setSessionError("Couldn’t end this chat. Try New chat again.")
     } finally {

@@ -1,6 +1,20 @@
-import { SessionNotActiveError } from "eve/client"
+import { ClientError, SessionNotActiveError } from "eve/client"
 
 type End = () => Promise<{ sessionId: string }>
+
+/**
+ * A restarted `eve dev` leaves earlier local runs dormant: ending one fails
+ * on the server (DevelopmentRunUnavailableError) and reaches the browser
+ * only as the end route's plain 500. Nothing on that server can retire the
+ * run any more, so local development may start a new chat without it.
+ */
+export function isDormantDevelopmentEnd(error: unknown) {
+  return (
+    ClientError.is(error) &&
+    error.status === 500 &&
+    error.message === "Failed to end the session."
+  )
+}
 
 /** Coordinates accepted input with an explicit, confirmed session retirement. */
 export class ChatSession {
@@ -40,7 +54,9 @@ export class ChatSession {
   async retire(
     end: End,
     reset: (sessionId?: string) => void | Promise<void>,
-    timeoutMs = 20_000
+    timeoutMs = 20_000,
+    /** Errors that mean the session can't be ended and may be left behind. */
+    abandon: (error: unknown) => boolean = () => false
   ) {
     if (this.retirement) return
     const controller = new AbortController()
@@ -64,7 +80,10 @@ export class ChatSession {
             throw new Error("A different chat was ended.")
         } catch (error) {
           // A definite inactive response is safe; network failures aren't.
-          if (!SessionNotActiveError.is(error) || error.retryable) throw error
+          if (abandon(error)) {
+            // Left behind on purpose (a dormant local run).
+          } else if (!SessionNotActiveError.is(error) || error.retryable)
+            throw error
         }
       }
       signal.throwIfAborted()
