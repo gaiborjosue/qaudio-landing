@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { motion } from "motion/react"
 import { Plus, X } from "lucide-react"
@@ -26,6 +26,7 @@ import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import type { ProductFilters } from "@/lib/admin/product-filters"
 import { valuesFrom, valuesFromProduct } from "@/lib/admin/product-editor"
 import adminStyles from "./admin.module.css"
+import { toast } from "./admin-toast"
 import styles from "./products-view.module.css"
 
 /** The product the sheet shows: a new one, or a saved one by id. */
@@ -69,7 +70,6 @@ export function ProductsView({
   onDeleting: (id: string | null) => void
 }) {
   const router = useRouter()
-  const [notice, setNotice] = useState<string | null>(null)
   const newButton = useRef<HTMLButtonElement>(null)
   const [removing, startRemoving] = useTransition()
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -100,13 +100,6 @@ export function ProductsView({
   const [target, setTarget] = useState(liveTarget)
   if (liveTarget && liveTarget !== target) setTarget(liveTarget)
 
-  // A notice reads for a few seconds, then clears.
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 5000)
-    return () => window.clearTimeout(timer)
-  }, [notice])
-
   const finalFocus = () => (gone.current ? newButton.current : true)
 
   const confirmDelete = () => {
@@ -129,7 +122,7 @@ export function ProductsView({
         if (sheet?.mode === "edit" && sheet.id === target.id) onSheet(null)
         router.refresh()
       })
-      setNotice(`Deleted “${target.name}”.`)
+      toast("success", { title: "Deleted", description: `“${target.name}”` })
     })
   }
 
@@ -187,9 +180,6 @@ export function ProductsView({
           {drafts.length > 0 &&
             ` · ${drafts.length} draft${drafts.length === 1 ? "" : "s"}`}
         </p>
-        <p className={styles.notice} role="status">
-          {notice}
-        </p>
         <button
           ref={newButton}
           type="button"
@@ -219,10 +209,11 @@ export function ProductsView({
           onDeleting(product.id)
         }}
         onSaved={(names) =>
-          setNotice(
+          toast(
+            "success",
             names.length === 1
-              ? `Saved “${names[0]}”.`
-              : `Saved ${names.length} products.`
+              ? { title: "Saved", description: `“${names[0]}”` }
+              : { title: `Saved ${names.length} products` }
           )
         }
       />
@@ -258,13 +249,14 @@ export function ProductsView({
                 stickyActions
                 onSaved={(saved, input) => {
                   onSheet(null)
-                  setNotice(
-                    input.id
-                      ? `Saved “${input.name}”.`
+                  toast("success", {
+                    title: input.id
+                      ? "Saved"
                       : input.status === "published"
-                        ? `Added “${input.name}” to the shop.`
-                        : `Added “${input.name}” as a draft.`
-                  )
+                        ? "Added to the shop"
+                        : "Added as a draft",
+                    description: `“${input.name}”`,
+                  })
                 }}
                 onCancel={() => onSheet(null)}
                 onDelete={

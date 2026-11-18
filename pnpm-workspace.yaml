@@ -9,6 +9,11 @@ minimumReleaseAgeExclude:
   - eve@1.0.0-rc.1
   - '@zernio/node@0.2.1459'
 
+# Sileo's toasts share the app's Motion, so the admin's MotionConfig
+# (reduced motion) reaches them and Motion ships once.
+overrides:
+  sileo>motion: ^14.7.1
+
 ignoredOptionalDependencies:
   - "@mongodb-js/zstd"
   - "node-liblzma"

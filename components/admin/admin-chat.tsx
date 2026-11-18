@@ -120,6 +120,8 @@ import { ChatSession } from "@/lib/admin/chat-session"
 import { newsChatMessage, type NewsChatStart } from "@/lib/admin/news"
 import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
+import { toast } from "./admin-toast"
+import { useChatNotices } from "./chat-notices"
 import styles from "./admin.module.css"
 
 type Agent = UseEveAgentReturn
@@ -163,6 +165,7 @@ export function AdminChat({
   onSession,
   onProduct,
   onNewsChatReady,
+  onShowChat,
 }: {
   active: boolean
   sessionId?: string
@@ -177,6 +180,8 @@ export function AdminChat({
   /** Opens a product in the Products tab (the quick menus' Product items). */
   onProduct: (request: ProductRequest) => void
   onNewsChatReady: (start: NewsChatStart | null) => void
+  /** Switches to the chat, from a toast shown in another tab. */
+  onShowChat: () => void
 }) {
   const router = useRouter()
   const [, startRefresh] = useTransition()
@@ -209,7 +214,12 @@ export function AdminChat({
         if (await cacheRefresh.current.flush(refreshSiteContent))
           router.refresh()
       } catch {
-        setSessionError("Saved changes. Reload this chat to refresh the site.")
+        toast("warning", {
+          title: "Saved, but the site didn’t refresh",
+          description: "Reload to show the changes.",
+          button: { title: "Reload", onClick: () => window.location.reload() },
+          place: "chat",
+        })
       }
     })
   }, [cacheRefresh, router])
@@ -439,6 +449,18 @@ export function AdminChat({
     setDraft(text)
     field.current?.focus()
   }, [])
+
+  useChatNotices({
+    active,
+    busy,
+    resuming,
+    messages: agent.messages,
+    error: agent.error,
+    onOpen: () => {
+      onShowChat()
+      requestAnimationFrame(() => field.current?.focus())
+    },
+  })
 
   // Read again only when the conversation changes, not as the owner types;
   // the stepper redraws only when the run's steps change.
@@ -1447,7 +1469,6 @@ const Composer = memo(function Composer({
 }) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
-  const [notice, setNotice] = useState<string | null>(null)
   // Send pressed while photos are still uploading: it goes once they land.
   const [queued, setQueued] = useState(false)
   const sending = useRef(false)
@@ -1510,12 +1531,6 @@ const Composer = memo(function Composer({
     document.addEventListener("pointerdown", onPointerDown)
     return () => document.removeEventListener("pointerdown", onPointerDown)
   }, [panelOpen])
-
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 4000)
-    return () => clearTimeout(timer)
-  }, [notice])
 
   const update = (id: string, change: Partial<Photo>) =>
     setPhotos((current) =>
@@ -1584,9 +1599,11 @@ const Composer = memo(function Composer({
   /** Deletes a staged upload the owner took back, saying so if it fails. */
   const discard = (path: string) =>
     discardUpload(path).catch(() =>
-      setNotice(
-        "The photo was removed here but couldn’t be deleted from storage."
-      )
+      toast("warning", {
+        title: "Photo removed here",
+        description: "It couldn’t be deleted from storage.",
+        place: "chat",
+      })
     )
 
   // Pasted and dropped-on-the-composer files get the dropzone's checks.
@@ -1595,11 +1612,13 @@ const Composer = memo(function Composer({
     const images = files.filter((file) => file.type.startsWith("image/"))
     const fit = images.filter((file) => file.size <= PHOTO_MAX_BYTES)
     if (fit.length < files.length) {
-      setNotice(
-        images.length < files.length
-          ? "Only images can be added."
-          : `Photos over ${MAX_MB} MB were left out.`
-      )
+      toast("warning", {
+        title:
+          images.length < files.length
+            ? "Only images can be added"
+            : `Photos over ${MAX_MB} MB were left out`,
+        place: "chat",
+      })
     }
     upload(fit)
   }
@@ -1620,6 +1639,12 @@ const Composer = memo(function Composer({
   }
 
   const failed = photos.some((photo) => photo.status === "failed")
+  const photoFailed = () =>
+    toast("error", {
+      title: "A photo didn’t upload",
+      description: "Remove it, then add it again.",
+      place: "chat",
+    })
 
   /**
    * Sends the words and the photos, each as a `Photo uploaded:` line (the
@@ -1634,7 +1659,7 @@ const Composer = memo(function Composer({
     const queuedPhotos = photos
     if (!typed && queuedPhotos.length === 0) return
     if (failed) {
-      setNotice("A photo didn’t upload. Remove it, then add it again.")
+      photoFailed()
       return
     }
     sending.current = true
@@ -1649,7 +1674,7 @@ const Composer = memo(function Composer({
         if (!mounted.current) return
       }
       if (queuedPhotos.some((photo) => failedIds.current.has(photo.id))) {
-        setNotice("A photo didn’t upload. Remove it, then add it again.")
+        photoFailed()
         return
       }
       // Photos the owner took back while waiting have no landing.
@@ -1686,7 +1711,11 @@ const Composer = memo(function Composer({
           ...current,
         ])
         setText((current) => current || typed)
-        setNotice("Couldn’t send that. Try again.")
+        toast("error", {
+          title: "Couldn’t send that",
+          description: "Try again.",
+          place: "chat",
+        })
         return
       }
       // Sent photos belong to the conversation now; they're never
@@ -1752,11 +1781,6 @@ const Composer = memo(function Composer({
         {queued && (
           <p className={styles.hint} role="status">
             Sending once the photos finish uploading…
-          </p>
-        )}
-        {notice && (
-          <p className={styles.hint} role="status">
-            {notice}
           </p>
         )}
         {voice.error && (

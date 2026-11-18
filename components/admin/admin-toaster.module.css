@@ -1,0 +1,54 @@
+/* The admin's toasts (admin-toaster.tsx): Sileo's pill in the admin's
+   monochrome. Every state keeps the same white on black; its icon tells
+   them apart. */
+
+.toaster {
+  display: contents;
+  --sileo-state-success: #fff;
+  --sileo-state-error: #fff;
+  --sileo-state-warning: #fff;
+  --sileo-state-info: #fff;
+  --sileo-state-action: #fff;
+  --sileo-state-loading: #a3a3a3;
+}
+
+/* Over the sheets and dialogs, so a save from one is seen. */
+.toaster [data-sileo-viewport] {
+  z-index: 100;
+}
+.toaster [data-sileo-viewport][data-position^="top"] {
+  top: var(--toast-top, 0px);
+}
+
+.toaster [data-sileo-title] {
+  text-transform: none;
+  letter-spacing: -0.005em;
+}
+.toaster [data-sileo-description] {
+  color: rgb(255 255 255 / 0.72);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.toaster [data-sileo-button] {
+  width: fit-content;
+  color: #fff;
+  background-color: rgb(255 255 255 / 0.14);
+}
+.toaster [data-sileo-button]:hover {
+  background-color: rgb(255 255 255 / 0.22);
+}
+.toaster [data-sileo-button]:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+/* Focus rings the pill's head, inside the black, since the toast's own box
+   is wider than the pill. */
+.toaster [data-sileo-toast]:focus-visible {
+  outline: none;
+}
+.toaster [data-sileo-toast]:focus-visible [data-sileo-header] {
+  border-radius: 9999px;
+  outline: 2px solid #fff;
+  outline-offset: -4px;
+}

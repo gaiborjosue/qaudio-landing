@@ -66,6 +66,7 @@ import { SaleDateRange } from "./sale-date-range"
 import { ProductPhotos } from "./product-photos"
 import { ScoreSlider } from "./score-slider"
 import adminStyles from "./admin.module.css"
+import { toast } from "./admin-toast"
 import styles from "./product-editor.module.css"
 
 /** What a successful Save returns: the product's id, address, photo paths. */
@@ -557,11 +558,37 @@ export function ProductEditor({
       offered.length > 0 &&
         `${photos.length} ${photos.length === 1 ? "photo" : "photos"}`,
     ].filter(Boolean)
-    setPrefillNote(
-      filled.length
-        ? `Tune filled in ${filled.join(" and ")}. Accept or reject each one.`
-        : "Tune found nothing new on this page."
-    )
+    const note = filled.length
+      ? `Tune filled in ${filled.join(" and ")}. Accept or reject each one.`
+      : "Tune found nothing new on this page."
+    setPrefillNote(note)
+    return note
+  }
+
+  /**
+   * Reading the page takes a while, and the owner may scroll on meanwhile:
+   * if the address row is out of sight when Tune answers, a toast says so
+   * and takes them back to it.
+   */
+  const announceIfAway = (note: string) => {
+    const row = form.current?.querySelector<HTMLElement>("[data-review-link]")
+    if (!row) return
+    const observer = new IntersectionObserver(([entry]) => {
+      observer.disconnect()
+      if (!entry || entry.isIntersecting) return
+      toast("success", {
+        title: "Prefill ready",
+        description: note,
+        button: {
+          title: "Review",
+          onClick: () => {
+            row.scrollIntoView({ block: "center" })
+            row.querySelector("input")?.focus({ preventScroll: true })
+          },
+        },
+      })
+    })
+    observer.observe(row)
   }
 
   /** Prefill with Tune: read the manufacturer's page and suggest fields. */
@@ -615,7 +642,7 @@ export function ProductEditor({
           ?.querySelector<HTMLInputElement>("[data-review-link] input")
           ?.focus()
       }
-      applySuggestions(suggestions, before)
+      announceIfAway(applySuggestions(suggestions, before))
     } catch {
       if (!controller.signal.aborted) {
         setPrefillNote("")

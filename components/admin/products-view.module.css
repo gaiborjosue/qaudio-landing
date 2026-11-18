@@ -32,12 +32,6 @@
   align-self: center;
   margin-left: auto;
 }
-/* Saved, added, and deleted notes, beside the count. */
-.notice {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 500;
-}
 
 /* The sheet: a fixed header, then the editor's scrolling fields and bottom
    action row (product-editor.module.css).

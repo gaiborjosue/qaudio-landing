@@ -13,6 +13,7 @@ import { LayoutGroup, MotionConfig, motion } from "motion/react"
 import { LogOut } from "lucide-react"
 import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
+import { AdminToaster } from "@/components/admin/admin-toaster"
 import { ConnectionsMenu } from "@/components/admin/connections-menu"
 import { MetadataView } from "@/components/admin/metadata-view"
 import { NewsView } from "@/components/admin/news-view"
@@ -88,6 +89,7 @@ export function AdminShell({
   const [sheet, setSheet] = useState<ProductSheet | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
   const [newsChat, setNewsChat] = useState<NewsChatStart | null>(null)
+  const [topbar, setTopbar] = useState<HTMLElement | null>(null)
   const onNewsChatReady = useCallback((start: NewsChatStart | null) => {
     setNewsChat(() => start)
   }, [])
@@ -157,7 +159,7 @@ export function AdminShell({
   return (
     <MotionConfig reducedMotion="user">
       <div ref={root} className={styles.app}>
-        <header className={styles.topbar}>
+        <header ref={setTopbar} className={styles.topbar}>
           <div className={styles.brand}>
             <Image
               src="/qaudio-logo.svg"
@@ -212,6 +214,7 @@ export function AdminShell({
             onSession={onSession}
             onProduct={openProduct}
             onNewsChatReady={onNewsChatReady}
+            onShowChat={() => show("chat")}
           />
         </div>
         <div
@@ -261,6 +264,7 @@ export function AdminShell({
             active={view === "metadata"}
           />
         </div>
+        <AdminToaster header={topbar} />
       </div>
     </MotionConfig>
   )
