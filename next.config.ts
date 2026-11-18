@@ -63,6 +63,9 @@ const nextConfig: NextConfig = {
   // links prefetch each route's shared App Shell.
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    agentUpgrade: "security",
+  },
   cacheLife: {
     // Supabase content: refreshed in the background every 5 minutes, and
     // never expired, so a paused or unreachable project keeps serving the
