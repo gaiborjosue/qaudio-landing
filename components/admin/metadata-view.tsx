@@ -1,7 +1,6 @@
 "use client"
 
 import {
-  useEffect,
   useId,
   useMemo,
   useRef,
@@ -49,6 +48,7 @@ import {
   type MetadataDraft,
 } from "./metadata-editor"
 import admin from "./admin.module.css"
+import { toast } from "./admin-toast"
 import page from "./products-view.module.css"
 import styles from "./metadata.module.css"
 
@@ -85,7 +85,6 @@ export function MetadataView({
   } | null>(null)
   const [pending, startPending] = useTransition()
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const newButton = useRef<HTMLButtonElement>(null)
   const tabs = useRef<(HTMLButtonElement | null)[]>([])
   const rows = data[kind]
@@ -112,11 +111,6 @@ export function MetadataView({
     )
   )
   const singular = kind === "categories" ? "category" : "brand"
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 5000)
-    return () => window.clearTimeout(timer)
-  }, [notice])
   const edit = (row?: MetadataRow) => {
     const key = `${kind}:${row?.slug ?? "new"}`
     setDrafts((current) => ({
@@ -131,8 +125,8 @@ export function MetadataView({
         Object.entries(current).filter(([name]) => name !== key)
       )
     )
-  const refresh = (message: string) => {
-    setNotice(message)
+  const refresh = (title: string, name?: string) => {
+    toast("success", { title, description: name && `“${name}”` })
     router.refresh()
   }
   const target = deleting?.row
@@ -140,9 +134,6 @@ export function MetadataView({
     <div className={page.page}>
       <div className={page.head}>
         <h2>Metadata</h2>
-        <p role="status" className={page.notice}>
-          {notice}
-        </p>
         <button
           ref={newButton}
           type="button"
@@ -287,7 +278,7 @@ export function MetadataView({
                         ...current,
                         [kind]: undefined,
                       }))
-                      refresh("Order saved.")
+                      refresh("Order saved")
                     } catch {
                       setError("Couldn’t save the order. Try again.")
                     }
@@ -489,7 +480,7 @@ export function MetadataView({
                 const name = drafts[editing.key].name
                 forget(editing.key)
                 setEditing(null)
-                refresh(`Saved “${name}”.`)
+                refresh("Saved", name)
               }}
               onDiscard={() => {
                 const draft = drafts[editing.key]
@@ -555,7 +546,7 @@ export function MetadataView({
                     }
                     forget(`${deleting.kind}:${deleting.row.slug}`)
                     setDeleting(null)
-                    refresh(`Deleted “${deleting.row.name}”.`)
+                    refresh("Deleted", deleting.row.name)
                   } catch {
                     setError("Couldn’t delete this entry. Try again.")
                   }

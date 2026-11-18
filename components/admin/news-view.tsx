@@ -39,6 +39,7 @@ import type { NewsQuickEdit } from "@/lib/admin/schemas"
 import { formatStoreDateTime, toStoreDateTime } from "@/lib/admin/store-time"
 import { Choice } from "./choice"
 import adminStyles from "./admin.module.css"
+import { toast } from "./admin-toast"
 import page from "./products-view.module.css"
 import table from "./product-table.module.css"
 import styles from "./news-view.module.css"
@@ -132,7 +133,6 @@ export function NewsView({
   )
   const [saving, startSaving] = useTransition()
   const [saveError, setSaveError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
   const [sheet, setSheet] = useState<Sheet | null>(null)
   const [loaded, setLoaded] = useState<Loaded | null>(null)
   const [attempt, setAttempt] = useState(0)
@@ -155,13 +155,6 @@ export function NewsView({
     const timer = window.setInterval(update, 30_000)
     return () => window.clearInterval(timer)
   }, [active])
-
-  // A notice reads for a few seconds, then clears.
-  useEffect(() => {
-    if (!notice) return
-    const timer = window.setTimeout(() => setNotice(null), 5000)
-    return () => window.clearTimeout(timer)
-  }, [notice])
 
   // The sheet's post, read fresh each time it opens.
   const editId = sheet?.mode === "edit" ? sheet.id : null
@@ -237,10 +230,11 @@ export function NewsView({
         setDrafts({})
         router.refresh()
       })
-      setNotice(
+      toast(
+        "success",
         titles.length === 1
-          ? `Saved “${titles[0]}”.`
-          : `Saved ${titles.length} posts.`
+          ? { title: "Saved", description: `“${titles[0]}”` }
+          : { title: `Saved ${titles.length} posts` }
       )
     })
   }
@@ -288,12 +282,14 @@ export function NewsView({
         })
         router.refresh()
       })
-      setNotice(
-        `Deleted “${target.title}”.` +
+      toast("success", {
+        title: "Deleted",
+        description:
+          `“${target.title}”` +
           (result.cancelled
-            ? ` Cancelled ${plural(result.cancelled, "scheduled sale")}.`
-            : "")
-      )
+            ? `. Cancelled ${plural(result.cancelled, "scheduled sale")}.`
+            : ""),
+      })
     })
   }
 
@@ -387,9 +383,6 @@ export function NewsView({
         <p className={page.total}>
           {plural(posts.length, "post")}
           {unpublished > 0 && ` · ${unpublished} not live`}
-        </p>
-        <p className={page.notice} role="status">
-          {notice}
         </p>
         <div className={styles.headActions}>
           <HaloButton
@@ -657,11 +650,13 @@ export function NewsView({
                 storageKey={storageKey()}
                 onSaved={(input) => {
                   setSheet(null)
-                  setNotice(
-                    input.status === "published"
-                      ? `Added “${input.title}”.`
-                      : `Added “${input.title}” as a draft.`
-                  )
+                  toast("success", {
+                    title:
+                      input.status === "published"
+                        ? "Added"
+                        : "Added as a draft",
+                    description: `“${input.title}”`,
+                  })
                 }}
                 onCancel={() => setSheet(null)}
               />
@@ -675,7 +670,10 @@ export function NewsView({
                   storageKey={storageKey(ready.id)}
                   onSaved={(input) => {
                     setSheet(null)
-                    setNotice(`Saved “${input.title}”.`)
+                    toast("success", {
+                      title: "Saved",
+                      description: `“${input.title}”`,
+                    })
                   }}
                   onCancel={() => setSheet(null)}
                   onDelete={() => {

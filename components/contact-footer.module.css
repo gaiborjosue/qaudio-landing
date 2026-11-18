@@ -39,7 +39,7 @@
   display: grid;
   gap: 10px;
 }
-.details address span {
+.details address > div > span {
   font-size: 13px;
   color: #595959;
 }
@@ -50,6 +50,76 @@
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 6px;
+}
+.details .phone {
+  gap: 14px;
+}
+.details .phoneLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  font-size: clamp(30px, 3.4vw, 50px);
+  text-decoration: none;
+}
+.phoneNumber {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.2em;
+}
+.phoneIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 1.15em;
+  height: 1.15em;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  transition:
+    background-color 200ms ease,
+    color 200ms ease;
+}
+.phoneIcon svg {
+  width: 0.5em;
+  height: 0.5em;
+}
+.phoneLink:hover .phoneIcon,
+.phoneLink:focus-visible .phoneIcon {
+  background: #111;
+  color: #fff;
+}
+.phoneNote {
+  max-width: 36ch;
+  margin: 0;
+  color: #595959;
+  font-size: 14px;
+  line-height: 1.6;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .phoneIcon svg {
+    animation: phoneRing 6s ease-in-out infinite;
+  }
+}
+@keyframes phoneRing {
+  0%,
+  12%,
+  100% {
+    transform: none;
+  }
+  2% {
+    transform: rotate(-14deg);
+  }
+  4% {
+    transform: rotate(12deg);
+  }
+  6% {
+    transform: rotate(-10deg);
+  }
+  8% {
+    transform: rotate(8deg);
+  }
+  10% {
+    transform: rotate(-4deg);
+  }
 }
 .form {
   display: grid;
@@ -237,6 +307,9 @@
   }
   .details a {
     font-size: clamp(20px, 6vw, 25px);
+  }
+  .details .phoneLink {
+    font-size: clamp(26px, 8vw, 34px);
   }
   .form {
     justify-self: center;

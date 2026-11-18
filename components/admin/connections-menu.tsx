@@ -8,6 +8,7 @@ import type { GoogleBusinessStatus } from "@/lib/admin/google-business-types"
 import { connectionHealth } from "@/lib/admin/connection-health"
 import { InstagramConnection } from "./instagram-connection"
 import { GoogleBusinessConnection } from "./google-business-connection"
+import { toast } from "./admin-toast"
 import styles from "./connections-menu.module.css"
 
 /** Shared header entry point for the admin's connected services. */
@@ -99,6 +100,36 @@ export function ConnectionsMenu() {
   }, [])
 
   const health = connectionHealth([instagram, googleBusiness])
+  // The amber badge is easy to miss: say which service needs attention,
+  // once each time that changes.
+  const troubled = [
+    { name: "Instagram", status: instagram },
+    { name: "Google Business", status: googleBusiness },
+  ].filter(
+    ({ status }) => status && connectionHealth([status]) === "warning"
+  )
+  const names = troubled.map(({ name }) => name).join(" and ")
+  const warning = !names
+    ? ""
+    : troubled.every(({ status }) => status?.state === "unavailable")
+      ? `Couldn’t check ${names}`
+      : `${names} ${troubled.length > 1 ? "need" : "needs"} attention`
+  const warned = useRef("")
+  useEffect(() => {
+    if (warning === warned.current) return
+    warned.current = warning
+    if (!warning) return
+    toast("warning", {
+      title: warning,
+      button: {
+        title: "Open",
+        onClick: () => {
+          setOpen(true)
+          trigger.current?.focus()
+        },
+      },
+    })
+  }, [warning])
   const summary =
     health === "healthy"
       ? "All connected"
