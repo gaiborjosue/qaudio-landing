@@ -165,6 +165,40 @@ const saleKey = (values: ProductValues) =>
     .map((value) => (value ?? "").trim())
     .join("|")
 
+const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
+
+/**
+ * Unsaved form values over a newer saved product: each field the owner left
+ * as it was in `base` (what the form started from) takes its value in
+ * `latest`, so a change made elsewhere meanwhile, by Tune say, shows in the
+ * form and Save doesn't write the old value back.
+ */
+export function rebaseValues(
+  values: ProductValues,
+  base: ProductValues,
+  latest: ProductValues
+): ProductValues {
+  const next: Record<string, unknown> = { ...values }
+  for (const key of Object.keys(latest) as (keyof ProductValues)[]) {
+    if (same(values[key], base[key])) next[key] = latest[key]
+  }
+  return next as ProductValues
+}
+
+/**
+ * The fields Save writes for a saved product: the ones that differ from
+ * what the form started from. The rest stay as they are in the database,
+ * even if they changed there since.
+ */
+export function changedInputFields(
+  input: Record<string, unknown>,
+  baseline: Record<string, unknown>
+) {
+  return Object.keys(input).filter(
+    (key) => key !== "id" && !same(input[key], baseline[key])
+  )
+}
+
 /**
  * The record Save sends, before validation (productInputSchema checks it on
  * both sides). Empty optional fields become null; a photo without alt text

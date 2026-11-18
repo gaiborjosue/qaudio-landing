@@ -1,20 +1,31 @@
 import type { ReactNode } from "react"
 import Image from "next/image"
 import catalogStyles from "@/components/product-catalog.module.css"
+import { isPrivateMediaUrl } from "@/lib/media"
 import styles from "./product-table.module.css"
 
 const CONDITION_TONES = ["new", "demo", "used"]
 
-/** A product's first photo at the table's 40px, or an empty tile. */
-export function ProductThumb({ src }: { src?: string }) {
+/** A product's photo at the table's 40px, or an empty tile. Photos still
+ * in the chat's private uploads load straight from the admin's media route. */
+export function ProductThumb({
+  src,
+  alt = "",
+}: {
+  src?: string
+  alt?: string
+}) {
   return src ? (
     <Image
       className={styles.photo}
       src={src}
-      alt=""
+      alt={alt}
+      title={alt || undefined}
       width={40}
       height={40}
       sizes="40px"
+      unoptimized={isPrivateMediaUrl(src)}
+      crossOrigin="anonymous"
     />
   ) : (
     <span className={styles.photo} />

@@ -19,10 +19,14 @@ import {
   type ReviewProduct,
 } from "@/components/admin/product-review-table"
 import {
+  NewProductPreview,
+  ProductUpdatesPreview,
+  productFromCreate,
+} from "@/components/admin/product-change-preview"
+import {
   changeFromInput,
   dealFromInput,
   newsFromInput,
-  productFromInput,
   productsInOrder,
   withChange,
   withWeek,
@@ -34,6 +38,7 @@ import {
   type CatalogTaxonomy,
 } from "@/lib/admin/preview"
 import {
+  createProductInputSchema,
   dealInputSchema,
   deleteDealInputSchema,
   deleteHoursChangeInputSchema,
@@ -48,6 +53,7 @@ import {
   reorderProductsInputSchema,
   retryInstagramPostInputSchema,
   saleInputSchema,
+  updateProductsInputSchema,
   weeklyHoursInputSchema,
   googleBusinessHoursInputSchema,
   googleBusinessPostInputSchema,
@@ -294,62 +300,27 @@ export const ChangePreview = memo(function ChangePreview({
     case "save_product": {
       const parsed = productInputSchema.safeParse(withDescription(input))
       if (!parsed.success) break
-      const result = productFromInput(parsed.data, data.taxonomy)
-      if ("problem" in result) return <Note>{result.problem}</Note>
-      const { product } = result
+      return <NewProductPreview input={parsed.data} taxonomy={data.taxonomy} />
+    }
+    case "create_product": {
+      const parsed = createProductInputSchema.safeParse(input)
+      if (!parsed.success) break
       return (
-        <>
-          <Note>
-            /products/{parsed.data.slug} ·{" "}
-            {parsed.data.status === "published"
-              ? "Published in the shop"
-              : "Draft, hidden from the shop"}
-          </Note>
-          {product.short_description && (
-            <Note>{product.short_description}</Note>
-          )}
-          <ProductReviewTable
-            label="Product"
-            rows={[product]}
-            rowKey={(row) => row.id}
-            product={(row) => ({
-              name: row.name,
-              photo: row.images[0]?.src,
-              detail: row.brand?.name,
-            })}
-            columns={[
-              { label: "Category", cell: (row) => row.category.name },
-              {
-                label: "Condition",
-                cell: (row) => <ConditionBadge condition={row.condition} />,
-              },
-              {
-                label: "Price",
-                numeric: true,
-                cell: (row) => (
-                  <>
-                    {price(row.price_cents, row.price_unit)}
-                    {row.sale && (
-                      <span className={tableStyles.sale}>
-                        Sale · was {formatPrice(row.sale.regular_price_cents)}
-                      </span>
-                    )}
-                  </>
-                ),
-              },
-              {
-                label: "MSRP",
-                numeric: true,
-                cell: (row) => optionalPrice(row.msrp_cents),
-              },
-              {
-                label: "Audition",
-                cell: (row) => (row.ready_for_audition ? "Yes" : "No"),
-              },
-              { label: "Status", cell: () => statusLabel(parsed.data.status) },
-            ]}
-          />
-        </>
+        <NewProductPreview
+          input={productFromCreate(parsed.data)}
+          taxonomy={data.taxonomy}
+        />
+      )
+    }
+    case "update_products": {
+      const parsed = updateProductsInputSchema.safeParse(input)
+      if (!parsed.success) break
+      return (
+        <ProductUpdatesPreview
+          input={parsed.data}
+          products={data.products}
+          taxonomy={data.taxonomy}
+        />
       )
     }
     case "delete_product": {

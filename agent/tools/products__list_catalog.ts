@@ -6,7 +6,7 @@ import { callerSupabase, failure } from "../lib/supabase"
 export default defineTool({
   deferred: true,
   description:
-    "List the shop's categories and brands (slug and name) and its products, including drafts, in the shop's display order, with optional filters. Use it to find a product's slug or id, valid category and brand slugs, the current order, and prices: price_cents is the regular price, msrp_cents the list price, and sale a time-limited sale (store times), if any.",
+    "List the shop's categories and brands (slug and name) and its products, including drafts, in the shop's display order, with optional filters. Use it to find a product's slug or id, valid category and brand slugs, the current order, and prices: price_cents is the regular price, msrp_cents the list price, and sale a time-limited sale (store times), if any. updated_at is the product's revision, for products__update_products.",
   inputSchema: z.object({
     search: z
       .string()
@@ -23,7 +23,7 @@ export default defineTool({
     let products = supabase
       .from("products")
       .select(
-        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, price_note, condition, condition_note, availability, status, sort_order, sale_price_cents, sale_starts_at, sale_ends_at"
+        "id, slug, name, category_slug, brand_slug, price_cents, msrp_cents, price_unit, price_note, condition, condition_note, availability, ready_for_audition, status, sort_order, sale_price_cents, sale_starts_at, sale_ends_at, updated_at"
       )
       // The shop's own order, so the list reads as the pages show it.
       .order("sort_order")

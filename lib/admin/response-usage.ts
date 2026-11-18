@@ -17,6 +17,14 @@ export type ResponseUsage = {
   models: { model: string; costUsd: number | null; partial: boolean }[]
 }
 
+/** Tools that report their own paid requests' receipts as `usage`, with
+ * what a call without one is listed as. */
+const PAID_TOOLS = new Map([
+  ["design_story", "Story image (model unavailable)"],
+  ["edit_story", "Story image (model unavailable)"],
+  ["products__read_manufacturer_page", "Product page read (unavailable)"],
+])
+
 /**
  * Scope a reply to its turn, or to the flow it continues across steering,
  * edits and approvals. A completed flow ends before the next user message;
@@ -149,13 +157,13 @@ export function responseUsage(
             : "Delegated models (attribution unavailable)",
           call.usage.costUsd
         )
-      if (call.name !== "design_story" && call.name !== "edit_story") continue
+      if (!PAID_TOOLS.has(call.name)) continue
       const output = call.output as
         { usage?: { model?: string; costUsd?: unknown }[] } | undefined
       if (Array.isArray(output?.usage) && output.usage.length > 0) {
         for (const item of output.usage) add(item.model, item.costUsd)
       } else if (call.startedAt) {
-        add("Story image (model unavailable)", null)
+        add(PAID_TOOLS.get(call.name), null)
       }
     }
   }

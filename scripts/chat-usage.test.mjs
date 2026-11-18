@@ -146,6 +146,33 @@ test("a response includes all its model steps and delegated copywriting, excludi
   ])
 })
 
+test("a product page read lists its model receipt and the page read it has no receipt for", () => {
+  const view = viewOf(
+    [{ turn: "answer", cost: 0.01 }],
+    [
+      {
+        turn: "answer",
+        id: "page",
+        name: "products__read_manufacturer_page",
+        output: {
+          usage: [
+            { model: "Tavily page read", costUsd: null },
+            { model: FAST, costUsd: 0.004 },
+          ],
+        },
+      },
+    ]
+  )
+  const result = responseUsage("answer", [message("answer", "answer")], view)
+  assert.equal(formatCost(result.totalUsd), "$0.0140")
+  assert.equal(result.partial, true)
+  assert.deepEqual(result.models, [
+    { model: MAIN, costUsd: 0.01, partial: false },
+    { model: "Tavily page read", costUsd: null, partial: true },
+    { model: FAST, costUsd: 0.004, partial: false },
+  ])
+})
+
 test("historical Haiku receipts keep their model when the configured copywriter changes", () => {
   const oldModel = "anthropic/claude-haiku-5.5"
   const view = viewOf(

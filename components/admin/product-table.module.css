@@ -434,3 +434,42 @@
 .strong {
   font-weight: 600;
 }
+
+/* A proposed change in a chat card: what it was, muted, then what it
+   becomes. */
+.change {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+.was {
+  margin: 0;
+  color: #6b6b6b;
+}
+.table .fieldName {
+  color: #4a4a4a;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+/* A product's new photos, card line, and description, under the table. */
+.copy {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+.photoStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cardLine {
+  margin: 0;
+  color: #4a4a4a;
+  font-size: 14px;
+  line-height: 1.5;
+}

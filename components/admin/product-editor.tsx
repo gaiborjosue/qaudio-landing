@@ -35,10 +35,12 @@ import {
   uploadPhoto,
 } from "@/lib/admin/photo-upload"
 import {
+  changedInputFields,
   inputFromValues,
   parseDollars,
   PRODUCT_AVAILABILITY_OPTIONS,
   PREFILL_FIELDS,
+  rebaseValues,
   slugify,
   type PrefillField,
   type ProductPageStatus,
@@ -96,20 +98,38 @@ const STATUSES = [
   { value: "published", label: "Published" },
 ] as const
 
-function restore(key: string | undefined): ProductValues | null {
+// What a kept draft started from, so it can be rebased on a newer save.
+const baseKey = (key: string) => `${key}:base`
+
+function readValues(key: string): ProductValues | null {
+  const saved = window.sessionStorage.getItem(key)
+  const values = saved ? (JSON.parse(saved) as Partial<ProductValues>) : null
+  // Drafts kept before the sale fields existed have none.
+  return values && Array.isArray(values.images)
+    ? ({
+        sale_price: "",
+        sale_starts: "",
+        sale_ends: "",
+        ...values,
+      } as ProductValues)
+    : null
+}
+
+/**
+ * The unsaved work kept for this form, rebased on `latest` (the product as
+ * saved now) when it's known what the work started from.
+ */
+function restore(
+  key: string | undefined,
+  latest?: ProductValues
+): ProductValues | null {
   if (!key || typeof window === "undefined") return null
   try {
-    const saved = window.sessionStorage.getItem(key)
-    const values = saved ? (JSON.parse(saved) as Partial<ProductValues>) : null
-    // Drafts kept before the sale fields existed have none.
-    return values && Array.isArray(values.images)
-      ? ({
-          sale_price: "",
-          sale_starts: "",
-          sale_ends: "",
-          ...values,
-        } as ProductValues)
-      : null
+    const values = readValues(key)
+    const base = latest && values ? readValues(baseKey(key)) : null
+    return values && base && latest
+      ? rebaseValues(values, base, latest)
+      : values
   } catch {
     return null
   }
@@ -223,10 +243,24 @@ export function ProductEditor({
   const id = useId()
   const form = useRef<HTMLDivElement>(null)
   const [baseline, setBaseline] = useState(initial)
-  const [values, setValues] = useState(() => restore(storageKey) ?? initial)
-  const [saleEnabled, setSaleEnabled] = useState(
-    () => !!(values.sale_price.trim() || values.sale_starts || values.sale_ends)
+  const [values, setValues] = useState(
+    () => restore(storageKey, initial.id ? initial : undefined) ?? initial
   )
+  const hasSale = (form: ProductValues) =>
+    !!(form.sale_price.trim() || form.sale_starts || form.sale_ends)
+  const [saleEnabled, setSaleEnabled] = useState(() => hasSale(values))
+  // A newer save of this product (Tune's, say) while the form is open: the
+  // fields the owner hasn't touched take it, and their own edits stay.
+  const [source, setSource] = useState(initial)
+  if (JSON.stringify(initial) !== JSON.stringify(source)) {
+    setSource(initial)
+    if (initial.id && initial.id === source.id) {
+      const rebased = rebaseValues(values, baseline, initial)
+      setValues(rebased)
+      setBaseline(initial)
+      if (hasSale(rebased)) setSaleEnabled(true)
+    }
+  }
   const saleToggle = useRef<HTMLButtonElement>(null)
   const still = useReducedMotion()
   // A new product's address follows its name until the owner edits it.
@@ -279,15 +313,21 @@ export function ProductEditor({
     latest.current = { values, review, slugFollows }
   })
 
-  // Keep unsaved work across a reload; drop it once saved.
+  // Keep unsaved work across a reload, with what it started from; drop it
+  // once saved.
   useEffect(() => {
     if (!storageKey) return
     if (dirty) {
       window.sessionStorage.setItem(storageKey, JSON.stringify(values))
+      window.sessionStorage.setItem(
+        baseKey(storageKey),
+        JSON.stringify(baseline)
+      )
     } else {
       window.sessionStorage.removeItem(storageKey)
+      window.sessionStorage.removeItem(baseKey(storageKey))
     }
-  }, [storageKey, values, dirty])
+  }, [storageKey, values, baseline, dirty])
 
   // Tune's suggestions waiting for review are kept with that work.
   useEffect(() => {
@@ -674,6 +714,7 @@ export function ProductEditor({
   const forget = () => {
     if (!storageKey) return
     window.sessionStorage.removeItem(storageKey)
+    window.sessionStorage.removeItem(baseKey(storageKey))
     window.sessionStorage.removeItem(reviewKey(storageKey))
   }
 
@@ -734,9 +775,18 @@ export function ProductEditor({
       return
     }
     const input = parsed.data
+    // A saved product writes only what changed here, so changes made
+    // elsewhere since it opened (by Tune, say) stay.
+    const started = inputFromValues(baseline)
+    const fields = input.id
+      ? changedInputFields(
+          input,
+          productInputSchema.safeParse(started).data ?? started
+        )
+      : undefined
     setMessage(null)
     startSaving(async () => {
-      const result = await saveProductFromEditor(input)
+      const result = await saveProductFromEditor(input, fields)
       if ("error" in result) {
         const marked = Object.fromEntries(
           Object.entries(result.fields ?? {}).map(([field, problem]) => [

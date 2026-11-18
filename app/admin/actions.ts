@@ -17,6 +17,7 @@ import {
 import {
   deleteProductInputSchema,
   productCardLineInputSchema,
+  productFieldsSchema,
   productInputSchema,
   productQuickEditsSchema,
   reorderProductsInputSchema,
@@ -223,11 +224,14 @@ export async function generateProductCardLine(
 /**
  * Saves a product from the Products tab's product form, as the signed-in
  * admin (RLS). The owner filled it in and pressed Save, which is their
- * approval. A missing card line is written first, from the description, by
- * the fast copywriting model.
+ * approval. For a saved product, `fields` names the ones the owner changed,
+ * and only those are written, so changes made elsewhere since the form
+ * opened stay. A missing card line is written first, from the description,
+ * by the fast copywriting model.
  */
 export async function saveProductFromEditor(
-  input: unknown
+  input: unknown,
+  fields?: unknown
 ): Promise<ProductSaveResult> {
   if (!(await getAdmin())) return { error: "Sign in as an admin." }
   const parsed = productInputSchema.safeParse(input)
@@ -237,8 +241,15 @@ export async function saveProductFromEditor(
       fields: fieldErrors(parsed.error.issues),
     }
   }
+  const changed =
+    fields === undefined ? null : productFieldsSchema.safeParse(fields)
+  if (changed && !changed.success) {
+    return { error: "Couldn’t save the product. Try again." }
+  }
+  const only = changed ? new Set<string>(changed.data) : undefined
   const product = parsed.data
   if (!product.short_description.trim()) {
+    only?.add("short_description")
     const { categories, brands } = await getCatalogTaxonomy()
     product.short_description = await writeCardLine({
       name: product.name,
@@ -252,7 +263,12 @@ export async function saveProductFromEditor(
     })
   }
   try {
-    const saved = await saveProduct(await sessionSupabase(), product, ownerFail)
+    const saved = await saveProduct(
+      await sessionSupabase(),
+      product,
+      ownerFail,
+      only
+    )
     updateTag(CATALOG_CACHE_TAG)
     updateTag(NEWS_CACHE_TAG)
     return { ...saved, short_description: product.short_description }

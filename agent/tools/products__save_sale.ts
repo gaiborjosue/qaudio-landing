@@ -8,9 +8,9 @@ import { refreshAfterSave } from "../lib/site-cache"
 
 const count = (n: number) => `${n} product${n === 1 ? "" : "s"}`
 
-// The one product change the agent makes: a time-limited sale price. The
-// regular price and MSRP stay; the site shows the sale price only inside
-// its window, so the sale ends by itself.
+// A time-limited sale price, never a regular price change. The regular
+// price and MSRP stay; the site shows the sale price only inside its
+// window, so the sale ends by itself.
 export default defineTool({
   deferred: true,
   description:

@@ -141,7 +141,7 @@ for (const [name, entry] of new Map([
   ...catalog.deferred,
 ]))
   checkArraySchemas(serializeModelInputSchema(entry.inputSchema), name)
-assert.equal(catalog.deferred.size, 27)
+assert.equal(catalog.deferred.size, 30)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -166,7 +166,7 @@ assert(
 )
 for (const [group, count] of Object.entries({
   hours: 4,
-  products: 5,
+  products: 8,
   news: 4,
   deals: 3,
   instagram: 5,
@@ -228,6 +228,46 @@ const fixtures = {
     },
   ],
   delete_product: [schemas.deleteProductInputSchema, { id, name: "Sample" }],
+  update_products: [
+    schemas.updateProductsInputSchema,
+    {
+      products: [
+        {
+          id,
+          name: "Sample",
+          updated_at: "2030-01-01T00:00:00+00:00",
+          changes: { status: "draft", condition_score: 8 },
+        },
+      ],
+    },
+  ],
+  create_product: [
+    schemas.createProductInputSchema,
+    {
+      slug: "sample",
+      category_slug: "speakers",
+      brand_slug: "sample",
+      name: "Sample",
+      short_description: "A sample.",
+      description: "What it is.",
+      price_cents: 100,
+      msrp_cents: null,
+      price_unit: "each",
+      condition: "Used",
+      condition_score: 9,
+      ready_for_audition: false,
+      manufacturer_url: null,
+      status: "draft",
+      images: [
+        {
+          path: "uploads/chat/00000000-0000-4000-8000-000000000081/00000000-0000-4000-8000-000000000082.webp",
+          width: 1600,
+          height: 1200,
+          alt: "Sample",
+        },
+      ],
+    },
+  ],
   reorder_products: [schemas.reorderProductsInputSchema, { product_ids: [id] }],
   save_sale: [
     schemas.saleProposalSchema,
@@ -380,9 +420,10 @@ for (const [name, definition] of catalog.deferred) {
     "valid"
   )
 }
-assert.equal(writes, 16)
-// Products are saved and deleted in the admin's Products tab; the agent has
-// no product writes left, only their names for older chats' cards.
+assert.equal(writes, 18)
+// The agent's earlier whole-record product writes are gone (products__
+// update_products and create_product replaced them); their names stay for
+// older chats' cards.
 const retired = ["products__save_product", "products__delete_product"]
 for (const name of retired) {
   assert(!tools.has(name) && !catalog.deferred.has(name))
@@ -449,7 +490,7 @@ for (const name of [...catalog.deferred.keys(), ...retired]) {
   assert(!render(name).includes("Unknown category"))
   renders += 2
 }
-assert.equal(renders, 36)
+assert.equal(renders, 40)
 // A sale's card lists each product's prices as a table row: 25% off the
 // $1,200 list price is $900, $300 off, against its $1,000 regular price.
 const saleCard = renderToStaticMarkup(
@@ -494,6 +535,101 @@ const saleRow = saleCard.match(/<tbody>.*<\/tbody>/s)?.[0] ?? ""
 for (const cell of ["Sample", "$1,000", "$1,200", "$900", "$300 · 25%"]) {
   assert(saleRow.includes(cell), cell)
 }
+// A product change reads "before → after" from the product as the page
+// loaded it, and a score keeps the note's other terms.
+const used = {
+  id,
+  slug: "sample",
+  name: "Sample",
+  short_description: "",
+  description: "",
+  price_cents: 100000,
+  msrp_cents: null,
+  price_unit: "each",
+  condition: "Used",
+  condition_note: "Used (final sale) · 6 out of 10",
+  availability: "available",
+  ready_for_audition: false,
+  manufacturer_url: null,
+  status: "published",
+  category: data.taxonomy.categories[0],
+  brand: data.taxonomy.brands[0],
+  images: [],
+}
+const renderChange = (input, products) =>
+  renderToStaticMarkup(
+    createElement(ChangePreview, {
+      tool: "products__update_products",
+      input,
+      data: { ...data, products },
+    })
+  )
+const oneChange = renderChange(fixtures.update_products[1], [used])
+for (const text of [
+  "Published",
+  "Draft",
+  "Used (final sale) · 6 out of 10",
+  "Used (final sale) · 8 out of 10",
+])
+  assert(oneChange.includes(text), text)
+const other = "00000000-0000-4000-8000-000000000002"
+const manyChanges = renderChange(
+  {
+    products: [
+      ...fixtures.update_products[1].products,
+      {
+        id: other,
+        name: "Other",
+        updated_at: "2030-01-01T00:00:00+00:00",
+        changes: { status: "draft" },
+      },
+    ],
+  },
+  [used, { ...used, id: other, name: "Other" }]
+)
+assert(manyChanges.includes('aria-label="Product changes"'))
+assert(manyChanges.includes("2 products · Condition notes, Status"))
+// Lowering the regular price under a live sale is flagged before approval.
+assert(
+  renderChange(
+    {
+      products: [
+        {
+          id,
+          name: "Sample",
+          updated_at: "2030-01-01T00:00:00+00:00",
+          changes: { price_cents: 50000 },
+        },
+      ],
+    },
+    [
+      {
+        ...used,
+        sale_window: {
+          price_cents: 80000,
+          starts_at: null,
+          ends_at: "2030-01-01T23:59",
+        },
+      },
+    ]
+  ).includes("must stay below the regular price")
+)
+// A new product's card shows its row, score, card line, photo, and copy.
+const newProduct = renderToStaticMarkup(
+  createElement(ChangePreview, {
+    tool: "products__create_product",
+    input: fixtures.create_product[1],
+    data,
+  })
+)
+for (const text of [
+  "/products/sample",
+  "9 out of 10",
+  "A sample.",
+  "What it is.",
+  "/api/admin/media?path=",
+])
+  assert(newProduct.includes(text), text)
 // A pending carousel's card adds the reorderable photo row, and the post
 // follows the arranged order.
 const arranged = renderToStaticMarkup(
@@ -573,5 +709,5 @@ assert(
   !renderDeal({ ...dealInput, id, image: null }, priorData).includes("<img")
 )
 console.log(
-  "Catalog verified: 27 deferred (hours 4, products 5, news 4, deals 3, instagram 5, googlebusiness 6); 9 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 16 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 36 current/historical preview renders, plus sale, carousel, and QDeal image/text/product previews. No site data read or written."
+  "Catalog verified: 30 deferred (hours 4, products 8, news 4, deals 3, instagram 5, googlebusiness 6); 9 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 18 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 40 current/historical preview renders, plus sale, product change, carousel, and QDeal image/text/product previews. No site data read or written."
 )

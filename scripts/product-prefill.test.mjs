@@ -32,6 +32,7 @@ const { guardedLookup, isPublicAddress, publicUrl } =
 const {
   checkProductPage,
   compactPage,
+  importPhoto,
   prefillPrompt,
   productPageCheckRoute,
   productPagePrefillRoute,
@@ -536,6 +537,30 @@ test("prefill reads the page, drafts the form, and stages photos", async () => {
   assert.deepEqual(
     staged.uploaded.map(({ path }) => path),
     [image.path]
+  )
+})
+
+test("Tune's page reader stages photos where its store names them", async () => {
+  const staged = store()
+  const path =
+    "uploads/chat/00000000-0000-4000-8000-000000000001/00000000-0000-4000-8000-000000000002.webp"
+  const image = await importPhoto(
+    { url: "https://maker.example.com/front.png", alt: "Front" },
+    {
+      page,
+      store: { ...staged, path: async () => path },
+      requester: async (url) => ({
+        url,
+        status: 200,
+        type: "image/png",
+        body: await photo(1200, 900),
+      }),
+    }
+  )
+  assert.equal(image?.path, path)
+  assert.deepEqual(
+    staged.uploaded.map((item) => item.path),
+    [path]
   )
 })
 

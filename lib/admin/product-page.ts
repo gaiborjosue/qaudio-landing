@@ -33,7 +33,7 @@ const TEXT_MAX = 40_000
 const CANDIDATES_MAX = 60
 /** Photos Tune may suggest at once; a product holds 20. */
 export const PREFILL_PHOTOS_MAX = 5
-const PRODUCT_PHOTOS_MAX = 20
+export const PRODUCT_PHOTOS_MAX = 20
 const PHOTO_MAX_BYTES = 20e6
 const PHOTO_EDGE = 1600
 /** Smaller than this on its long side is a thumbnail or an icon. */
@@ -515,6 +515,8 @@ export function suggestionsFromDraft(
 export type PhotoStore = {
   upload: (path: string, data: Buffer) => Promise<void>
   discard: (paths: string[]) => Promise<void>
+  /** A staged photo's path; uploads/<uuid>.webp when not given. */
+  path?: () => Promise<string>
 }
 
 /**
@@ -568,7 +570,9 @@ export async function importPhoto(
       .toBuffer({ resolveWithObject: true })
     if (Math.max(info.width, info.height) < PHOTO_MIN_EDGE) return null
     if (signal?.aborted) return null
-    const path = `uploads/${randomUUID()}.webp`
+    const path = store.path
+      ? await store.path()
+      : `uploads/${randomUUID()}.webp`
     await store.upload(path, data)
     return { path, alt, width: info.width, height: info.height }
   } catch {

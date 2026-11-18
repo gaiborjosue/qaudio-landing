@@ -135,8 +135,9 @@ export const productImageInputSchema = z.object({
   height: z.int().positive(),
 })
 
-// Products are saved and deleted in the admin's Products tab (Server Actions
-// validated with these); older chats' product cards still render from them.
+// Products are saved in the admin's Products tab (Server Actions validated
+// with these) and by the agent's products__ tools (below). Older chats'
+// save_product and delete_product cards still render from them.
 
 /** A time-limited sale on one product, in store time. */
 export const productSaleSchema = z
@@ -263,9 +264,9 @@ export const reorderProductsInputSchema = z
     "Reorder one category or one brand at a time."
   )
 
-// Time-limited sales, the one product change the agent makes (lib/admin/
-// sale.ts). The approval card works the prices out from this input itself,
-// so it shows exactly what gets saved.
+// Time-limited sales (lib/admin/sale.ts), apart from the regular price. The
+// approval card works the prices out from this input itself, so it shows
+// exactly what gets saved.
 const saleProduct = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(160).describe("For the approval card."),
@@ -391,6 +392,18 @@ export const endSaleInputSchema = z.object({
 // The admin's Products tab: its product form and table save through Server
 // Actions, validated with productInputSchema and these.
 
+/** The product form's changed fields, the ones its Save writes. */
+export const productFieldsSchema = z
+  .array(
+    z.enum(
+      Object.keys(productInputSchema.shape).filter((key) => key !== "id") as [
+        string,
+        ...string[],
+      ]
+    )
+  )
+  .max(Object.keys(productInputSchema.shape).length)
+
 /** Some of a product's fields: what the product form starts from. */
 export const productDraftSchema = productInputSchema
   .omit({ id: true, sort_order: true })
@@ -419,6 +432,111 @@ export const productQuickEditsSchema = z
   .array(productQuickEditSchema)
   .min(1)
   .max(200)
+
+// The agent's product edits: anything the Products tab's form and table
+// change, except sales (products__save_sale) and the shop order
+// (products__reorder_products).
+
+const conditionScore = z
+  .int()
+  .min(0)
+  .max(10)
+  .nullable()
+  .describe(
+    "Used gear's visual condition score out of 10; null removes it. It's kept in the condition note as “N out of 10”, beside the note's other terms, which stay."
+  )
+const conditionNote = z
+  .string()
+  .max(500)
+  .describe(
+    "The whole condition note, replacing it (terms like “Used (final sale)”, and the score as “N out of 10”). For the score alone use condition_score."
+  )
+const availability = z
+  .enum(["available", "sold", "unavailable"])
+  .describe(
+    "sold: gone (used gear that's sold is also saved as a draft); unavailable: not in stock now."
+  )
+
+/** What products__update_products changes on one product; omitted fields
+ * stay as they are. */
+export const productChangesSchema = productInputSchema
+  .pick({
+    name: true,
+    slug: true,
+    category_slug: true,
+    brand_slug: true,
+    condition: true,
+    price_cents: true,
+    msrp_cents: true,
+    price_unit: true,
+    ready_for_audition: true,
+    status: true,
+    manufacturer_url: true,
+    short_description: true,
+    description: true,
+  })
+  .extend({
+    slug: productInputSchema.shape.slug.describe(
+      "Its /products/<slug> address. Changing it breaks links to the old address."
+    ),
+    condition_score: conditionScore,
+    condition_note: conditionNote,
+    availability,
+    images: productInputSchema.shape.images.describe(
+      "The complete new photo list in display order (the first is the card photo): photos left out are removed. Keep saved ones exactly as products__get_product gave them."
+    ),
+  })
+  .partial()
+  .refine(
+    (changes) => Object.values(changes).some((value) => value !== undefined),
+    "Change at least one field."
+  )
+
+export const updateProductsInputSchema = z.object({
+  products: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        name: z
+          .string()
+          .trim()
+          .min(1)
+          .max(160)
+          .describe("Its current name, as products__list_catalog gave it."),
+        updated_at: z
+          .string()
+          .min(1)
+          .max(40)
+          .describe(
+            "Its updated_at exactly as products__list_catalog or products__get_product gave it. The save refuses a product that changed since."
+          ),
+        changes: productChangesSchema,
+      })
+    )
+    .min(1)
+    .max(100)
+    .refine(
+      (products) =>
+        new Set(products.map((product) => product.id)).size === products.length,
+      "List each product once."
+    )
+    .describe("Each product, with only the fields that change."),
+})
+
+/** A new product from the agent; a sale and its place come afterwards. */
+export const createProductInputSchema = productInputSchema
+  .omit({ id: true, sort_order: true, sale: true })
+  .extend({
+    short_description: productInputSchema.shape.short_description
+      .trim()
+      .min(1)
+      .describe(
+        "The card line, 1000 characters at most; the copywriter writes it with the description."
+      ),
+    condition_score: conditionScore.optional(),
+    condition_note: conditionNote.optional(),
+    availability: availability.optional(),
+  })
 
 // News posts: body blocks follow NewsBlock in lib/news.ts, with image `src`
 // as a media path.
@@ -932,6 +1050,9 @@ export type SaleInput = z.infer<typeof saleInputSchema>
 export type EndSaleInput = z.infer<typeof endSaleInputSchema>
 export type ProductDraft = z.infer<typeof productDraftSchema>
 export type ProductQuickEdit = z.infer<typeof productQuickEditSchema>
+export type ProductChanges = z.infer<typeof productChangesSchema>
+export type UpdateProductsInput = z.infer<typeof updateProductsInputSchema>
+export type CreateProductInput = z.infer<typeof createProductInputSchema>
 export type NewsBlockInput = z.infer<typeof newsBlockSchema>
 export type NewsPostInput = z.infer<typeof newsPostInputSchema>
 export type DeleteNewsPostInput = z.infer<typeof deleteNewsPostInputSchema>

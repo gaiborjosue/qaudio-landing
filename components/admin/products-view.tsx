@@ -122,6 +122,7 @@ export function ProductsView({
         return
       }
       window.sessionStorage.removeItem(storageKey(target.id))
+      window.sessionStorage.removeItem(`${storageKey(target.id)}:base`)
       window.sessionStorage.removeItem(`${storageKey(target.id)}:tune`)
       gone.current = true
       startRemoving(() => {

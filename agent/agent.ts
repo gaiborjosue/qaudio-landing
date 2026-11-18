@@ -3,7 +3,7 @@ import { FAST_CONTEXT_TOKENS, fastModel, mainChatModel } from "./lib/models"
 
 export default defineAgent({
   description:
-    "Tune, Q Audio's web assistant: edits store hours, news, and deals, arranges products, and manages Instagram and Google Business hours and posts for the owner.",
+    "Tune, Q Audio's web assistant: edits store hours, news, deals, and shop products (adding, changing, and arranging them), and manages Instagram and Google Business hours and posts for the owner.",
   model: mainChatModel,
   compaction: {
     model: fastModel,

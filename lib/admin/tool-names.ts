@@ -4,13 +4,16 @@ const PREVIEW_TOOLS = {
   hours__set_weekly_hours: "set_weekly_hours",
   hours__save_hours_change: "save_hours_change",
   hours__delete_hours_change: "delete_hours_change",
-  // Historical: products are now saved and deleted in the admin's Products
-  // tab, so the agent no longer has these. Kept so older chats still show
+  // Historical: products were saved and deleted only in the admin's Products
+  // tab for a while, so these went away. Kept so older chats still show
   // their cards.
   products__save_product: "save_product",
   products__delete_product: "delete_product",
   products__reorder_products: "reorder_products",
-  // Time-limited sales: the one product change the agent makes.
+  // Product changes, as the Products tab makes them.
+  products__update_products: "update_products",
+  products__create_product: "create_product",
+  // Time-limited sales.
   products__save_sale: "save_sale",
   products__end_sale: "end_sale",
   news__save_news_post: "save_news_post",

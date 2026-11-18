@@ -8,7 +8,7 @@ Landing page, product catalog, and custom owner dashboard for Q Audio, a hi-fi s
 
 - **Public site:** shop information, equipment, brands, services, news, QDeals, and store hours.
 - **Owner dashboard (`/admin`):** direct editors for products, news, categories, and brands.
-- **Tune:** an Eve agent for managing hours, news, deals, product sales, Instagram, and Google Business through chat. Proposed changes include previews and require owner approval before saving or publishing.
+- **Tune:** an Eve agent for managing hours, news, deals, products (adding, changing, ordering, and sales), Instagram, and Google Business through chat. Proposed changes include previews and require owner approval before saving or publishing.
 
 ## Integrations
 

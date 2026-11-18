@@ -1,5 +1,5 @@
 ---
-description: Use before answering questions about shop products, reordering them, or putting them on sale (or ending a sale), and when the owner asks to add, edit, publish, unpublish, or delete one.
+description: Use before answering questions about shop products, and when the owner asks to add a product, change products (hide or show, publish or unpublish, prices, condition, availability, audition, copy, photos, category, brand), reorder them, or put them on sale (or end a sale).
 ---
 
 Load these instructions with `eve__skill({ name: "products" })`. Discover this group with `eve__search({ query: "products__" })` unless its signatures are already in context. Execute the discovered tools with `eve__tool({ name, input })`, using their exact names and signatures. Reuse discovery while its signatures remain in context. For requests spanning domains, also load the other skill and discover its group as needed.
@@ -7,18 +7,39 @@ Load these instructions with `eve__skill({ name: "products" })`. Discover this g
 What you can do with products:
 
 - Read them: `products__list_catalog` lists categories, brands, and every product (drafts included) in the shop's order; `products__get_product` reads one product with every field and its photos.
+- Change them with `products__update_products`: one product or many in one card (below).
+- Add one with `products__create_product` (below), after reading its manufacturer page with `products__read_manufacturer_page` when the owner gives one.
 - Reorder them with `products__reorder_products` (below).
-- Put them on a time-limited sale with `products__save_sale`, or end a sale early with `products__end_sale` (below). That's the only product change you make.
+- Put them on a time-limited sale with `products__save_sale`, or end a sale early with `products__end_sale` (below).
 
-Adding, editing, publishing, unpublishing, and deleting products, and changing their regular prices, is done by the owner in the admin's Products tab (the Chat / Products switch at the top of the page): a table with filters, a sheet with the full product form, and Delete. You have no tool for it. When the owner asks for one of those, say in one short line that it's in the Products tab; don't collect the product's details or offer to save it. If they ask you to write a product's copy from notes, a spec sheet, or a manufacturer page, ask the `copywriter` subagent and give them its description and card line to paste into the form.
+Deleting a product has no tool: it's the bin in the admin's Products tab. When the owner asks to delete one, offer to hide it (a draft) instead, and say in one short line that deleting is in the Products tab. Categories and brands are edited in the Metadata tab.
 
 How the shop catalog works:
 
 - Every product has a `slug` (its page is `/products/<slug>`), a category and an optional brand, a `name`, a card line (`short_description`), and a Markdown `description`.
-- Price: `price_cents` is the regular selling price in US cents, and `msrp_cents` the manufacturer's list price or null. A selling price below MSRP shows as a sale. `price_unit` is `each` or `pair`. Say prices in dollars. A null price means no quoted selling price; never replace it with MSRP or a number from the teaser. Preserve `price_note` (starting-at, each/pair, final sale) and `condition_note`. `availability` distinguishes available, sold, and unavailable listings; do not offer sold or unavailable stock or put unpriced listings on a sale. Missing brands/logos are intentional; never infer them from names.
+- Price: `price_cents` is the regular selling price in US cents, and `msrp_cents` the manufacturer's list price or null. A selling price below MSRP shows as a sale. `price_unit` is `each` or `pair`. Say prices in dollars. A null price means no quoted selling price (price on request); never replace it with MSRP or a number from the teaser. Preserve `price_note` (starting-at, each/pair, final sale). `availability` distinguishes available, sold, and unavailable listings; do not offer sold or unavailable stock or put unpriced listings on a sale. Missing brands/logos are intentional; never infer them from names.
 - `sale` is a time-limited sale, if any: its `price_cents` shows instead of the regular price from `starts_at` (null: as soon as it's saved) until `ends_at`, store time, and then the regular price shows again by itself. A sale that has ended stays listed until a new one replaces it.
-- `condition` is `New`, `Demo`, or `Used`. `status` `published` shows the product in the shop; `draft` hides it.
+- `condition` is `New`, `Demo`, or `Used`. Used gear has a visual condition score out of 10, kept in `condition_note` as "N out of 10" beside any other terms ("Used (final sale) · 6 out of 10"). `status` `published` shows the product in the shop; `draft` hides it. Used gear that's sold is always saved as a draft.
+- `ready_for_audition` marks products the owner can demo in the shop.
 - There's no product line field: a line ("Paradigm Monitor SE") is the brand plus a name match, so find it with `products__list_catalog` (`brand_slug` and `search`) and check the names.
+
+Changing products:
+
+- Find them first: `products__list_catalog` (with `brand_slug`, `category_slug`, `search`, or `status`) for the short fields, or `products__get_product` for copy and photos. Then call `products__update_products` once for the whole request (up to 100 products), each with its `id`, current `name`, and `updated_at` exactly as read, and in `changes` only the fields that change. "Hide all Thorens" is every published Thorens product with `changes: { status: "draft" }`, in one card.
+- Propose straight away; the card shows each product's change and is the question. If the request matches no products, say so instead. If it's unclear which ones, ask with `ask_question`.
+- The save refuses products that changed since you read them. Read them again and propose on the current values. After a save, use its returned `updated_at` for that product's next change.
+- `price_cents` here is the regular price. Change it only when the owner says the regular price itself changes ("it's $1,199 now", "raise Rega prices 5%"). Any sale, discount, or promotion is a sale (`products__save_sale`, and the product-sale flow), never a regular price change. A regular price must stay above the product's current sale price; end or change the sale first.
+- Hiding a product that's in a sale linked to a news post can end that post early, when it was the post's last product in the shop; mention it when that applies.
+- `condition_score` sets used gear's score (0 to 10; null removes it), keeping the note's other terms. Use `condition_note` only to change those other terms, and keep the score in it.
+- `slug` changes the page address and breaks links to the old one: only when the owner asks for a new address.
+- Copy: ask the `copywriter` subagent for a new description and card line from the owner's notes, a spec sheet, or a manufacturer page; keep the owner's own wording when they give it. Change only the copy the owner asked about.
+- Photos: `images` is the complete new list in display order, and the first is the card photo. Get the current list with `products__get_product` and keep each saved photo exactly as it's listed (path, alt, width, height, caption). Add the owner's photos (their `Photo uploaded:` path, width, and height, after looking at them with `view_photos`) with alt text you write from what each shows. Leave a photo out to remove it. A product holds 20.
+
+Adding a product:
+
+- With a manufacturer page, call `products__read_manufacturer_page` once with its address (it takes up to a minute and costs money; never retry a failure by yourself), look at its photos with `view_photos`, and use its suggestions where the owner hasn't said otherwise. It saves nothing.
+- `products__create_product` needs the category and brand (slugs from `products__list_catalog`; a brand only when it's in the list), name (brand, then model), `slug` (from the name, unused by another product), condition, prices (the selling price only when the owner gives one; else null), unit, audition, the manufacturer page or null, the card line and Markdown description (from the copywriter, or the page's suggestions), and the photos with alt text.
+- Publish it when the owner wants it in the shop; otherwise add it as a draft, and say so in a few words. Ask with `ask_question` only when the category or condition isn't clear. It's listed first in the shop until the owner reorders.
 
 Sales:
 
