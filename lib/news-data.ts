@@ -14,15 +14,12 @@ import {
 import { STORE_TIME_ZONE } from "@/lib/store-hours"
 import { mediaUrl, publicSupabase } from "@/lib/supabase/public"
 
-// Published news from Supabase, read as an anonymous visitor. Results are
-// cached under NEWS_CACHE_TAG with the "content" profile (5 minutes). Admin
-// Server Actions will call updateTag(NEWS_CACHE_TAG) after a save so edits
-// show up right away (from a Route Handler, revalidateTag(NEWS_CACHE_TAG,
-// "max")).
+// These reads include scheduled and expiring posts. Bound the hard cache
+// lifetime so an expired post clears from the feed, archive, and article.
 export const NEWS_CACHE_TAG = "news"
 
 function cacheNews() {
-  cacheLife("content")
+  cacheLife({ stale: 0, revalidate: 30, expire: 60 })
   cacheTag(NEWS_CACHE_TAG)
 }
 
@@ -232,7 +229,8 @@ export async function getNewsCount() {
 /** Slugs of published posts, for prerendering article pages. */
 export async function getNewsSlugs() {
   "use cache"
-  cacheNews()
+  cacheLife("content")
+  cacheTag(NEWS_CACHE_TAG)
   const { data, error } = await publicSupabase()
     .from("news_posts")
     .select("slug")

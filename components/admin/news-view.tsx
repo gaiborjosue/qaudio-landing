@@ -26,7 +26,13 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import type { AdminNewsItem } from "@/lib/admin/preview"
-import { filterNews, newsStatus, type NewsStatus } from "@/lib/admin/news"
+import {
+  filterNews,
+  newsExpired,
+  newsStatus,
+  scheduledNewsSales,
+  type NewsStatus,
+} from "@/lib/admin/news"
 import { blankNewsValues, valuesFromNews } from "@/lib/admin/news-editor"
 import type { NewsRecord } from "@/lib/admin/news-save"
 import type { NewsQuickEdit } from "@/lib/admin/schemas"
@@ -41,7 +47,9 @@ const STATUS_LABELS: Record<NewsStatus, string> = {
   draft: "Draft",
   scheduled: "Scheduled",
   published: "Published",
+  expired: "Expired",
 }
+type EditableStatus = Exclude<NewsStatus, "expired">
 const ALL = "all"
 const FILTERS = [
   { value: ALL, label: "Any status" },
@@ -63,10 +71,14 @@ const plural = (count: number, noun: string) =>
 /** A row's status options: Scheduled only while it has a future date. */
 const statusOptions = (post: AdminNewsItem, now: string) => [
   { value: "draft", label: STATUS_LABELS.draft },
-  ...(post.publishedAt && post.publishedAt > now
-    ? [{ value: "scheduled", label: STATUS_LABELS.scheduled }]
-    : []),
-  { value: "published", label: STATUS_LABELS.published },
+  ...(newsExpired(post, now)
+    ? []
+    : [
+        ...(post.publishedAt && post.publishedAt > now
+          ? [{ value: "scheduled", label: STATUS_LABELS.scheduled }]
+          : []),
+        { value: "published", label: STATUS_LABELS.published },
+      ]),
 ]
 
 /**
@@ -75,7 +87,7 @@ const statusOptions = (post: AdminNewsItem, now: string) => [
  */
 function quickEdit(
   post: AdminNewsItem,
-  status: NewsStatus,
+  status: EditableStatus,
   now: string
 ): NewsQuickEdit {
   if (status === "draft") return { id: post.id, status: "draft" }
@@ -115,7 +127,9 @@ export function NewsView({
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<NewsStatus | typeof ALL>(ALL)
   const [now, setNow] = useState(initialNow)
-  const [drafts, setDrafts] = useState<Record<string, NewsStatus>>({})
+  const [drafts, setDrafts] = useState<Partial<Record<string, EditableStatus>>>(
+    {}
+  )
   const [saving, startSaving] = useTransition()
   const [saveError, setSaveError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -125,6 +139,10 @@ export function NewsView({
   const [deleting, setDeleting] = useState<AdminNewsItem | null>(null)
   const [removing, startRemoving] = useTransition()
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [needsSaleChoice, setNeedsSaleChoice] = useState(false)
+  const [saleChoice, setSaleChoice] = useState<"keep" | "cancel" | null>(null)
+  const scheduledSales = deleting ? scheduledNewsSales(deleting, now) : 0
+  const chooseSales = scheduledSales > 0 || needsSaleChoice
   const newButton = useRef<HTMLButtonElement>(null)
   // Set once the post the sheet or confirmation came from is gone, so focus
   // goes to New post instead of a row that no longer exists.
@@ -185,13 +203,17 @@ export function NewsView({
   const visible = filterNews(posts, search, filter, now)
   const changes = posts.flatMap((post) => {
     const status = drafts[post.id]
-    return status && status !== newsStatus(post, now) ? [{ post, status }] : []
+    return status &&
+      (status === "draft" || !newsExpired(post, now)) &&
+      status !== newsStatus(post, now)
+      ? [{ post, status }]
+      : []
   })
   const coverless = changes.filter(
     ({ post, status }) => status !== "draft" && post.hasCover === false
   )
 
-  const choose = (post: AdminNewsItem, status: NewsStatus) =>
+  const choose = (post: AdminNewsItem, status: EditableStatus) =>
     setDrafts((all) => {
       const next = { ...all }
       if (status === newsStatus(post, now)) delete next[post.id]
@@ -231,20 +253,27 @@ export function NewsView({
   const askDelete = (post: AdminNewsItem) => {
     gone.current = false
     setDeleteError(null)
+    setNeedsSaleChoice(false)
+    setSaleChoice(null)
     setDeleting(post)
   }
 
   const confirmDelete = () => {
-    if (!deleting) return
+    if (!deleting || (chooseSales && !saleChoice)) return
     const target = deleting
     setDeleteError(null)
     startRemoving(async () => {
       const result = await deleteNewsFromAdmin({
         id: target.id,
         title: target.title,
+        ...(saleChoice && { sale_choice: saleChoice }),
       })
       if ("error" in result) {
         setDeleteError(result.error)
+        return
+      }
+      if ("needsSaleChoice" in result) {
+        setNeedsSaleChoice(true)
         return
       }
       window.sessionStorage.removeItem(storageKey(target.id))
@@ -259,7 +288,12 @@ export function NewsView({
         })
         router.refresh()
       })
-      setNotice(`Deleted “${target.title}”.`)
+      setNotice(
+        `Deleted “${target.title}”.` +
+          (result.cancelled
+            ? ` Cancelled ${plural(result.cancelled, "scheduled sale")}.`
+            : "")
+      )
     })
   }
 
@@ -289,10 +323,38 @@ export function NewsView({
             Delete “{deleting?.title}”?
           </AlertDialogTitle>
           <AlertDialogDescription className={page.confirmText}>
-            It comes off the site for good. To hide it but keep it, set it to
-            Draft instead.
+            {chooseSales
+              ? "Choose what happens to the scheduled sale prices linked to this post."
+              : "It comes off the site for good. To hide it but keep it, set it to Draft instead."}
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {chooseSales && (
+          <fieldset className={styles.saleChoice}>
+            <legend className="visually-hidden">
+              Linked scheduled sale prices
+            </legend>
+            <label>
+              <input
+                type="radio"
+                name={`${id}-sale-choice`}
+                checked={saleChoice === "keep"}
+                disabled={removing}
+                onChange={() => setSaleChoice("keep")}
+              />
+              Keep scheduled prices
+            </label>
+            <label>
+              <input
+                type="radio"
+                name={`${id}-sale-choice`}
+                checked={saleChoice === "cancel"}
+                disabled={removing}
+                onChange={() => setSaleChoice("cancel")}
+              />
+              Cancel scheduled prices
+            </label>
+          </fieldset>
+        )}
         {deleteError && (
           <p className={adminStyles.error} role="alert">
             {deleteError}
@@ -308,7 +370,7 @@ export function NewsView({
           <button
             type="button"
             className={adminStyles.primary}
-            disabled={removing}
+            disabled={removing || (chooseSales && !saleChoice)}
             onClick={confirmDelete}
           >
             {removing ? "Deleting…" : "Delete"}
@@ -394,7 +456,11 @@ export function NewsView({
                   <tbody>
                     {visible.map((post) => {
                       const saved = newsStatus(post, now)
-                      const status = drafts[post.id] ?? saved
+                      const proposed = drafts[post.id]
+                      const status =
+                        proposed === "draft" || !newsExpired(post, now)
+                          ? (proposed ?? saved)
+                          : saved
                       const changed = status !== saved || undefined
                       const needsCover =
                         changed && status !== "draft" && post.hasCover === false
@@ -416,25 +482,29 @@ export function NewsView({
                             </span>
                           </th>
                           <td>
-                            <span
-                              className={table.cell}
-                              data-changed={changed}
-                            >
-                              <Choice
-                                small
-                                value={status}
-                                options={statusOptions(post, now)}
-                                aria-label={`Status of ${post.title}`}
-                                aria-invalid={needsCover || undefined}
-                                aria-describedby={
-                                  [needsCover && problemId, changed && changedId]
-                                    .filter(Boolean)
-                                    .join(" ") || undefined
-                                }
-                                onChange={(value) =>
-                                  choose(post, value as NewsStatus)
-                                }
-                              />
+                            <span className={table.cell} data-changed={changed}>
+                              {status === "expired" ? (
+                                STATUS_LABELS.expired
+                              ) : (
+                                <Choice
+                                  small
+                                  value={status}
+                                  options={statusOptions(post, now)}
+                                  aria-label={`Status of ${post.title}`}
+                                  aria-invalid={needsCover || undefined}
+                                  aria-describedby={
+                                    [
+                                      needsCover && problemId,
+                                      changed && changedId,
+                                    ]
+                                      .filter(Boolean)
+                                      .join(" ") || undefined
+                                  }
+                                  onChange={(value) =>
+                                    choose(post, value as EditableStatus)
+                                  }
+                                />
+                              )}
                             </span>
                             {needsCover && (
                               <span id={problemId} className={table.problem}>

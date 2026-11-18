@@ -23,6 +23,7 @@ export type NewsValues = {
   status: "draft" | "published"
   /** Store time "YYYY-MM-DDTHH:MM", or "" (publish now, or undated draft). */
   publishedAt: string
+  expiresAt: string
 }
 
 export { slugify }
@@ -258,6 +259,7 @@ export function blankNewsValues(): NewsValues {
     cover: null,
     status: "draft",
     publishedAt: "",
+    expiresAt: "",
   }
 }
 
@@ -271,6 +273,7 @@ export function valuesFromNews(record: NewsRecord): NewsValues {
     cover: record.cover,
     status: record.status,
     publishedAt: record.published_at ?? "",
+    expiresAt: record.expires_at ?? "",
   }
 }
 
@@ -281,8 +284,7 @@ export function valuesFromNews(record: NewsRecord): NewsValues {
  * publishes now.
  */
 export function inputFromNews(values: NewsValues, original?: NewsRecord) {
-  const untouched =
-    original && values.body === blocksToMarkdown(original.body)
+  const untouched = original && values.body === blocksToMarkdown(original.body)
   const parsed = untouched
     ? { blocks: original.body }
     : markdownToBlocks(values.body, values.photos)
@@ -293,6 +295,9 @@ export function inputFromNews(values: NewsValues, original?: NewsRecord) {
     body: parsed.blocks,
     cover: values.cover && { ...values.cover, alt: values.cover.alt.trim() },
     status: values.status,
+    ...(values.expiresAt !== undefined && {
+      expires_at: values.expiresAt || null,
+    }),
     published_at:
       values.publishedAt ||
       (values.status === "published" ? ("now" as const) : null),

@@ -185,6 +185,10 @@ export type AdminNewsItem = {
   status: string
   /** "YYYY-MM-DDTHH:MM", or null for an undated draft. */
   publishedAt: string | null
+  expiresAt?: string | null
+  /** null means this post has never had a linked product sale. */
+  linkedSales?:
+    { published: boolean; startsAt: string | null; endsAt: string }[] | null
   /** Publishing needs a cover photo. */
   hasCover?: boolean
 }

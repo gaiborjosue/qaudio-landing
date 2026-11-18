@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import Link from "next/link"
+import { Suspense } from "react"
 import { CableHeading } from "@/components/cable-heading"
 import { NewsFeed } from "@/components/news-feed"
 import { getNewsCount, getNewsPage } from "@/lib/news-data"
@@ -13,11 +14,7 @@ export const metadata: Metadata = pageMetadata({
     "Arrivals, promotions and listening notes from Q Audio in Cambridge, Massachusetts.",
 })
 
-export default async function NewsPage() {
-  const [firstPage, total] = await Promise.all([
-    getNewsPage(null),
-    getNewsCount(),
-  ])
+export default function NewsPage() {
   return (
     <>
       <CableHeading connector="banana" className={styles.titleRow}>
@@ -25,14 +22,26 @@ export default async function NewsPage() {
           News
         </h1>
       </CableHeading>
-      <NewsFeed
-        initial={firstPage ?? { items: [], nextCursor: null }}
-        total={total}
-        labelledBy="news-title"
-      />
+      <Suspense>
+        <LatestNews />
+      </Suspense>
       <nav className={styles.pagination} aria-label="News archive">
         <Link href="/news/archive">Archive</Link>
       </nav>
     </>
+  )
+}
+
+async function LatestNews() {
+  const [firstPage, total] = await Promise.all([
+    getNewsPage(null),
+    getNewsCount(),
+  ])
+  return (
+    <NewsFeed
+      initial={firstPage ?? { items: [], nextCursor: null }}
+      total={total}
+      labelledBy="news-title"
+    />
   )
 }

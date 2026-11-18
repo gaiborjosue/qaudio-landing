@@ -51,3 +51,5 @@ __pycache__/
 
 .vscode/
 .codegraph/
+
+.pnpm-store/

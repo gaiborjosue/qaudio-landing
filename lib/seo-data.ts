@@ -12,7 +12,7 @@ import { PUBLIC_PAGES, siteUrl } from "./site"
 
 export async function getSitemap(): Promise<MetadataRoute.Sitemap> {
   "use cache"
-  cacheLife("content")
+  cacheLife({ stale: 0, revalidate: 30, expire: 60 })
   cacheTag(CATALOG_CACHE_TAG, NEWS_CACHE_TAG)
   const [{ categories, brands }, products, posts] = await Promise.all([
     getCatalogTaxonomy(),

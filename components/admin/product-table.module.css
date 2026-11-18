@@ -3,7 +3,7 @@
    the bar that saves the changes. Monochrome; product photos keep their
    color. Changed cells are marked in ink (a dot and bold text), and a
    missing price with a heavier border. The table sits in a rounded frame,
-   ruled like a grid for the beams (grid-beam.tsx) that run along its lines,
+   ruled like a grid,
    and scrolls sideways on narrow screens, so focus rings are drawn inside
    each control. */
 
@@ -73,8 +73,7 @@
   overflow-x: auto;
   overscroll-behavior-x: contain;
 }
-/* The beam's canvas covers the whole table, also where it scrolls. */
-.beam {
+.productTable .products {
   min-width: 860px;
 }
 .table {
@@ -194,6 +193,18 @@
   min-width: 112px;
 }
 
+.equipment {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.conditionNote {
+  width: 112px;
+  padding: 0 7px;
+}
+
+.conditionNote,
 .price {
   height: 32px;
   border: 1px solid #cfcfcf;
@@ -221,6 +232,7 @@
   font-variant-numeric: tabular-nums;
   outline: none;
 }
+.conditionNote:focus-visible,
 .price:focus-within {
   outline: 2px solid #111;
   outline-offset: -2px;

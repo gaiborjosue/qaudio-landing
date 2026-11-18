@@ -12,6 +12,7 @@ import {
   newsPostInputSchema,
   newsQuickEditsSchema,
 } from "@/lib/admin/schemas"
+import { CATALOG_CACHE_TAG } from "@/lib/catalog-data"
 import { NEWS_CACHE_TAG } from "@/lib/news-data"
 import { sessionSupabase } from "@/lib/supabase/server"
 
@@ -39,6 +40,12 @@ function ownerFail(what: string, error: { code?: string; message: string }) {
   if (error.code === "23514" && /published_complete/.test(error.message)) {
     return new OwnerError("Add a cover photo before publishing.", "cover")
   }
+  if (
+    error.code === "23514" &&
+    /expiry_after_publication/.test(error.message)
+  ) {
+    return new OwnerError("Expiration must be after publication.", "expires_at")
+  }
   if (error.code === "42501") {
     return new OwnerError("Only site admins can save news.")
   }
@@ -48,7 +55,8 @@ function ownerFail(what: string, error: { code?: string; message: string }) {
 const ownerMessage = (error: unknown, fallback: string) =>
   error instanceof OwnerError
     ? error.message
-    : error instanceof Error && /no longer exists|may be deleted/.test(error.message)
+    : error instanceof Error &&
+        /no longer exists|may be deleted/.test(error.message)
       ? "This post was deleted. Reload to see the current list."
       : fallback
 
@@ -134,20 +142,25 @@ export async function saveNewsTableEdits(
 /** Deletes a post after the owner confirmed it; its photos stay in storage. */
 export async function deleteNewsFromAdmin(
   input: unknown
-): Promise<{ error: string } | { deleted: true }> {
+): Promise<
+  | { error: string }
+  | { needsSaleChoice: true }
+  | { deleted: true; cancelled: number }
+> {
   if (!(await getAdmin())) return { error: "Sign in as an admin." }
   const parsed = deleteNewsPostInputSchema.safeParse(input)
   if (!parsed.success) return { error: "That post isn’t valid." }
   try {
-    const slug = await deleteNewsPost(
+    const result = await deleteNewsPost(
       await sessionSupabase(),
-      parsed.data.id,
+      parsed.data,
       ownerFail
     )
+    if (!result) return { error: "This post was already deleted." }
+    if ("needsSaleChoice" in result) return result
     updateTag(NEWS_CACHE_TAG)
-    return slug !== null
-      ? { deleted: true }
-      : { error: "This post was already deleted." }
+    if (result.cancelled) updateTag(CATALOG_CACHE_TAG)
+    return { deleted: true, cancelled: result.cancelled }
   } catch (error) {
     return {
       error: ownerMessage(error, "Couldn’t delete the post. Try again."),

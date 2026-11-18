@@ -1,12 +1,14 @@
 import { defineTool } from "eve/tools"
 import { z } from "zod"
+import { newsStatus, scheduledNewsSales } from "../../lib/admin/news"
+import { toStoreDateTime } from "../../lib/admin/store-time"
 import { readNewsPost } from "../../lib/admin/news-save"
 import { callerSupabase, failure } from "../lib/supabase"
 
 export default defineTool({
   deferred: true,
   description:
-    "Read one news post (draft, scheduled, or published) with its cover, body blocks, and store-time published_at, by slug or id. Read it before editing, then send the full updated post to news__save_news_post.",
+    "Read one news post (draft, scheduled, published, or expired) with its cover, body blocks, and store-time published_at, by slug or id. Read it before editing, then send the full updated post to news__save_news_post.",
   inputSchema: z
     .object({
       slug: z.string().max(120).optional(),
@@ -20,6 +22,22 @@ export default defineTool({
       id ? { id } : { slug: slug! },
       failure
     )
-    return post ? { found: true, post } : { found: false }
+    if (!post) return { found: false }
+    const { linkedSales, ...record } = post
+    const now = toStoreDateTime(new Date())
+    return {
+      found: true,
+      post: record,
+      timing: newsStatus(
+        {
+          ...record,
+          publishedAt: record.published_at,
+          expiresAt: record.expires_at,
+          linkedSales,
+        },
+        now
+      ),
+      scheduled_sale_count: scheduledNewsSales({ linkedSales }, now),
+    }
   },
 })

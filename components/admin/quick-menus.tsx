@@ -72,6 +72,7 @@ const day = (local: string) => formatNewsDate(local.slice(0, 10), "short")
 function newsMeta(post: AdminNewsItem, now: string) {
   const status = newsStatus(post, now)
   if (status === "draft" || !post.publishedAt) return "Draft"
+  if (status === "expired") return "Expired"
   return status === "scheduled"
     ? `Scheduled · ${day(post.publishedAt)}`
     : day(post.publishedAt)

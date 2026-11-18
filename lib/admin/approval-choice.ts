@@ -136,8 +136,13 @@ export function scheduledAt(tool: ReleaseTool, input: unknown) {
 
 /** A deal can't start once it has ended. */
 export function scheduleBefore(tool: ReleaseTool, input: unknown) {
-  if (tool !== "save_deal") return null
-  const ends = parse(tool, input)?.ends_at
+  const post = parse(tool, input)
+  const ends =
+    tool === "save_news_post"
+      ? post?.expires_at
+      : tool === "save_deal"
+        ? post?.ends_at
+        : null
   return isTime(ends) ? ends : null
 }
 

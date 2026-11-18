@@ -43,6 +43,11 @@ export function priceQualifications(note = "", condition = "") {
   return { startingAt, text: [...new Set(parts.filter(Boolean))].join(" · ") }
 }
 
+/** Used stock includes the demos listed in the Used Equipment category. */
+export function isUsedEquipment(category: string, condition: string) {
+  return category === "used-equipment" || condition === "Used"
+}
+
 /** The condition badge supplies New/Demo/Used; retain only grade/terms beside it. */
 export function conditionQualification(note = "") {
   return [

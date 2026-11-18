@@ -53,7 +53,6 @@ export function ProductsView({
   taxonomy,
   filters,
   onFilters,
-  active,
   sheet,
   onSheet,
   deleting,
@@ -63,8 +62,6 @@ export function ProductsView({
   taxonomy: CatalogTaxonomy
   filters: ProductFilters
   onFilters: (filters: ProductFilters) => void
-  /** Whether this tab is the one shown. */
-  active: boolean
   sheet: ProductSheet | null
   onSheet: (sheet: ProductSheet | null) => void
   /** The id of the product waiting for delete confirmation. */
@@ -212,7 +209,6 @@ export function ProductsView({
         taxonomy={taxonomy}
         filters={filters}
         onFilters={onFilters}
-        beam={active && !sheet && !deleting}
         onOpen={(product) => {
           gone.current = false
           onSheet({ mode: "edit", id: product.id })

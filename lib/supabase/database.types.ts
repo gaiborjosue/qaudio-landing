@@ -306,6 +306,8 @@ export type Database = {
           cover_width: number | null
           created_at: string
           excerpt: string
+          expires_at: string | null
+          has_linked_sales: boolean
           id: string
           published_at: string | null
           slug: string
@@ -322,6 +324,8 @@ export type Database = {
           cover_width?: number | null
           created_at?: string
           excerpt?: string
+          expires_at?: string | null
+          has_linked_sales?: boolean
           id?: string
           published_at?: string | null
           slug: string
@@ -338,6 +342,8 @@ export type Database = {
           cover_width?: number | null
           created_at?: string
           excerpt?: string
+          expires_at?: string | null
+          has_linked_sales?: boolean
           id?: string
           published_at?: string | null
           slug?: string
@@ -409,6 +415,7 @@ export type Database = {
           price_unit: string
           ready_for_audition: boolean
           sale_ends_at: string | null
+          sale_news_post_id: string | null
           sale_price_cents: number | null
           sale_starts_at: string | null
           short_description: string
@@ -437,6 +444,7 @@ export type Database = {
           price_unit?: string
           ready_for_audition?: boolean
           sale_ends_at?: string | null
+          sale_news_post_id?: string | null
           sale_price_cents?: number | null
           sale_starts_at?: string | null
           short_description?: string
@@ -465,6 +473,7 @@ export type Database = {
           price_unit?: string
           ready_for_audition?: boolean
           sale_ends_at?: string | null
+          sale_news_post_id?: string | null
           sale_price_cents?: number | null
           sale_starts_at?: string | null
           short_description?: string
@@ -487,6 +496,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "catalog_categories"
             referencedColumns: ["slug"]
+          },
+          {
+            foreignKeyName: "products_sale_news_post_id_fkey"
+            columns: ["sale_news_post_id"]
+            isOneToOne: false
+            referencedRelation: "news_posts"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -623,6 +639,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      delete_news_with_sales: {
+        Args: { p_post_id: string; p_sale_choice?: string }
+        Returns: { cancelled: number; slug: string }[]
+      }
       discard_media_upload: {
         Args: { p_bucket: string; p_path: string }
         Returns: undefined
@@ -650,6 +670,15 @@ export type Database = {
           slug: string
           title: string
         }[]
+      }
+      save_product_sales: {
+        Args: {
+          p_ends_at: string
+          p_news_post_id?: string
+          p_products: Json
+          p_starts_at: string | null
+        }
+        Returns: undefined
       }
       pin_media_asset: {
         Args: { p_bucket: string; p_path: string }

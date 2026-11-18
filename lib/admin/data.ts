@@ -8,6 +8,7 @@ import {
   type AdminProduct,
   type AdminSchedule,
 } from "@/lib/admin/preview"
+import { NEWS_SALE_COLUMNS, newsSaleDetails } from "./news"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { descriptionFromColumns } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
@@ -28,7 +29,9 @@ export async function getAdminNews(): Promise<AdminNewsItem[]> {
   for (let offset = 0; ; offset += pageSize) {
     const { data, error } = await supabase
       .from("news_posts")
-      .select("id, slug, title, status, published_at, cover_path")
+      .select(
+        `id, slug, title, status, published_at, cover_path, ${NEWS_SALE_COLUMNS}`
+      )
       .order("published_at", { ascending: false, nullsFirst: true })
       .order("id")
       .range(offset, offset + pageSize - 1)
@@ -41,6 +44,7 @@ export async function getAdminNews(): Promise<AdminNewsItem[]> {
         status: post.status,
         publishedAt: post.published_at && toStoreDateTime(post.published_at),
         hasCover: post.cover_path !== null,
+        ...newsSaleDetails(post),
       }))
     )
     if (data.length < pageSize) return posts

@@ -36,6 +36,8 @@ import {
 } from "@/lib/admin/photo-upload"
 import {
   inputFromValues,
+  parseDollars,
+  PRODUCT_AVAILABILITY_OPTIONS,
   PREFILL_FIELDS,
   slugify,
   type PrefillField,
@@ -44,6 +46,7 @@ import {
   type ProductValues,
 } from "@/lib/admin/product-editor"
 import { productFromInput, type CatalogTaxonomy } from "@/lib/admin/preview"
+import { isUsedEquipment } from "@/lib/catalog"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import {
   productCardLineInputSchema,
@@ -746,6 +749,7 @@ export function ProductEditor({
         ...values,
         id: result.id,
         slug: result.slug,
+        status: input.status,
         short_description: result.short_description,
         images: input.images.map((image, index) => ({
           ...image,
@@ -877,6 +881,13 @@ export function ProductEditor({
     })
   }
 
+  const used = isUsedEquipment(values.category_slug, values.condition)
+  const sold = used && values.availability === "sold"
+  const useListPrice =
+    !values.price.trim() &&
+    values.availability === "available" &&
+    parseDollars(values.msrp) > 0
+
   return (
     <div
       ref={form}
@@ -954,7 +965,8 @@ export function ProductEditor({
                     type="radio"
                     name={fieldId("status")}
                     value={status.value}
-                    checked={values.status === status.value}
+                    checked={(sold ? "draft" : values.status) === status.value}
+                    disabled={sold && status.value === "published"}
                     onChange={() => set("status", status.value)}
                   />
                   <span>{status.label}</span>
@@ -1105,21 +1117,33 @@ export function ProductEditor({
             "Availability",
             <Choice
               value={values.availability}
-              options={[
-                { value: "available", label: "Available" },
-                { value: "sold", label: "Sold out" },
-                { value: "unavailable", label: "Unavailable" },
-              ]}
+              options={PRODUCT_AVAILABILITY_OPTIONS}
               onChange={(value) =>
                 set("availability", value as ProductValues["availability"])
               }
               aria-labelledby={`${fieldId("availability")}-label`}
             />
           )}
+          {(used || values.condition_note) &&
+            field(
+              "condition_note",
+              "Condition score or notes",
+              <input
+                type="text"
+                value={values.condition_note ?? ""}
+                placeholder="8/10"
+                maxLength={500}
+                onChange={(event) => set("condition_note", event.target.value)}
+                {...invalid("condition_note")}
+              />
+            )}
           <div className={`${styles.pricing} ${styles.full}`}>
             {field(
               "price_cents",
-              "Price",
+              <>
+                Selling price{" "}
+                <span className={styles.aside}>Blank for price on request</span>
+              </>,
               <span className={styles.affix}>
                 <span aria-hidden="true">$</span>
                 <input
@@ -1153,7 +1177,8 @@ export function ProductEditor({
             {field(
               "msrp_cents",
               <>
-                List price <span className={styles.aside}>MSRP, optional</span>
+                List price{" "}
+                <span className={styles.aside}>Manufacturer MSRP</span>
               </>,
               suggested(
                 "msrp",
@@ -1167,6 +1192,17 @@ export function ProductEditor({
                     {...invalid("msrp_cents")}
                   />
                 </span>
+              ),
+              undefined,
+              useListPrice && (
+                <button
+                  type="button"
+                  className={styles.saleToggle}
+                  disabled={disabled || saving}
+                  onClick={() => set("price", values.msrp)}
+                >
+                  Use as selling price
+                </button>
               )
             )}
             {field(

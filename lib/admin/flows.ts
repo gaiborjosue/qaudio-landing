@@ -43,7 +43,7 @@ export const FLOWS = [
         id: "products",
         label: "Products",
         instructions:
-          "Look at the attached promotion graphic with view_photos. Load the products skill and discover products__. Work out the brand and product line from the owner's words and the graphic, then find the matching products with products__list_catalog (brand_slug, and search with the line's name). Say in one short list which products match. Ask with ask_question only when it's unclear which ones. If none are in the shop, say so: the prices step is then skipped.",
+          "Look at the attached promotion graphic with view_photos. Load the products skill and discover products__. Work out the brand and product line from the owner's words and the graphic, then find the matching products with products__list_catalog (brand_slug, and search with the line's name). For a storefront promotion, match published, available products. Say in one short list which products match. Ask with ask_question only when it's unclear which ones. If none are in the shop, say so: the prices step is then skipped.",
       },
       {
         id: "dates",
@@ -57,14 +57,14 @@ export const FLOWS = [
         label: "News post",
         tool: "news__save_news_post",
         instructions:
-          "Load the news skill and discover news__. Write the post from the graphic and the owner's words: what's on sale, how much off, and until when, linking each product to /products/<slug>. Use the attached graphic as the cover, fit contain. Propose it with news__save_news_post, published at the sale's start (\"now\" when it starts now).",
+          "Load the news skill and discover news__. Write the post from the graphic and the owner's words: what's on sale, how much off, and until when, linking each product to /products/<slug>. Use the attached graphic as the cover, fit contain. Propose it with news__save_news_post, published at the sale's start (\"now\" when it starts now), with expires_at set to the promotion's end. Keep the saved result's id, status, and published_at for the price step.",
       },
       {
         id: "prices",
         label: "Sale prices",
         tool: "products__save_sale",
         instructions:
-          "Call products__save_sale with the matched products exactly as products__list_catalog gave them (id, name, price_cents, msrp_cents), the discount, and the dates. Use off msrp when the promotion is off MSRP or list price, otherwise price. Mark this step skipped when no products matched.",
+          "Call products__save_sale with the matched products exactly as products__list_catalog gave them (id, name, price_cents, msrp_cents), the discount, and the dates. If the news step saved a post, pass its returned id as news_post_id. If that post is published or scheduled, use its returned published_at as starts_at even if the approval changed the proposed time. If it was saved as a draft or skipped, keep the confirmed sale dates. Never guess a post id. Use off msrp when the promotion is off MSRP or list price, otherwise price. Mark this step skipped when no products matched.",
       },
       {
         id: "design",

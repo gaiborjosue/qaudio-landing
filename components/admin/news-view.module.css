@@ -37,3 +37,15 @@
 .loading p {
   margin: 0;
 }
+
+.saleChoice {
+  display: grid;
+  gap: 0.5rem;
+  padding-block: 0.5rem;
+}
+
+.saleChoice label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}

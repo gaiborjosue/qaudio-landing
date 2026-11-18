@@ -79,7 +79,7 @@ registerHooks({
   },
 })
 
-const { filterNews, newsChatMessage, newsStatus } =
+const { filterNews, newsChatMessage, newsStatus, scheduledNewsSales } =
   await import("../lib/admin/news.ts")
 const { getAdminNews } = await import("../lib/admin/data.ts")
 const { NewsView } = await import("../components/admin/news-view.tsx")
@@ -115,6 +115,26 @@ test("news visibility uses status and the exact store-time publication boundary"
   assert.equal(newsStatus(post("undated", "published", null), now), "draft")
 })
 
+test("promotion news expires at its cutoff or when its last linked public sale ends", () => {
+  const promotion = { ...posts[3], expiresAt: "2026-11-07T12:02" }
+  const linked = {
+    ...promotion,
+    linkedSales: [
+      { published: true, startsAt: null, endsAt: "2026-11-07T12:01" },
+      { published: false, startsAt: "2026-11-07T12:01", endsAt: "2026-11-07T12:05" },
+    ],
+  }
+  assert.equal(newsStatus(promotion, now), "published")
+  assert.equal(newsStatus(promotion, promotion.expiresAt), "expired")
+  assert.equal(newsStatus(linked, now), "published")
+  assert.equal(newsStatus(linked, "2026-11-07T12:01"), "expired")
+  assert.equal(scheduledNewsSales(linked, now), 1)
+  assert.equal(scheduledNewsSales(linked, "2026-11-07T12:01"), 0)
+  assert.deepEqual(filterNews([posts[3], linked], "", "expired", promotion.expiresAt), [linked])
+  assert.equal(newsStatus({ ...promotion, linkedSales: [] }, now), "expired")
+  assert.equal(newsStatus({ ...promotion, status: "draft", linkedSales: [] }, now), "draft")
+})
+
 test("search matches titles and slugs, with combined status filters", () => {
   assert.deepEqual(filterNews(posts, "", "all", now), posts)
   assert.deepEqual(filterNews(posts, "", "draft", now), posts.slice(0, 2))
@@ -145,6 +165,9 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
     status: i === 0 ? "draft" : "published",
     published_at: i === 0 ? null : "2026-11-07T17:00:00Z",
     cover_path: i === 0 ? null : "news/cover.webp",
+    expires_at: null,
+    has_linked_sales: false,
+    products: [],
   }))
   const calls = []
   globalThis.__newsDb = {
@@ -154,7 +177,7 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
         select(columns) {
           assert.equal(
             columns,
-            "id, slug, title, status, published_at, cover_path"
+            "id, slug, title, status, published_at, cover_path, expires_at, has_linked_sales, products(status, sale_starts_at, sale_ends_at)"
           )
           return query
         },
@@ -178,6 +201,8 @@ test("admin news loads beyond 200 rows through the session and keeps drafts", as
   assert.deepEqual(result[0], {
     ...post("0", "draft", null, "News"),
     hasCover: false,
+    expiresAt: null,
+    linkedSales: null,
   })
   assert.equal(result[400].publishedAt, now)
   assert.equal(result[400].hasCover, true)

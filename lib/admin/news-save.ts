@@ -2,10 +2,12 @@ import type { SupabaseClient } from "@supabase/supabase-js"
 import { newsExcerpt, type NewsBlock } from "../news"
 import type { Database, Json } from "../supabase/database.types"
 import type {
+  DeleteNewsPostInput,
   NewsBlockInput,
   NewsPostInput,
   NewsQuickEdit,
 } from "./schemas"
+import { NEWS_SALE_COLUMNS, newsSaleDetails, newsStatus } from "./news"
 import { fromStoreDateTime, toStoreDateTime } from "./store-time"
 import { placeUploads, type Fail } from "./uploads"
 
@@ -20,10 +22,11 @@ type Supabase = SupabaseClient<Database>
 export type NewsRecord = Omit<NewsPostInput, "id" | "published_at"> & {
   id: string
   published_at: string | null
+  linkedSales?: ReturnType<typeof newsSaleDetails>["linkedSales"]
 }
 
 const RECORD_COLUMNS =
-  "id, slug, title, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, status, published_at"
+  `id, slug, title, body, cover_path, cover_width, cover_height, cover_alt, cover_fit, status, published_at, ${NEWS_SALE_COLUMNS}` as const
 
 /**
  * One post (draft, scheduled, or published) with its cover, body blocks as
@@ -40,6 +43,7 @@ export async function readNewsPost(
   ).maybeSingle()
   if (error) throw fail("News post", error)
   if (!post) return null
+  const { expiresAt, linkedSales } = newsSaleDetails(post)
   return {
     id: post.id,
     slug: post.slug,
@@ -57,6 +61,8 @@ export async function readNewsPost(
         : null,
     status: post.status === "published" ? "published" : "draft",
     published_at: post.published_at && toStoreDateTime(post.published_at),
+    expires_at: expiresAt,
+    linkedSales,
   }
 }
 
@@ -75,7 +81,7 @@ function publishedInstant(value: string | null) {
  */
 export async function saveNewsPost(
   supabase: Supabase,
-  { id, body, cover, published_at, ...post }: NewsPostInput,
+  { id, body, cover, published_at, expires_at, ...post }: NewsPostInput,
   fail: Fail
 ) {
   // Move newly uploaded photos into news/ before the post points at them.
@@ -107,31 +113,41 @@ export async function saveNewsPost(
     cover_alt: cover?.alt.trim() ?? "",
     cover_fit: cover?.fit ?? "cover",
     published_at: publishedAt,
+    ...(expires_at !== undefined && {
+      expires_at: expires_at && fromStoreDateTime(expires_at),
+    }),
   }
   const result = id
     ? await supabase
         .from("news_posts")
         .update(row)
         .eq("id", id)
-        .select("id, slug")
-    : await supabase.from("news_posts").insert(row).select("id, slug")
+        .select(`id, slug, status, published_at, ${NEWS_SALE_COLUMNS}`)
+    : await supabase
+        .from("news_posts")
+        .insert(row)
+        .select(`id, slug, status, published_at, ${NEWS_SALE_COLUMNS}`)
   if (result.error) throw fail("News post", result.error)
   const saved = result.data[0]
   if (!saved) {
     throw new Error("News post: no post with that id; it may be deleted.")
   }
+  const published = saved.published_at && toStoreDateTime(saved.published_at)
+  const timing = newsStatus(
+    { status: saved.status, publishedAt: published, ...newsSaleDetails(saved) },
+    toStoreDateTime(new Date())
+  )
   return {
     id: saved.id,
     slug: saved.slug,
-    live:
-      post.status === "published" &&
-      publishedAt !== null &&
-      Date.parse(publishedAt) <= Date.now(),
+    live: timing === "published",
+    timing,
+    expires_at: saved.expires_at && toStoreDateTime(saved.expires_at),
     cover: row.cover_path,
     images: blocks.flatMap((block) =>
       block.type === "image" ? [block.image.src] : []
     ),
-    published_at: publishedAt && toStoreDateTime(publishedAt),
+    published_at: published,
   }
 }
 
@@ -164,20 +180,17 @@ export async function saveNewsQuickEdits(
   return { saved: edits.length }
 }
 
-/**
- * Deletes a post by id (its photo files stay in storage). Returns its slug,
- * or null when no post has that id.
- */
+/** Deletes a post and, if approved, cancels its still-scheduled prices. */
 export async function deleteNewsPost(
   supabase: Supabase,
-  id: string,
+  { id, sale_choice }: DeleteNewsPostInput,
   fail: Fail
 ) {
-  const { data, error } = await supabase
-    .from("news_posts")
-    .delete()
-    .eq("id", id)
-    .select("slug")
+  const { data, error } = await supabase.rpc("delete_news_with_sales", {
+    p_post_id: id,
+    ...(sale_choice && { p_sale_choice: sale_choice }),
+  })
+  if (error?.code === "P0001") return { needsSaleChoice: true } as const
   if (error) throw fail("News post", error)
-  return data[0]?.slug ?? null
+  return data[0] ?? null
 }

@@ -324,6 +324,12 @@ export const saleInputSchema = z
       .enum(["cent", "dollar"])
       .default("cent")
       .describe("dollar rounds each sale price to the nearest whole dollar."),
+    news_post_id: z
+      .uuid()
+      .optional()
+      .describe(
+        "For the Product sale flow, the id returned by the approved news save. Omit for an independent sale."
+      ),
     starts_at: z
       .union([z.literal("now"), z.string().regex(STORE_DATETIME)])
       .describe(
@@ -394,8 +400,10 @@ export const productDraftSchema = productInputSchema
 export const productQuickEditSchema = z
   .object({
     id: z.uuid(),
-    price_cents: z.int().positive().optional(),
+    price_cents: z.int().positive().nullable().optional(),
     condition: z.enum(["New", "Demo", "Used"]).optional(),
+    condition_note: z.string().max(500).optional(),
+    availability: z.enum(["available", "sold", "unavailable"]).optional(),
     ready_for_audition: z.boolean().optional(),
     status: z.enum(["draft", "published"]).optional(),
   })
@@ -483,6 +491,14 @@ export const newsPostInputSchema = z
     status: z
       .enum(["draft", "published"])
       .describe("published shows it from published_at on; draft hides it."),
+    expires_at: z
+      .string()
+      .regex(STORE_DATETIME)
+      .nullable()
+      .optional()
+      .describe(
+        "Store-time end of the promotion mentioned in the post. Omit to keep the existing expiry or use null to clear it."
+      ),
     published_at: z
       .union([z.literal("now"), z.string().regex(STORE_DATETIME)])
       .nullable()
@@ -492,6 +508,18 @@ export const newsPostInputSchema = z
   })
   .superRefine((post, ctx) => {
     if (post.status !== "published") return
+    if (
+      post.expires_at &&
+      post.published_at &&
+      post.published_at !== "now" &&
+      post.expires_at <= post.published_at
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["expires_at"],
+        message: "Expiration must be after publication.",
+      })
+    }
     if (!post.cover) {
       ctx.addIssue({
         code: "custom",
@@ -520,6 +548,12 @@ export const newsQuickEditsSchema = z.array(newsQuickEditSchema).min(1).max(200)
 
 export const deleteNewsPostInputSchema = z.object({
   id: z.uuid(),
+  sale_choice: z
+    .enum(["keep", "cancel"])
+    .optional()
+    .describe(
+      "For linked scheduled prices, ask the owner whether to keep or cancel them before proposing deletion."
+    ),
   title: z
     .string()
     .min(1)

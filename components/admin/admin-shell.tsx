@@ -241,7 +241,6 @@ export function AdminShell({
             taxonomy={preview.taxonomy}
             filters={productFilters}
             onFilters={filterProducts}
-            active={view === "products"}
             sheet={sheet}
             onSheet={setSheet}
             deleting={deleting}

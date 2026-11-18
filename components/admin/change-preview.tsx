@@ -481,6 +481,8 @@ export const ChangePreview = memo(function ChangePreview({
             {saleDiscountLabel(sale)} · {saleWindowLabel(sale)} · {lines.length}{" "}
             product{lines.length === 1 ? "" : "s"}
             {problems > 0 && ` · ${problems} can’t go on sale`}
+            {sale.news_post_id &&
+              ` · Linked to ${data.news.find((post) => post.id === sale.news_post_id)?.title ?? "sale news post"}`}
           </Note>
           <ProductReviewTable
             label="Products on sale"
@@ -563,6 +565,8 @@ export const ChangePreview = memo(function ChangePreview({
               parsed.data.status,
               parsed.data.published_at
             )}
+            {parsed.data.expires_at &&
+              ` · Expires ${formatStoreDateTime(parsed.data.expires_at)}`}
             {!card && " · Needs a cover photo to publish"}
           </Note>
           <div className={styles.newsPreview}>
@@ -597,8 +601,11 @@ export const ChangePreview = memo(function ChangePreview({
       if (!parsed.success) break
       return (
         <Note>
-          Deletes “{parsed.data.title}” and its page. Saving it as a draft hides
-          it instead.
+          Deletes “{parsed.data.title}” and its page.
+          {parsed.data.sale_choice === "cancel" &&
+            " Cancels its linked scheduled sale prices."}
+          {parsed.data.sale_choice === "keep" &&
+            " Keeps its linked scheduled sale prices."}
         </Note>
       )
     }

@@ -201,6 +201,44 @@ test("turning off an existing sale clears it on Save while unrelated edits prese
   assert.equal(removed.price_cents, 129900)
 })
 
+test("the editor keeps a used equipment score and sends sold equipment as draft", () => {
+  const values = valuesFrom({
+    status: "published",
+    condition: "Demo",
+    category_slug: "used-equipment",
+    condition_note: "8/10",
+    msrp_cents: 129900,
+  })
+  const input = inputFromValues({ ...values, availability: "sold" }, values)
+  assert.equal(input.status, "draft")
+  assert.equal(input.condition_note, "8/10")
+  assert.equal(input.msrp_cents, 129900)
+  assert.equal(input.price_cents, null)
+  assert.equal(inputFromValues({ ...values, price: values.msrp }, values).price_cents, 129900)
+})
+
+test("scheduled prices and their news link are saved in one RPC with store-time dates", async () => {
+  const proposed = saleInputSchema.parse({
+    title: "Winter sale",
+    starts_at: "2027-01-11T10:00",
+    ends_at: "2027-01-15T19:00",
+    news_post_id: id(3),
+    products: [{ id: id(1), name: "Speakers", price_cents: 10000, msrp_cents: 12000 }],
+    discount: { kind: "percent", percent: 25 },
+  })
+  const calls = []
+  await sale.saveSale({ rpc: async (...args) => {
+    calls.push(args)
+    return { error: null }
+  } }, proposed, () => new Error("Unexpected database failure"))
+  assert.deepEqual(calls, [["save_product_sales", {
+    p_products: [{ id: id(1), price_cents: 10000, msrp_cents: 12000, sale_price_cents: 9000 }],
+    p_starts_at: "2027-01-11T15:00:00.000Z",
+    p_ends_at: "2027-01-16T00:00:00.000Z",
+    p_news_post_id: id(3),
+  }]])
+})
+
 test("sale prices come off MSRP or the regular price, rounded as asked", () => {
   const percent = { kind: "percent", percent: 25 }
   assert.equal(sale.discountedPrice(129900, percent), 97425)

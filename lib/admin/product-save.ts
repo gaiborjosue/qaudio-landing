@@ -107,7 +107,10 @@ export async function saveProduct(
     name: fields.name.trim(),
     short_description: fields.short_description.trim(),
     ...descriptionColumns(description),
-    ...(sale !== undefined && saleColumns(sale)),
+    ...(sale !== undefined && {
+      ...saleColumns(sale),
+      sale_news_post_id: null,
+    }),
   }
   const result = id
     ? await supabase

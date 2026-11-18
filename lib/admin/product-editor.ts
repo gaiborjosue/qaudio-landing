@@ -1,3 +1,4 @@
+import { isUsedEquipment } from "../catalog"
 import type { AdminProduct } from "./preview"
 import type { ProductDraft, ProductInput } from "./schemas"
 
@@ -42,6 +43,12 @@ export type ProductValues = {
   manufacturer_url: string
   images: EditorPhoto[]
 }
+
+export const PRODUCT_AVAILABILITY_OPTIONS = [
+  { value: "available", label: "Available" },
+  { value: "sold", label: "Sold out" },
+  { value: "unavailable", label: "Unavailable" },
+] as const
 
 /** The form fields Prefill with Tune can suggest, besides photos. */
 export const PREFILL_FIELDS = [
@@ -198,7 +205,11 @@ export function inputFromValues(
     condition: values.condition,
     ready_for_audition: values.ready_for_audition,
     manufacturer_url: values.manufacturer_url.trim() || null,
-    status: values.status,
+    status:
+      values.availability === "sold" &&
+      isUsedEquipment(values.category_slug, values.condition)
+        ? ("draft" as const)
+        : values.status,
     images: values.images.map((image, index) => ({
       ...image,
       alt:

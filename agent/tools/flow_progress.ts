@@ -1,3 +1,4 @@
+import { productSaleFlow } from "../lib/product-sale-flow"
 import { defineTool } from "eve/tools"
 import {
   flowById,
@@ -29,10 +30,19 @@ export default defineTool({
       )
     }
     if (status === "done" || status === "stopped") {
+      if (id === "product-sale") {
+        productSaleFlow.update(() => ({ step: null, newsPostId: null }))
+      }
       return { flow: id, status }
     }
     const index = step ? flow.steps.findIndex((item) => item.id === step) : 0
     const current = flow.steps[index]
+    if (id === "product-sale") {
+      productSaleFlow.update((previous) => ({
+        step: status === "skipped" ? null : current.id,
+        newsPostId: step ? previous.newsPostId : null,
+      }))
+    }
     const next = flow.steps
       .slice(index + 1)
       .map((item) => item.id)

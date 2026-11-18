@@ -12,8 +12,8 @@ import styles from "../news.module.css"
 
 type Props = { params: Promise<{ slug: string }> }
 
-// Published posts are prerendered; newer ones render on first visit. Their
-// data refreshes with the news cache ("content" profile, 5 minutes).
+// Precompute routes for published articles. The article itself uses the
+// short news cache so a promotion can expire without a rebuild.
 export async function generateStaticParams() {
   const slugs = await getNewsSlugs()
   return slugs.map((slug) => ({ slug }))

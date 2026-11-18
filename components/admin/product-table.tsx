@@ -4,13 +4,16 @@ import { useId, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
-import { GridBeam, type GridBeamLines } from "@/components/ui/grid-beam"
+import { isUsedEquipment } from "@/lib/catalog"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import {
   NO_PRODUCT_FILTERS,
   type ProductFilters,
 } from "@/lib/admin/product-filters"
-import { parseDollars } from "@/lib/admin/product-editor"
+import {
+  parseDollars,
+  PRODUCT_AVAILABILITY_OPTIONS,
+} from "@/lib/admin/product-editor"
 import { saleStatus } from "@/lib/admin/sale"
 import type { ProductQuickEdit } from "@/lib/admin/schemas"
 import { toStoreDateTime } from "@/lib/admin/store-time"
@@ -35,12 +38,15 @@ const STATUSES = [
 ] as const
 
 type Condition = (typeof CONDITIONS)[number]
+type Availability = (typeof PRODUCT_AVAILABILITY_OPTIONS)[number]["value"]
 type Status = (typeof STATUSES)[number]["value"]
 
 /** A product's unsaved values, the price as typed. */
 type Draft = {
   price?: string
   condition?: Condition
+  condition_note?: string
+  availability?: Availability
   ready_for_audition?: boolean
   status?: Status
 }
@@ -65,16 +71,33 @@ const dollars = (cents: number | null) =>
         maximumFractionDigits: 2,
       })
 
-const isPrice = (cents: number) => Number.isSafeInteger(cents) && cents > 0
+const priceValue = (text: string) => (text.trim() ? parseDollars(text) : null)
+const invalidPrice = (text: string) => {
+  const cents = priceValue(text)
+  return cents !== null && (!Number.isSafeInteger(cents) || cents <= 0)
+}
 
 /** The draft's fields that differ from the saved product. */
 function unsaved(product: AdminProduct, draft: Draft = {}): Draft {
-  const { price, condition, ready_for_audition, status } = draft
+  const {
+    price,
+    condition,
+    condition_note,
+    availability,
+    ready_for_audition,
+    status,
+  } = draft
   return {
     ...(price !== undefined &&
-      parseDollars(price) !== product.price_cents && { price }),
+      priceValue(price) !== product.price_cents && { price }),
     ...(condition !== undefined &&
       condition !== product.condition && { condition }),
+    ...(condition_note !== undefined &&
+      condition_note !== (product.condition_note ?? "") && { condition_note }),
+    ...(availability !== undefined &&
+      availability !== (product.availability ?? "available") && {
+        availability,
+      }),
     ...(ready_for_audition !== undefined &&
       ready_for_audition !== product.ready_for_audition && {
         ready_for_audition,
@@ -98,24 +121,6 @@ function withoutSaved(current: Drafts, sent: Drafts): Drafts {
 }
 
 /**
- * The beams follow the table's own lines: between the columns, and under
- * the heading and each row but the last.
- */
-function tableLines(root: HTMLElement, box: DOMRect): GridBeamLines {
-  const table = root.querySelector("table")
-  const head = table?.tHead?.rows[0]
-  if (!table || !head) return { x: [], y: [] }
-  return {
-    x: [...head.cells]
-      .slice(1)
-      .map((cell) => cell.getBoundingClientRect().left - box.left),
-    y: [...table.rows]
-      .slice(0, -1)
-      .map((row) => row.getBoundingClientRect().bottom - box.top),
-  }
-}
-
-/**
  * Every product, drafts included, as a table the owner filters and edits in
  * place, like a CMS collection. The short fields (price, condition,
  * audition, status) save here in one go, as the signed-in admin; a row's
@@ -128,7 +133,6 @@ export function ProductTable({
   taxonomy,
   filters,
   onFilters,
-  beam,
   onOpen,
   onDelete,
   onSaved,
@@ -138,8 +142,6 @@ export function ProductTable({
   taxonomy: CatalogTaxonomy
   filters: ProductFilters
   onFilters: (filters: ProductFilters) => void
-  /** Runs the grid beam over the table (off while it isn't shown). */
-  beam: boolean
   /** Opens a product in the full form. */
   onOpen: (product: AdminProduct) => void
   /** Asks to delete a product. */
@@ -191,8 +193,7 @@ export function ProductTable({
     return Object.keys(fields).length > 0 ? [{ product, fields }] : []
   })
   const unpriced = changes.filter(
-    ({ fields }) =>
-      fields.price !== undefined && !isPrice(parseDollars(fields.price))
+    ({ fields }) => fields.price !== undefined && invalidPrice(fields.price)
   )
 
   // A typed price stays as typed until the field loses focus, even when it
@@ -212,9 +213,13 @@ export function ProductTable({
     const edits: ProductQuickEdit[] = changes.map(({ product, fields }) => ({
       id: product.id,
       ...(fields.price !== undefined && {
-        price_cents: parseDollars(fields.price),
+        price_cents: priceValue(fields.price),
       }),
       ...(fields.condition && { condition: fields.condition }),
+      ...(fields.condition_note !== undefined && {
+        condition_note: fields.condition_note,
+      }),
+      ...(fields.availability && { availability: fields.availability }),
       ...(fields.ready_for_audition !== undefined && {
         ready_for_audition: fields.ready_for_audition,
       }),
@@ -326,49 +331,41 @@ export function ProductTable({
         {rows.length > 0 && (
           <div className={styles.frame}>
             <div className={styles.scroller}>
-              <GridBeam
-                className={styles.beam}
-                lines={tableLines}
-                active={beam}
-              >
-                <table className={styles.table}>
-                  <caption className="visually-hidden">Products</caption>
-                  <thead>
-                    <tr>
-                      <th scope="col" className={styles.photoColumn}>
-                        <span className="visually-hidden">Photo</span>
-                      </th>
-                      <th scope="col">Product</th>
-                      <th scope="col">Category</th>
-                      <th scope="col">Condition</th>
-                      <th scope="col">Price</th>
-                      <th scope="col" className={styles.auditionColumn}>
-                        Audition
-                      </th>
-                      <th scope="col">Status</th>
-                      <th scope="col" className={styles.actionsColumn}>
-                        <span className="visually-hidden">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((product) => (
-                      <ProductRow
-                        key={product.id}
-                        product={product}
-                        draft={drafts[product.id] ?? {}}
-                        errorId={`${id}-${product.id}-price`}
-                        changedId={changedId}
-                        onEdit={(change, typing) =>
-                          edit(product, change, typing)
-                        }
-                        onOpen={() => onOpen(product)}
-                        onDelete={() => onDelete(product)}
-                      />
-                    ))}
-                  </tbody>
-                </table>
-              </GridBeam>
+              <table className={`${styles.table} ${styles.products}`}>
+                <caption className="visually-hidden">Products</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" className={styles.photoColumn}>
+                      <span className="visually-hidden">Photo</span>
+                    </th>
+                    <th scope="col">Product</th>
+                    <th scope="col">Category</th>
+                    <th scope="col">Condition</th>
+                    <th scope="col">Selling price</th>
+                    <th scope="col" className={styles.auditionColumn}>
+                      Audition
+                    </th>
+                    <th scope="col">Status</th>
+                    <th scope="col" className={styles.actionsColumn}>
+                      <span className="visually-hidden">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((product) => (
+                    <ProductRow
+                      key={product.id}
+                      product={product}
+                      draft={drafts[product.id] ?? {}}
+                      errorId={`${id}-${product.id}-price`}
+                      changedId={changedId}
+                      onEdit={(change, typing) => edit(product, change, typing)}
+                      onOpen={() => onOpen(product)}
+                      onDelete={() => onDelete(product)}
+                    />
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
@@ -477,7 +474,11 @@ function ProductRow({
   const mark = (field: keyof Draft) => fields[field] !== undefined || undefined
   const changed = (field: keyof Draft) => (mark(field) ? changedId : undefined)
   const price = draft.price ?? dollars(product.price_cents)
-  const priceInvalid = mark("price") && !isPrice(parseDollars(price))
+  const priceInvalid = mark("price") && invalidPrice(price)
+  const condition = draft.condition ?? product.condition
+  const used = isUsedEquipment(product.category.slug, condition)
+  const availability = draft.availability ?? product.availability ?? "available"
+  const sold = used && availability === "sold"
   const pair = product.price_unit === "pair"
 
   return (
@@ -496,13 +497,43 @@ function ProductRow({
         <span className={styles.cell} data-changed={mark("condition")}>
           <Choice
             small
-            value={draft.condition ?? product.condition}
+            value={condition}
             options={CONDITION_OPTIONS}
             aria-label={`Condition of ${product.name}`}
             aria-describedby={changed("condition")}
             onChange={(value) => onEdit({ condition: value as Condition })}
           />
         </span>
+        {used && (
+          <div className={styles.equipment}>
+            <span className={styles.cell} data-changed={mark("condition_note")}>
+              <input
+                className={styles.conditionNote}
+                type="text"
+                value={draft.condition_note ?? product.condition_note ?? ""}
+                placeholder="Score (e.g. 8/10)"
+                maxLength={500}
+                aria-label={`Condition score of ${product.name}`}
+                aria-describedby={changed("condition_note")}
+                onChange={(event) =>
+                  onEdit({ condition_note: event.target.value })
+                }
+              />
+            </span>
+            <span className={styles.cell} data-changed={mark("availability")}>
+              <Choice
+                small
+                value={availability}
+                options={PRODUCT_AVAILABILITY_OPTIONS}
+                aria-label={`Availability of ${product.name}`}
+                aria-describedby={changed("availability")}
+                onChange={(value) =>
+                  onEdit({ availability: value as Availability })
+                }
+              />
+            </span>
+          </div>
+        )}
       </td>
       <td>
         <span className={styles.cell} data-changed={mark("price")}>
@@ -513,6 +544,7 @@ function ProductRow({
               inputMode="decimal"
               autoComplete="off"
               value={price}
+              placeholder="On request"
               aria-label={`Price of ${product.name}${pair ? ", per pair" : ""}`}
               aria-invalid={priceInvalid || undefined}
               aria-describedby={
@@ -552,10 +584,16 @@ function ProductRow({
         </span>
       </td>
       <td>
-        <span className={styles.cell} data-changed={mark("status")}>
+        <span
+          className={styles.cell}
+          data-changed={
+            mark("status") || (sold && product.status !== "draft") || undefined
+          }
+        >
           <Choice
             small
-            value={draft.status ?? product.status}
+            value={sold ? "draft" : (draft.status ?? product.status)}
+            disabled={sold}
             options={STATUSES}
             aria-label={`Status of ${product.name}`}
             aria-describedby={changed("status")}

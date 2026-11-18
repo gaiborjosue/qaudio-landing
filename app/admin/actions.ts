@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers"
 import { redirect } from "next/navigation"
+import { NEWS_CACHE_TAG } from "@/lib/news-data"
 import { updateTag } from "next/cache"
 import { getAdmin } from "@/lib/admin/auth"
 import {
@@ -253,6 +254,7 @@ export async function saveProductFromEditor(
   try {
     const saved = await saveProduct(await sessionSupabase(), product, ownerFail)
     updateTag(CATALOG_CACHE_TAG)
+    updateTag(NEWS_CACHE_TAG)
     return { ...saved, short_description: product.short_description }
   } catch (error) {
     if (error instanceof OwnerError) {
@@ -282,6 +284,7 @@ export async function saveProductTableEdits(
       ownerFail
     )
     updateTag(CATALOG_CACHE_TAG)
+    updateTag(NEWS_CACHE_TAG)
     return result
   } catch (error) {
     return {
@@ -310,6 +313,7 @@ export async function deleteProductFromAdmin(
       ownerFail
     )
     updateTag(CATALOG_CACHE_TAG)
+    updateTag(NEWS_CACHE_TAG)
     return deleted
       ? { deleted: true }
       : { error: "This product was already deleted." }

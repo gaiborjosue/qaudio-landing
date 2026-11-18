@@ -24,6 +24,7 @@ import {
   type BodyProblem,
   type NewsValues,
 } from "@/lib/admin/news-editor"
+import { newsExpired } from "@/lib/admin/news"
 import type { NewsRecord } from "@/lib/admin/news-save"
 import {
   discardUpload,
@@ -121,7 +122,10 @@ export function NewsEditor({
   const form = useRef<HTMLDivElement>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
-  const [values, setValues] = useState(() => restore(storageKey) ?? initial)
+  const [values, setValues] = useState(() => ({
+    ...initial,
+    ...restore(storageKey),
+  }))
   // A new post's address follows its title until the owner edits it.
   const [slugFollows, setSlugFollows] = useState(
     !initial.id && (!initial.slug || initial.slug === slugify(initial.title))
@@ -159,7 +163,12 @@ export function NewsEditor({
 
   const set = <K extends keyof NewsValues>(key: K, value: NewsValues[K]) => {
     setValues((current) => ({ ...current, [key]: value }))
-    const field = key === "publishedAt" ? "published_at" : key
+    const field =
+      key === "publishedAt"
+        ? "published_at"
+        : key === "expiresAt"
+          ? "expires_at"
+          : key
     if (errors[field]) {
       setErrors((current) => {
         const rest = { ...current }
@@ -355,11 +364,19 @@ export function NewsEditor({
   const timing =
     values.status === "draft"
       ? "Hidden from the site"
-      : !values.publishedAt
-        ? "Publishes on save"
-        : values.publishedAt > now
-          ? "Scheduled"
-          : "Live"
+      : newsExpired(
+            {
+              expiresAt: values.expiresAt || null,
+              linkedSales: original?.linkedSales,
+            },
+            now
+          )
+        ? "Expired"
+        : !values.publishedAt
+          ? "Publishes on save"
+          : values.publishedAt > now
+            ? "Scheduled"
+            : "Live"
 
   const bodyPreview = showBody
     ? markdownToBlocks(values.body, values.photos).blocks
@@ -414,6 +431,33 @@ export function NewsEditor({
                   aria-label="Clear the publication date"
                   title="Clear"
                   onClick={() => set("publishedAt", "")}
+                >
+                  <X size={14} strokeWidth={2} aria-hidden="true" />
+                </button>
+              )}
+            </span>,
+            news.dateField
+          )}
+          {field(
+            "expires_at",
+            <>
+              Expiration <span className={styles.aside}>Optional</span>
+            </>,
+            <span className={news.date}>
+              <DateTimePicker
+                label="Expiration"
+                placeholder="No expiration"
+                value={values.expiresAt}
+                onChange={(next) => set("expiresAt", next)}
+                {...invalid("expires_at")}
+              />
+              {values.expiresAt && (
+                <button
+                  type="button"
+                  className={news.clear}
+                  aria-label="Clear the expiration date"
+                  title="Clear"
+                  onClick={() => set("expiresAt", "")}
                 >
                   <X size={14} strokeWidth={2} aria-hidden="true" />
                 </button>
@@ -595,7 +639,9 @@ export function NewsEditor({
                 bodyPreview.length > 0 ? (
                   <div className={news.bodyPreview}>
                     <NewsBody
-                      blocks={newsFromInput({ ...candidate, body: bodyPreview }).body}
+                      blocks={
+                        newsFromInput({ ...candidate, body: bodyPreview }).body
+                      }
                       compact
                     />
                   </div>

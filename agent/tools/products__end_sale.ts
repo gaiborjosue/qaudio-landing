@@ -26,7 +26,7 @@ export default defineTool({
     return refreshAfterSave(ctx, {
       saved: true,
       ended,
-      revalidate: ["catalog"],
+      revalidate: ["catalog", "news"],
     })
   },
 })

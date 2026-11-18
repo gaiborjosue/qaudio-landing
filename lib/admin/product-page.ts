@@ -387,7 +387,7 @@ Describe only the one product the page is about. Use null for anything the page 
 Fields:
 - name: the product's name as the shop lists it: the brand, then the model, as the page writes them (for example "U-Turn Audio Orbit Theory"). No taglines or category words unless they're part of the model's name.
 - brand_slug and category_slug: one slug from the lists given, or null when none clearly fits.
-- list_price_usd: the manufacturer's price in US dollars, as a number (1299.99), only when the page shows a US dollar price for this product. For several versions, the base version's.
+- list_price_usd: the manufacturer's regular US list price or MSRP, as a number (1299.99), only when the page states it clearly for this product. Use the base version's regular price if there are several versions. Ignore temporary offers and sale prices.
 - price_unit: "pair" when that price is for a pair (as speakers often are), "each" when it's for one unit, null when the page doesn't say.
 - description: the product page's description, as Markdown. ${DESCRIPTION_RULES}
 - short_description: the product card's line. ${CARD_LINE_RULES}

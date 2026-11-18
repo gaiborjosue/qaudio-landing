@@ -2,13 +2,14 @@ import { defineTool } from "eve/tools"
 import { always } from "eve/tools/approval"
 import { saveNewsPost } from "../../lib/admin/news-save"
 import { newsPostInputSchema } from "../../lib/admin/schemas"
+import { productSaleFlow } from "../lib/product-sale-flow"
 import { callerSupabase, failure } from "../lib/supabase"
 import { refreshAfterSave } from "../lib/site-cache"
 
 export default defineTool({
   deferred: true,
   description:
-    "Add a news post, or replace an existing one by id. Send the complete post: title, slug, every body block, the cover, status, and published_at. The card excerpt is written automatically from the body. The owner sees the news card and article preview and must approve before anything is saved.",
+    "Add a news post, or replace an existing one by id. Send the complete post: title, slug, every body block, the cover, status, published_at, and expires_at when the post announces a time-limited promotion. The card excerpt is written automatically from the body. The owner sees the news card and article preview and must approve before anything is saved.",
   inputSchema: newsPostInputSchema,
   approval: {
     request: always(),
@@ -22,6 +23,12 @@ export default defineTool({
     complete: (input) => `Saved “${input.title}”`,
   },
   async execute(input, ctx) {
+    const saleNewsStep = productSaleFlow.get().step === "news"
+    if (saleNewsStep && !input.expires_at) {
+      throw new Error(
+        "Set expires_at to the promotion's confirmed end and propose the sale news post again."
+      )
+    }
     const saved = await saveNewsPost(
       callerSupabase(ctx),
       input,
@@ -39,12 +46,21 @@ export default defineTool({
           )
         : error
     })
+    if (saleNewsStep) {
+      productSaleFlow.update((current) => ({
+        ...current,
+        newsPostId: saved.id,
+      }))
+    }
     return refreshAfterSave(ctx, {
       saved: true,
       id: saved.id,
       slug: saved.slug,
       status: input.status,
       live: saved.live,
+      timing: saved.timing,
+      published_at: saved.published_at,
+      expires_at: saved.expires_at,
       url: `/news/${saved.slug}`,
       // Saved photo paths; use these (not uploads/) in later edits.
       cover: saved.cover,

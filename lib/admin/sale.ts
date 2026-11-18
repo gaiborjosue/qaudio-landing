@@ -117,26 +117,6 @@ export async function saveSale(
   sale: SaleInput,
   fail: Fail
 ) {
-  const ids = sale.products.map((product) => product.id)
-  const { data, error } = await supabase
-    .from("products")
-    .select("id, name, price_cents, msrp_cents")
-    .in("id", ids)
-  if (error) throw fail("Sale", error)
-  const current = new Map(data.map((row) => [row.id, row]))
-  const changed = sale.products.filter((product) => {
-    const row = current.get(product.id)
-    return (
-      !row ||
-      row.price_cents !== product.price_cents ||
-      row.msrp_cents !== product.msrp_cents
-    )
-  })
-  if (changed.length > 0) {
-    throw new Error(
-      `Sale: ${changed.map((product) => product.name).join(", ")} changed or no longer exist${changed.length === 1 ? "s" : ""}. Read the products again with products__list_catalog and propose the sale again.`
-    )
-  }
   const lines = saleLines(sale)
   const problems = lines.filter((line) => line.problem)
   if (problems.length > 0) {
@@ -147,22 +127,20 @@ export async function saveSale(
   const starts =
     sale.starts_at === "now" ? null : fromStoreDateTime(sale.starts_at)
   const ends = fromStoreDateTime(sale.ends_at)
-  const results = await Promise.all(
-    lines.map((line) =>
-      supabase
-        .from("products")
-        .update({
-          sale_price_cents: line.sale_price_cents,
-          sale_starts_at: starts,
-          sale_ends_at: ends,
-        })
-        .eq("id", line.id)
-        .select("id")
-    )
-  )
-  for (const result of results) {
-    if (result.error) throw fail("Sale", result.error)
-  }
+  const { error } = await supabase.rpc("save_product_sales", {
+    p_products: lines.map(
+      ({ id, price_cents, msrp_cents, sale_price_cents }) => ({
+        id,
+        price_cents,
+        msrp_cents,
+        sale_price_cents,
+      })
+    ),
+    p_starts_at: starts,
+    p_ends_at: ends,
+    ...(sale.news_post_id && { p_news_post_id: sale.news_post_id }),
+  })
+  if (error) throw fail("Sale", error)
   return lines
 }
 
@@ -178,6 +156,7 @@ export async function endSale(
       sale_price_cents: null,
       sale_starts_at: null,
       sale_ends_at: null,
+      sale_news_post_id: null,
     })
     .in(
       "id",
