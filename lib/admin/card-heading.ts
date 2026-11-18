@@ -55,10 +55,15 @@ function subject(tool: ReleaseTool, post: Post) {
     }
   }
   if (tool === "save_deal") {
-    return {
-      object: `the deal ${quoted(post.title)}`,
-      name: `QDeal ${quoted(post.title)}`,
-    }
+    return post.kind === "sale"
+      ? {
+          object: `the featured sale ${quoted(post.title)}`,
+          name: `Featured sale ${quoted(post.title)}`,
+        }
+      : {
+          object: `the deal ${quoted(post.title)}`,
+          name: `QDeal ${quoted(post.title)}`,
+        }
   }
   return {
     object: `the Instagram ${noun(post)}`,
@@ -142,6 +147,7 @@ export function cardHeading({
   phase,
   chosen,
   note,
+  skipped,
   now,
 }: {
   name: string
@@ -154,6 +160,8 @@ export function cardHeading({
   chosen?: ChosenRelease
   /** The owner's note with a denial. */
   note?: boolean
+  /** The owner turned the change down ("Don't feature"). */
+  skipped?: boolean
   /** Store time now, "YYYY-MM-DDTHH:MM". */
   now: string
 }): { title: string; status: string } {
@@ -200,9 +208,11 @@ export function cardHeading({
         status:
           phase === "failed"
             ? "Failed"
-            : phase === "denied" && note
-              ? "Changes requested"
-              : "Not saved",
+            : phase === "denied" && skipped
+              ? "Skipped"
+              : phase === "denied" && note
+                ? "Changes requested"
+                : "Not saved",
       }
   }
 }

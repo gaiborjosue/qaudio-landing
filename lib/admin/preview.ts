@@ -16,6 +16,8 @@ import type {
 } from "@/lib/admin/schemas"
 import { fromStoreDateTime } from "@/lib/admin/store-time"
 import type { Deal } from "@/lib/deals-data"
+import type { DealKind } from "@/lib/deals"
+import type { DealRecord } from "@/lib/admin/deal-save"
 import { mediaUrl } from "@/lib/media"
 import { newsExcerpt, type NewsBlock, type NewsSummary } from "@/lib/news"
 import {
@@ -196,11 +198,15 @@ export type AdminNewsItem = {
 /** A QDeal promotion as the Edit menu lists it; dates are store time. */
 export type AdminDealItem = {
   id: string
+  /** qdeal (/qdeal) or sale (a featured sale on /sales). */
+  kind?: DealKind
   title: string
   status: string
   startsAt: string | null
   endsAt: string | null
   image?: Deal["image"]
+  /** Every field, for the Deals tab's form. */
+  record?: DealRecord
 }
 
 /**
@@ -246,13 +252,21 @@ export function newsFromInput(input: NewsPostInput): {
 /** The proposed deal as the QDeal page's card renders it. */
 export function dealFromInput(
   input: DealInput,
-  existingImage?: Deal["image"]
+  existingImage?: Deal["image"],
+  /** For rows linked to shop products: their pages. */
+  products: Pick<AdminProduct, "id" | "slug" | "status">[] = []
 ): Deal {
+  const pages = new Map(
+    products
+      .filter((product) => product.status === "published")
+      .map((product) => [product.id, `/products/${product.slug}`])
+  )
   return {
     id: input.id ?? "preview",
     title: input.title,
     summary: input.summary,
     note: input.note,
+    endsAt: input.ends_at && fromStoreDateTime(input.ends_at),
     image:
       input.image === undefined
         ? (existingImage ?? null)
@@ -270,6 +284,7 @@ export function dealFromInput(
       name: item.name,
       condition: item.condition,
       priceCents: item.price_cents,
+      href: (item.product_id && pages.get(item.product_id)) || null,
     })),
   }
 }

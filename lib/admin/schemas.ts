@@ -15,6 +15,7 @@ import {
   STORE_DATETIME,
   toStoreDateTime,
 } from "./store-time"
+import { DEAL_CONDITIONS, DEAL_KINDS } from "../deals"
 
 // Inputs of the admin agent's write tools. The agent validates tool calls with
 // them, and the admin chat renders previews from the same (validated) input.
@@ -701,6 +702,19 @@ export const dealInputSchema = z
       .uuid()
       .optional()
       .describe("An existing deal's id to edit it; omit to add a new one."),
+    kind: z
+      .enum(DEAL_KINDS)
+      .optional()
+      .describe(
+        "qdeal: a Q Audio-only opportunity on /qdeal (closeouts, discounted used gear). sale: a featured sale promotion on /sales, above the products on sale. Omit to keep an existing deal's kind; a new deal without it is a QDeal."
+      ),
+    updated_at: z
+      .string()
+      .max(40)
+      .optional()
+      .describe(
+        "On edits, its updated_at exactly as deals__list_deals gave it: the save refuses a deal that changed since."
+      ),
     title: z.string().trim().min(1).max(200),
     summary: z.string().max(600).describe('Short line under the title, or "".'),
     image: dealImageInputSchema
@@ -718,7 +732,7 @@ export const dealInputSchema = z
     status: z
       .enum(["draft", "published"])
       .describe(
-        "published shows it on /qdeal inside its dates; draft hides it."
+        "published shows it on its page inside its dates; draft hides it."
       ),
     starts_at: z
       .string()
@@ -730,18 +744,25 @@ export const dealInputSchema = z
       .regex(STORE_DATETIME)
       .nullable()
       .describe('Optional store-time "YYYY-MM-DDTHH:MM" when it disappears.'),
-    sort_order: z.int().default(0).describe("Lower shows first on /qdeal."),
+    sort_order: z.int().default(0).describe("Lower shows first on its page."),
     items: z
       .array(
         z.object({
           brand: z.string().trim().max(80).describe('Brand label, or "".'),
           name: z.string().trim().min(1).max(160),
-          condition: z.enum(["new", "demo"]).nullable(),
+          condition: z.enum(DEAL_CONDITIONS).nullable(),
           price_cents: z
             .int()
             .positive()
             .nullable()
             .describe("US cents, or null to show no price."),
+          product_id: z
+            .uuid()
+            .nullable()
+            .optional()
+            .describe(
+              "The shop product this row is (its id from products__list_catalog), so its name links to the product's page; null or omitted for none."
+            ),
         })
       )
       .max(50)
@@ -753,6 +774,23 @@ export const dealInputSchema = z
     (deal) => !deal.starts_at || !deal.ends_at || deal.starts_at < deal.ends_at,
     "starts_at must be before ends_at."
   )
+
+/** The deal form's changed fields, the ones its Save writes. */
+export const dealFieldsSchema = z
+  .array(
+    z.enum(
+      Object.keys(dealInputSchema.shape).filter(
+        (key) => key !== "id" && key !== "updated_at"
+      ) as [string, ...string[]]
+    )
+  )
+  .max(Object.keys(dealInputSchema.shape).length)
+
+/** One deal's status, as changed in the Deals tab's table. */
+export const dealQuickEditsSchema = z
+  .array(z.object({ id: z.uuid(), status: z.enum(["draft", "published"]) }))
+  .min(1)
+  .max(100)
 
 export const deleteDealInputSchema = z.object({
   id: z.uuid(),
@@ -1059,6 +1097,7 @@ export type DeleteNewsPostInput = z.infer<typeof deleteNewsPostInputSchema>
 export type NewsQuickEdit = z.infer<typeof newsQuickEditSchema>
 export type DealInput = z.infer<typeof dealInputSchema>
 export type DeleteDealInput = z.infer<typeof deleteDealInputSchema>
+export type DealQuickEdit = z.infer<typeof dealQuickEditsSchema>[number]
 export type InstagramPhotoInput = z.infer<typeof instagramPhotoSchema>
 export type InstagramPostInput = z.infer<typeof instagramPostInputSchema>
 export type InstagramPostReference = z.infer<

@@ -15,10 +15,17 @@ import { signOut } from "@/app/admin/actions"
 import { AdminChat } from "@/components/admin/admin-chat"
 import { AdminToaster } from "@/components/admin/admin-toaster"
 import { ConnectionsMenu } from "@/components/admin/connections-menu"
+import {
+  DealsView,
+  type DealRequest,
+  type DealSheet,
+} from "@/components/admin/deals-view"
 import { MetadataView } from "@/components/admin/metadata-view"
 import { NewsView } from "@/components/admin/news-view"
-import type { NewsChatStart } from "@/lib/admin/news"
-import type { AdminNewsItem } from "@/lib/admin/preview"
+import type { ChatStart } from "@/components/admin/admin-chat"
+import { dealChatMessage } from "@/lib/admin/deal-editor"
+import { newsChatMessage } from "@/lib/admin/news"
+import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
 import type { MetadataData } from "@/lib/admin/metadata"
 import type { PreviewData } from "@/components/admin/change-preview"
 import {
@@ -28,12 +35,13 @@ import {
 } from "@/components/admin/products-view"
 import styles from "./admin.module.css"
 
-export type AdminView = "chat" | "news" | "products" | "metadata"
+export type AdminView = "chat" | "news" | "products" | "deals" | "metadata"
 
 const VIEWS: { id: AdminView; label: string }[] = [
   { id: "chat", label: "Chat" },
   { id: "news", label: "News" },
   { id: "products", label: "Products" },
+  { id: "deals", label: "Deals" },
   { id: "metadata", label: "Metadata" },
 ]
 
@@ -54,8 +62,9 @@ function setAddress(path: string) {
  * workspace switch in the middle, and chat/sign-out actions on the right.
  * All tabs stay mounted, so switching
  * keeps the conversation and the table's filters and unsaved changes. The
- * address follows along (/admin or /admin/s/<session>, and
- * /admin/news, /admin/products, or /admin/metadata), so a reload opens the same view.
+ * address follows along (/admin or /admin/s/<session>, and /admin/news,
+ * /admin/products, /admin/deals, or /admin/metadata), so a reload opens the
+ * same view.
  */
 export function AdminShell({
   initialView,
@@ -88,22 +97,27 @@ export function AdminShell({
   const [chatActions, setChatActions] = useState<HTMLDivElement | null>(null)
   const [sheet, setSheet] = useState<ProductSheet | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
-  const [newsChat, setNewsChat] = useState<NewsChatStart | null>(null)
+  const [dealSheet, setDealSheet] = useState<DealSheet | null>(null)
+  const [dealDeleting, setDealDeleting] = useState<string | null>(null)
+  // Tune, ready to take an item over from a tab, or null while it's busy.
+  const [chat, setChat] = useState<ChatStart | null>(null)
   const [topbar, setTopbar] = useState<HTMLElement | null>(null)
-  const onNewsChatReady = useCallback((start: NewsChatStart | null) => {
-    setNewsChat(() => start)
+  const onChatReady = useCallback((start: ChatStart | null) => {
+    setChat(() => start)
   }, [])
 
   const address = (next: AdminView) =>
     next === "news"
       ? "/admin/news"
-      : next === "metadata"
-        ? "/admin/metadata"
-        : next === "products"
-          ? productFiltersHref(productFilters)
-          : session.current
-            ? `/admin/s/${encodeURIComponent(session.current)}`
-            : "/admin"
+      : next === "deals"
+        ? "/admin/deals"
+        : next === "metadata"
+          ? "/admin/metadata"
+          : next === "products"
+            ? productFiltersHref(productFilters)
+            : session.current
+              ? `/admin/s/${encodeURIComponent(session.current)}`
+              : "/admin"
 
   const show = (next: AdminView) => {
     current.current = next
@@ -112,9 +126,14 @@ export function AdminShell({
   }
 
   const tuneNews = (post?: AdminNewsItem) => {
-    if (!newsChat) return
+    if (!chat) return
     show("chat")
-    newsChat(post)
+    chat(newsChatMessage(post))
+  }
+  const tuneDeal = (deal?: AdminDealItem) => {
+    if (!chat) return
+    show("chat")
+    chat(dealChatMessage(deal))
   }
 
   // Stable, so the chat's agent can hold on to it.
@@ -134,6 +153,18 @@ export function AdminShell({
     } else {
       setDeleting(null)
       setSheet(request)
+    }
+  }
+
+  // And deals here.
+  const openDeal = (request: DealRequest) => {
+    show("deals")
+    if (request.mode === "delete") {
+      setDealSheet(null)
+      setDealDeleting(request.id)
+    } else {
+      setDealDeleting(null)
+      setDealSheet(request)
     }
   }
 
@@ -213,7 +244,8 @@ export function AdminShell({
             actionsTarget={chatActions}
             onSession={onSession}
             onProduct={openProduct}
-            onNewsChatReady={onNewsChatReady}
+            onDeal={openDeal}
+            onChatReady={onChatReady}
             onShowChat={() => show("chat")}
           />
         </div>
@@ -227,7 +259,7 @@ export function AdminShell({
           <NewsView
             posts={preview.news}
             active={view === "news"}
-            disabled={!newsChat}
+            disabled={!chat}
             onTune={tuneNews}
             initialNow={newsNow}
           />
@@ -248,6 +280,26 @@ export function AdminShell({
             onSheet={setSheet}
             deleting={deleting}
             onDeleting={setDeleting}
+          />
+        </div>
+        <div
+          id={panelId("deals")}
+          role="tabpanel"
+          aria-labelledby={tabId("deals")}
+          className={`${styles.panel} ${styles.productsPanel}`}
+          hidden={view !== "deals"}
+        >
+          <DealsView
+            deals={preview.deals}
+            products={preview.products}
+            active={view === "deals"}
+            disabled={!chat}
+            onTune={tuneDeal}
+            initialNow={newsNow}
+            sheet={dealSheet}
+            onSheet={setDealSheet}
+            deleting={dealDeleting}
+            onDeleting={setDealDeleting}
           />
         </div>
         <div

@@ -24,7 +24,30 @@ export const APPROVED_AS = "Approved as"
 export const PHOTO_ORDER = "Photo order"
 /** Older chats' line for a carousel approved in a new order. */
 export const APPROVED_PHOTO_ORDER = "Approved photo order"
+/** A denial that turns a step down: the agent goes on without it. */
+export const SKIP_STEP = "Skip step"
+const SKIP_LINE = new RegExp(`^${SKIP_STEP}: `, "m")
 const APPROVED_LINE = new RegExp(`^${APPROVED_AS}: (.+)$`, "m")
+
+/** Whether a denial's note turned the step down. */
+export const skippedStep = (note: string | undefined) =>
+  !!note && SKIP_LINE.test(note)
+
+/**
+ * The card's way to turn its change down without asking for another, or
+ * null: a new featured sale, which the product-sale flow proposes and the
+ * owner may not want on the Sales page.
+ */
+export function skipChoice(tool: string, input: unknown) {
+  if (releaseTool(tool) !== "save_deal") return null
+  const deal = parse("save_deal", input)
+  return deal && deal.kind === "sale" && !deal.id
+    ? {
+        label: "Don’t feature",
+        note: `${SKIP_STEP}: don’t feature this sale on the Sales page.`,
+      }
+    : null
+}
 
 export type Release = "now" | "draft" | "schedule"
 /** The Approve step's choices, in order. */

@@ -190,7 +190,7 @@
   padding: 4px 16px;
 }
 
-/* Chat / Products: a pill switch; the chosen tab wears the dark pill. */
+/* The workspace tabs: a pill switch; the chosen tab wears the dark pill. */
 .switch {
   display: inline-flex;
   padding: 3px;
@@ -528,7 +528,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .taskQueue :global([data-slot="trace-collapsible-content"]),
-  .taskQueue :global([data-slot="trace-collapsible-trigger"] [data-slot="trace-icon"]) {
+  .taskQueue
+    :global([data-slot="trace-collapsible-trigger"] [data-slot="trace-icon"]) {
     transition: none;
   }
 }
@@ -1649,7 +1650,7 @@
   }
   .switch {
     width: 100%;
-    max-width: 380px;
+    max-width: 440px;
   }
   .switchTab {
     flex: 1;

@@ -1,0 +1,49 @@
+/* The Sales page's filters (sale-products.tsx): monochrome pills, like the
+   shop's brand filter; the chosen one is filled. */
+.filters {
+  display: grid;
+  gap: 10px;
+  margin: -14px 0 30px;
+}
+
+.filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  padding: 8px 15px;
+  border: 1px solid #dedede;
+  border-radius: 100px;
+  background: #fff;
+  color: #161616;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+
+.chip:hover {
+  border-color: #9a9a9a;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: #161616;
+  background: #161616;
+  color: #fff;
+}
+
+.chip:focus-visible {
+  outline: 2px solid #161616;
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chip {
+    transition: none;
+  }
+}

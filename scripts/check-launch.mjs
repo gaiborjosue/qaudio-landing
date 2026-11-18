@@ -152,6 +152,7 @@ const staticPaths = [
   "/shop",
   "/news",
   "/news/archive",
+  "/sales",
   "/qdeal",
   "/in-store-policies",
   "/how-to-order",

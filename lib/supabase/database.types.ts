@@ -98,6 +98,7 @@ export type Database = {
           id: string
           name: string
           price_cents: number | null
+          product_id: string | null
           sort_order: number
           updated_at: string
         }
@@ -109,6 +110,7 @@ export type Database = {
           id?: string
           name: string
           price_cents?: number | null
+          product_id?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -120,6 +122,7 @@ export type Database = {
           id?: string
           name?: string
           price_cents?: number | null
+          product_id?: string | null
           sort_order?: number
           updated_at?: string
         }
@@ -129,6 +132,13 @@ export type Database = {
             columns: ["deal_id"]
             isOneToOne: false
             referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -142,6 +152,7 @@ export type Database = {
           image_height: number | null
           image_path: string | null
           image_width: number | null
+          kind: string
           note: string
           sort_order: number
           starts_at: string | null
@@ -158,6 +169,7 @@ export type Database = {
           image_height?: number | null
           image_path?: string | null
           image_width?: number | null
+          kind?: string
           note?: string
           sort_order?: number
           starts_at?: string | null
@@ -174,6 +186,7 @@ export type Database = {
           image_height?: number | null
           image_path?: string | null
           image_width?: number | null
+          kind?: string
           note?: string
           sort_order?: number
           starts_at?: string | null

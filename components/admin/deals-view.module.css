@@ -1,0 +1,26 @@
+/* The Deals tab (deals-view.tsx). The table, its save bar, and the sheet
+   share the Products tab's styles (product-table.module.css and
+   products-view.module.css); these are the deal-only pieces. */
+
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-left: auto;
+}
+.table {
+  min-width: 760px;
+}
+.table .deal {
+  min-width: 220px;
+  font-weight: 400;
+}
+.dates {
+  color: #4a4a4a;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.actionsColumn {
+  width: 120px;
+}

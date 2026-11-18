@@ -3,6 +3,7 @@
 import { memo } from "react"
 import Image from "next/image"
 import { previewToolName } from "@/lib/admin/tool-names"
+import { DEAL_KIND_LABELS, DEAL_PAGES } from "@/lib/deals"
 import { DealCard } from "@/components/deal-card"
 import { NewsBody } from "@/components/news-body"
 import { NewsCard } from "@/components/news-card"
@@ -152,20 +153,21 @@ const condition = (product: AdminProduct | undefined) =>
   product ? <ConditionBadge condition={product.condition} /> : "—"
 
 function dealTiming(
+  page: string,
   status: string,
   startsAt: string | null,
   endsAt: string | null
 ) {
-  if (status !== "published") return "Draft, hidden from /qdeal"
+  if (status !== "published") return `Draft, hidden from ${page}`
   const now = toStoreDateTime(new Date())
   if (endsAt && endsAt <= now) {
-    return `Ended ${formatStoreDateTime(endsAt)}, hidden from /qdeal`
+    return `Ended ${formatStoreDateTime(endsAt)}, hidden from ${page}`
   }
   const until = endsAt ? ` until ${formatStoreDateTime(endsAt)}` : ""
   if (startsAt && startsAt > now) {
-    return `Shows on /qdeal from ${formatStoreDateTime(startsAt)}${until}`
+    return `Shows on ${page} from ${formatStoreDateTime(startsAt)}${until}`
   }
-  return `Live on /qdeal${until}`
+  return `Live on ${page}${until}`
 }
 
 function newsTiming(slug: string, status: string, publishedAt: string | null) {
@@ -583,21 +585,24 @@ export const ChangePreview = memo(function ChangePreview({
     case "save_deal": {
       const parsed = dealInputSchema.safeParse(input)
       if (!parsed.success) break
+      const saved = data.deals.find((deal) => deal.id === parsed.data.id)
+      // An edit that leaves out its kind keeps the saved one.
+      const kind = parsed.data.kind ?? saved?.kind ?? "qdeal"
       return (
         <>
           <Note>
+            {DEAL_KIND_LABELS[kind]} ·{" "}
             {dealTiming(
+              DEAL_PAGES[kind],
               parsed.data.status,
               parsed.data.starts_at,
               parsed.data.ends_at
             )}
           </Note>
-          <div className={styles.cardPreview}>
+          <div className={styles.cardPreview} inert>
             <DealCard
-              deal={dealFromInput(
-                parsed.data,
-                data.deals.find((deal) => deal.id === parsed.data.id)?.image
-              )}
+              deal={dealFromInput(parsed.data, saved?.image, data.products)}
+              showEnd={kind === "sale"}
             />
           </div>
         </>
@@ -606,10 +611,12 @@ export const ChangePreview = memo(function ChangePreview({
     case "delete_deal": {
       const parsed = deleteDealInputSchema.safeParse(input)
       if (!parsed.success) break
+      const kind =
+        data.deals.find((deal) => deal.id === parsed.data.id)?.kind ?? "qdeal"
       return (
         <Note>
-          Deletes “{parsed.data.title}” and its products from /qdeal. Saving it
-          as a draft hides it instead.
+          Deletes “{parsed.data.title}” and its products from {DEAL_PAGES[kind]}
+          . Saving it as a draft hides it instead.
         </Note>
       )
     }

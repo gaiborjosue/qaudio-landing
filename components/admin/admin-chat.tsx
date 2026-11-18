@@ -55,6 +55,7 @@ import {
 } from "@/components/admin/message-actions"
 import { orderScope, ProductOrder } from "@/components/admin/product-order"
 import type { ProductRequest } from "@/components/admin/products-view"
+import type { DealRequest } from "@/components/admin/deals-view"
 import {
   PHOTOS_LIFT,
   QuickActionsMore,
@@ -100,6 +101,8 @@ import {
   PHOTO_ORDER,
   proposedRelease,
   scheduledAt,
+  SKIP_STEP,
+  skippedStep,
 } from "@/lib/admin/approval-choice"
 import {
   cardHeading,
@@ -117,12 +120,14 @@ import { mediaUrl } from "@/lib/media"
 import { mediaSessionEvent } from "@/lib/admin/media-lifecycle"
 import { responseUsage } from "@/lib/admin/response-usage"
 import { ChatSession, isDormantDevelopmentEnd } from "@/lib/admin/chat-session"
-import { newsChatMessage, type NewsChatStart } from "@/lib/admin/news"
 import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
 import { toast } from "./admin-toast"
 import { useChatNotices } from "./chat-notices"
 import styles from "./admin.module.css"
+
+/** Opens a conversation with Tune about an item, as if the owner wrote it. */
+export type ChatStart = (message: string) => void
 
 type Agent = UseEveAgentReturn
 
@@ -164,7 +169,8 @@ export function AdminChat({
   actionsTarget,
   onSession,
   onProduct,
-  onNewsChatReady,
+  onDeal,
+  onChatReady,
   onShowChat,
 }: {
   active: boolean
@@ -179,7 +185,10 @@ export function AdminChat({
   onSession: (sessionId?: string) => void
   /** Opens a product in the Products tab (the quick menus' Product items). */
   onProduct: (request: ProductRequest) => void
-  onNewsChatReady: (start: NewsChatStart | null) => void
+  /** Opens a deal in the Deals tab (the quick menus' deal items). */
+  onDeal: (request: DealRequest) => void
+  /** How the tabs hand an item to Tune, or null while it's busy. */
+  onChatReady: (start: ChatStart | null) => void
   /** Switches to the chat, from a toast shown in another tab. */
   onShowChat: () => void
 }) {
@@ -198,8 +207,8 @@ export function AdminChat({
   const [sessionError, setSessionError] = useState<string | null>(null)
   const [ending, setEnding] = useState(false)
   const [voiceReset, setVoiceReset] = useState(0)
-  const newsSending = useRef(false)
-  const [startingNews, setStartingNews] = useState(false)
+  const chatSending = useRef(false)
+  const [starting, setStarting] = useState(false)
   const mediaDraft = useRef<string>("")
   // Created on interaction, so hydration never invents a different draft id.
   const mediaDraftId = useCallback(
@@ -428,32 +437,30 @@ export function AdminChat({
   // words back in the field.
   const [draft, setDraft] = useState("")
   const field = useRef<HTMLTextAreaElement>(null)
-  const startNewsChat = useCallback<NewsChatStart>(
-    (post) => {
-      if (newsSending.current) return
-      newsSending.current = true
-      setStartingNews(true)
+  // A tab's Edit with Tune (News, Deals) opens the conversation with its
+  // item, once at a time.
+  const startChat = useCallback<ChatStart>(
+    (message) => {
+      if (chatSending.current) return
+      chatSending.current = true
+      setStarting(true)
       setSessionError(null)
-      void send(newsChatMessage(post))
+      void send(message)
         .then(() => field.current?.focus())
         .catch(() => {
-          setSessionError(
-            "Couldn’t start this news conversation. Try again from News."
-          )
+          setSessionError("Couldn’t start this conversation. Try again.")
         })
         .finally(() => {
-          newsSending.current = false
-          setStartingNews(false)
+          chatSending.current = false
+          setStarting(false)
         })
     },
     [send]
   )
   useEffect(() => {
-    onNewsChatReady(
-      busy || resuming || ending || startingNews ? null : startNewsChat
-    )
-    return () => onNewsChatReady(null)
-  }, [busy, resuming, ending, startingNews, startNewsChat, onNewsChatReady])
+    onChatReady(busy || resuming || ending || starting ? null : startChat)
+    return () => onChatReady(null)
+  }, [busy, resuming, ending, starting, startChat, onChatReady])
   const edit = useCallback((text: string) => {
     setDraft(text)
     field.current?.focus()
@@ -478,10 +485,18 @@ export function AdminChat({
 
   // What the quick actions need, kept as one object that changes only when
   // they do, so the composer doesn't redraw with every streamed update.
-  const disabled = resuming || ending || startingNews
+  const disabled = resuming || ending || starting
   const quick = useMemo<QuickMenusProps>(
-    () => ({ preview, ask, onProduct, flows, onFlow: setFlow, disabled }),
-    [preview, ask, onProduct, flows, setFlow, disabled]
+    () => ({
+      preview,
+      ask,
+      onProduct,
+      onDeal,
+      flows,
+      onFlow: setFlow,
+      disabled,
+    }),
+    [preview, ask, onProduct, onDeal, flows, setFlow, disabled]
   )
 
   return (
@@ -497,7 +512,7 @@ export function AdminChat({
               leadingIcon={<Plus size={15} aria-hidden="true" />}
               isLoading={ending}
               loadingText="Starting…"
-              disabled={ending || resuming || startingNews}
+              disabled={ending || resuming || starting}
               onClick={newChat}
             >
               New chat
@@ -753,10 +768,11 @@ function cardStates(
 // Edit-menu choice names, a product order the owner arranged and saved on a
 // reorder card ("Order:" is the earlier form), and what the owner approved
 // on a card ("Approved as:", lib/admin/approval-choice.ts; older chats carry
-// a carousel's photo order). Older chats also carry what the owner saved or
-// asked to draft in the chat's former product editor and table.
+// a carousel's photo order), or turned down ("Skip step:"). Older chats also
+// carry what the owner saved or asked to draft in the chat's former product
+// editor and table.
 const HIDDEN_LINE = new RegExp(
-  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|Story edit|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}|${APPROVED_AS}): .*$`,
+  `^(Photo uploaded|Item|Order|Order saved|Product saved|Products updated|Editor|Story edit|${PHOTO_ORDER}|${APPROVED_PHOTO_ORDER}|${APPROVED_AS}|${SKIP_STEP}): .*$`,
   "gm"
 )
 const ORDER_SAVED = /^Order saved: (.+)$/m
@@ -1141,6 +1157,7 @@ const ChangeCard = memo(function ChangeCard({
     phase === "denied"
       ? interaction?.answer?.text?.replace(HIDDEN_LINE, "").trim()
       : undefined
+  const skipped = phase === "denied" && skippedStep(interaction?.answer?.text)
   // Once answered, the heading says what is happening or happened instead
   // of asking (lib/admin/card-heading.ts).
   const heading = cardHeading({
@@ -1152,6 +1169,7 @@ const ChangeCard = memo(function ChangeCard({
     phase,
     chosen,
     note: !!denial,
+    skipped,
     now: toStoreDateTime(new Date()),
   })
   // A draft or scheduled post has no page to visit yet.

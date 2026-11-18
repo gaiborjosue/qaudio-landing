@@ -35,7 +35,8 @@ export const FLOWS = [
   {
     id: "product-sale",
     name: "Product sale",
-    summary: "News post, sale prices, then a designed Instagram story",
+    summary:
+      "News post, sale prices, a Sales page feature, then a designed Instagram story",
     trigger:
       "the owner tells you about a sale, discount, or promotion on shop products or a brand (often with its promotion graphic), whatever they ask for about it: a news post, an Instagram post or story, new prices, or all of it",
     steps: [
@@ -65,6 +66,13 @@ export const FLOWS = [
         tool: "products__save_sale",
         instructions:
           "Call products__save_sale with the matched products exactly as products__list_catalog gave them (id, name, price_cents, msrp_cents), the discount, and the dates. If the news step saved a post, pass its returned id as news_post_id. If that post is published or scheduled, use its returned published_at as starts_at even if the approval changed the proposed time. If it was saved as a draft or skipped, keep the confirmed sale dates. Never guess a post id. Use off msrp when the promotion is off MSRP or list price, otherwise price. Mark this step skipped when no products matched.",
+      },
+      {
+        id: "feature",
+        label: "Sales feature",
+        tool: "deals__save_deal",
+        instructions:
+          "Load the deals skill and discover deals__. Propose a new featured sale for the Sales page with deals__save_deal: kind sale and no id, so it's added beside any featured sales already there, never replacing or changing them. Use the promotion graphic as its image (its path, width, and height, with alt text from what it shows); a title in a few words, such as \"Monitor Audio Bronze: up to 20% off\"; a one-line summary of what's included; note \"\" and items []. Make it published, with starts_at the sale's start (null when it started now) and ends_at the sale's end, so it shows and ends with the sale. The owner approves it, asks for changes, or chooses Don't feature: a denial whose note starts with \"Skip step:\" means don't feature it. Then call flow_progress with this step skipped and go on to the next step without asking.",
       },
       {
         id: "design",
@@ -188,7 +196,7 @@ const SALE_WORDS =
 // The lines the chat adds for the agent (photos, the item, a card's
 // choice), which can mention a sale without the owner asking about one.
 const AGENT_LINE =
-  /^(?:Photo uploaded|Item|Order|Order saved|Photo order|Approved photo order|Approved as): .*$/gm
+  /^(?:Photo uploaded|Item|Order|Order saved|Photo order|Approved photo order|Approved as|Skip step): .*$/gm
 
 /**
  * A nudge for a message that mentions a sale, so a news post about one goes

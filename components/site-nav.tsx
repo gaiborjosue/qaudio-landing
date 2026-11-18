@@ -26,6 +26,7 @@ const PillNav = PillNavBase as unknown as (props: PillNavProps) => ReactElement
 const PAGES = [
   { label: "Home", href: "/" },
   { label: "News", href: "/news" },
+  { label: "Sales", href: "/sales" },
   { label: "QDeal", href: "/qdeal" },
   { label: "Used Equipment", href: "/shop/used-equipment" },
 ]

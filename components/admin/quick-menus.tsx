@@ -27,11 +27,13 @@ import {
   Package,
   PackagePlus,
   PenLine,
+  Tag,
 } from "lucide-react"
 import type { PreviewData } from "@/components/admin/change-preview"
 import { FlowsMenu } from "@/components/admin/flows-menu"
 import { ItemPicker, type PickerItem } from "@/components/admin/item-picker"
 import type { ProductRequest } from "@/components/admin/products-view"
+import type { DealRequest } from "@/components/admin/deals-view"
 import { CreateMenu, type CreateMenuItem } from "@/components/ui/create-menu"
 import type { FlowId, FlowSettings } from "@/lib/admin/flows"
 import type { AdminDealItem, AdminNewsItem } from "@/lib/admin/preview"
@@ -40,21 +42,29 @@ import { toStoreDateTime } from "@/lib/admin/store-time"
 import { formatPrice } from "@/lib/catalog"
 import { formatNewsDate } from "@/lib/news"
 import { formatChangeDates, formatHours } from "@/lib/store-hours"
+import { DEAL_KIND_LABELS } from "@/lib/deals"
 import styles from "./admin.module.css"
 
 /** Sends a line as the owner's message; `item` names the exact item. */
 export type Ask = (text: string, item?: string) => void
 
-// The Create menu's rows and the line each one sends. Product is the
-// exception: it opens the Products tab's form (see QuickMenus).
-const QUICK_STARTS = [
+// The Create menu's rows and the line each one sends. Products and deals
+// are the exception: they open their tab's form (see QuickMenus).
+type QuickStart = {
+  icon: typeof Newspaper
+  label: string
+  message?: string
+  opens?: { product: true } | DealRequest
+}
+const QUICK_STARTS: QuickStart[] = [
   {
     icon: Newspaper,
     label: "News post",
     message: "I want to create a news post.",
   },
-  { icon: PackagePlus, label: "Product", message: null },
-  { icon: BadgePercent, label: "QDeal", message: "I want to create a deal." },
+  { icon: PackagePlus, label: "Product", opens: { product: true } },
+  { icon: BadgePercent, label: "QDeal", opens: { mode: "new", kind: "qdeal" } },
+  { icon: Tag, label: "Featured sale", opens: { mode: "new", kind: "sale" } },
   {
     icon: CalendarClock,
     label: "Schedule change",
@@ -78,7 +88,7 @@ function newsMeta(post: AdminNewsItem, now: string) {
     : day(post.publishedAt)
 }
 
-function dealMeta(deal: AdminDealItem, now: string) {
+function dealTiming(deal: AdminDealItem, now: string) {
   if (deal.status !== "published") return "Draft"
   if (deal.endsAt && deal.endsAt <= now) return "Ended"
   if (deal.startsAt && deal.startsAt > now)
@@ -86,11 +96,15 @@ function dealMeta(deal: AdminDealItem, now: string) {
   return deal.endsAt ? `Until ${day(deal.endsAt)}` : "Live"
 }
 
+const dealMeta = (deal: AdminDealItem, now: string) =>
+  `${DEAL_KIND_LABELS[deal.kind ?? "qdeal"]} · ${dealTiming(deal, now)}`
+
 /** What the quick actions need from the chat, wherever they're shown. */
 export type QuickMenusProps = {
   preview: PreviewData
   ask: Ask
   onProduct: (request: ProductRequest) => void
+  onDeal: (request: DealRequest) => void
   flows: FlowSettings
   onFlow: (id: FlowId, on: boolean) => void
   disabled: boolean
@@ -124,6 +138,7 @@ export const QuickMenus = memo(function QuickMenus({
   preview,
   ask: send,
   onProduct: openProduct,
+  onDeal: openDeal,
   flows,
   onFlow,
   disabled,
@@ -174,11 +189,22 @@ export const QuickMenus = memo(function QuickMenus({
     onAction?.()
     openProduct(request)
   }
+  const onDeal = (request: DealRequest) => {
+    onAction?.()
+    openDeal(request)
+  }
 
-  const create: CreateMenuItem[] = QUICK_STARTS.map(({ message, ...item }) => ({
-    ...item,
-    onSelect: () => (message ? ask(message) : onProduct({ mode: "new" })),
-  }))
+  const create: CreateMenuItem[] = QUICK_STARTS.map(
+    ({ message, opens, ...item }) => ({
+      ...item,
+      onSelect: () =>
+        opens
+          ? "product" in opens
+            ? onProduct({ mode: "new" })
+            : onDeal(opens)
+          : message && ask(message),
+    })
+  )
 
   // Edit and Remove both name the item, and its id rides along hidden.
   const pick = (
@@ -264,24 +290,27 @@ export const QuickMenus = memo(function QuickMenus({
     },
     {
       icon: BadgePercent,
-      label: "QDeal",
+      label: "Deal",
       view: {
-        title: "QDeals",
+        title: "Deals",
         render: (close) => {
           const now = toStoreDateTime(new Date())
           return (
             <ItemPicker
-              noun="QDeal"
-              items={preview.deals.map((deal) =>
-                pick(
-                  "deal",
-                  "deal",
-                  deal.id,
-                  deal.title,
-                  dealMeta(deal, now),
-                  close
-                )
-              )}
+              noun="deal"
+              items={preview.deals.map((deal) => ({
+                id: deal.id,
+                title: deal.title,
+                meta: dealMeta(deal, now),
+                onEdit: () => {
+                  close()
+                  onDeal({ mode: "edit", id: deal.id })
+                },
+                onRemove: () => {
+                  close()
+                  onDeal({ mode: "delete", id: deal.id })
+                },
+              }))}
             />
           )
         },

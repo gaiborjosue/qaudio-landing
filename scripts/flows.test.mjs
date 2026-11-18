@@ -599,7 +599,15 @@ test("the stepper follows a flow run through the conversation", () => {
   assert.equal(view(owner()), null)
   assert.deepEqual(view(owner(), progress({ flow: "product-sale" })), {
     status: "active",
-    steps: ["active", "pending", "pending", "pending", "pending", "pending"],
+    steps: [
+      "active",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+      "pending",
+    ],
   })
   // The dates question is open, then answered; the news card waits.
   assert.deepEqual(
@@ -613,22 +621,46 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "waiting", "pending", "pending", "pending"],
+      steps: [
+        "done",
+        "done",
+        "waiting",
+        "pending",
+        "pending",
+        "pending",
+        "pending",
+      ],
     }
   )
   // A later step's card moves the stepper on even without a progress call,
-  // and a skipped step stays skipped.
+  // and a skipped step stays skipped, including a feature the owner chose
+  // not to show on the Sales page.
   assert.deepEqual(
     view(
       owner(),
       progress({ flow: "product-sale" }),
       progress({ flow: "product-sale", step: "prices", status: "skipped" }),
       call("news__save_news_post", {}, "completed"),
+      call("deals__save_deal", { kind: "sale" }, "rejected"),
+      progress({ flow: "product-sale", step: "feature", status: "skipped" }),
       call("design_story", { brief: "25% off" }, "blocked")
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "skipped", "waiting", "pending"],
+      steps: ["done", "done", "done", "skipped", "skipped", "waiting", "pending"],
+    }
+  )
+  // The featured sale's card waits like any other step's.
+  assert.deepEqual(
+    view(
+      owner(),
+      progress({ flow: "product-sale", step: "prices" }),
+      call("products__save_sale", {}, "completed"),
+      call("deals__save_deal", { kind: "sale" }, "approval")
+    ),
+    {
+      status: "active",
+      steps: ["done", "done", "done", "done", "waiting", "pending", "pending"],
     }
   )
   // The story's design is picked; its card waits.
@@ -638,12 +670,13 @@ test("the stepper follows a flow run through the conversation", () => {
       progress({ flow: "product-sale" }),
       progress({ flow: "product-sale", step: "prices", status: "skipped" }),
       call("news__save_news_post", {}, "completed"),
+      call("deals__save_deal", { kind: "sale" }, "completed"),
       call("design_story", { brief: "25% off" }, "completed"),
       call("instagram__save_post", {}, "approval")
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "skipped", "done", "waiting"],
+      steps: ["done", "done", "done", "skipped", "done", "done", "waiting"],
     }
   )
   // A denied card leaves its step under way for the next proposal.
@@ -658,7 +691,7 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "done", "waiting", "pending"],
+      steps: ["done", "done", "done", "done", "done", "waiting", "pending"],
     }
   )
   assert.deepEqual(

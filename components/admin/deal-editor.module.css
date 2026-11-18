@@ -1,0 +1,92 @@
+/* The deal form (deal-editor.tsx). It shares the product and news forms'
+   layout (product-editor.module.css, news-editor.module.css); these are the
+   deal-only pieces. A deal's image keeps its colors, as on the site. */
+
+.image {
+  flex: none;
+  width: 200px;
+  max-height: 260px;
+  border-radius: 10px;
+  background: #f4f4f4;
+  object-fit: contain;
+}
+
+/* Product rows: the shop product a row links to, then what the card shows
+   (brand, name, condition, price), and the row's own buttons. */
+.items {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.item {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.1fr) minmax(90px, 0.6fr) minmax(150px, 1.4fr)
+    130px 110px auto;
+  align-items: center;
+  gap: 8px;
+}
+.item > * {
+  min-width: 0;
+}
+.items .item input[type="text"] {
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.items .price {
+  height: 32px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.items .item .price input[type="text"] {
+  height: 30px;
+  padding-left: 3px;
+}
+.rowActions {
+  display: flex;
+  gap: 2px;
+}
+.rowActions button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: #4a4a4a;
+  cursor: pointer;
+}
+.rowActions button:hover:enabled {
+  background: #f0f0f0;
+  color: #111;
+}
+.rowActions button:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: -2px;
+}
+.rowActions button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+@media (max-width: 800px) {
+  .item {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #ececec;
+  }
+  .link,
+  .name {
+    grid-column: span 2;
+  }
+  .rowActions {
+    grid-row: 1;
+    grid-column: 3;
+  }
+}

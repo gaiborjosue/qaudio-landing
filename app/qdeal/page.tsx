@@ -17,7 +17,7 @@ export const metadata: Metadata = pageMetadata({
 })
 
 export default async function QDealPage() {
-  const deals = await getDeals()
+  const deals = await getDeals("qdeal")
   return (
     <div className={styles.page}>
       <a className="skip-link" href="#qdeal-content">

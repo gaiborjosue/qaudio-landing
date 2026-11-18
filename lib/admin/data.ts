@@ -9,6 +9,7 @@ import {
   type AdminSchedule,
 } from "@/lib/admin/preview"
 import { NEWS_SALE_COLUMNS, newsSaleDetails } from "./news"
+import { readDeals } from "./deal-save"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { descriptionFromColumns } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
@@ -52,34 +53,28 @@ export async function getAdminNews(): Promise<AdminNewsItem[]> {
 }
 
 /**
- * Every QDeal promotion (drafts, scheduled, live, and expired), in /qdeal's
- * order, read as the admin for the Edit menu.
+ * Every deal, QDeals and featured sales (drafts, scheduled, live, and
+ * expired), in their pages' order, read as the admin for the Edit menu.
  */
 export async function getAdminDeals(): Promise<AdminDealItem[]> {
-  const supabase = await sessionSupabase()
-  const { data, error } = await supabase
-    .from("deals")
-    .select(
-      "id, title, status, starts_at, ends_at, image_path, image_width, image_height, image_alt"
-    )
-    .order("sort_order")
-    .order("created_at")
-  if (error) throw new Error(`Admin deals: ${error.message}`)
-  return data.map((deal) => ({
+  const deals = await readDeals(
+    await sessionSupabase(),
+    (what, error) => new Error(`Admin ${what.toLowerCase()}: ${error.message}`)
+  )
+  return deals.map((deal) => ({
     id: deal.id,
+    kind: deal.kind,
     title: deal.title,
     status: deal.status,
-    startsAt: deal.starts_at && toStoreDateTime(deal.starts_at),
-    endsAt: deal.ends_at && toStoreDateTime(deal.ends_at),
-    image:
-      deal.image_path && deal.image_width && deal.image_height
-        ? {
-            src: mediaUrl(deal.image_path),
-            width: deal.image_width,
-            height: deal.image_height,
-            alt: deal.image_alt,
-          }
-        : null,
+    startsAt: deal.starts_at,
+    endsAt: deal.ends_at,
+    image: deal.image && {
+      src: mediaUrl(deal.image.path),
+      width: deal.image.width,
+      height: deal.image.height,
+      alt: deal.image.alt,
+    },
+    record: deal,
   }))
 }
 

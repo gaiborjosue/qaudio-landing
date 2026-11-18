@@ -168,26 +168,26 @@ const saleKey = (values: ProductValues) =>
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /**
- * Unsaved form values over a newer saved product: each field the owner left
- * as it was in `base` (what the form started from) takes its value in
- * `latest`, so a change made elsewhere meanwhile, by Tune say, shows in the
- * form and Save doesn't write the old value back.
+ * Unsaved form values over a newer save (a product's or a deal's): each
+ * field the owner left as it was in `base` (what the form started from)
+ * takes its value in `latest`, so a change made elsewhere meanwhile, by Tune
+ * say, shows in the form and Save doesn't write the old value back.
  */
-export function rebaseValues(
-  values: ProductValues,
-  base: ProductValues,
-  latest: ProductValues
-): ProductValues {
-  const next: Record<string, unknown> = { ...values }
-  for (const key of Object.keys(latest) as (keyof ProductValues)[]) {
+export function rebaseValues<T extends object>(
+  values: T,
+  base: T,
+  latest: T
+): T {
+  const next = { ...values } as Record<string, unknown>
+  for (const key of Object.keys(latest) as (keyof T & string)[]) {
     if (same(values[key], base[key])) next[key] = latest[key]
   }
-  return next as ProductValues
+  return next as T
 }
 
 /**
- * The fields Save writes for a saved product: the ones that differ from
- * what the form started from. The rest stay as they are in the database,
+ * The fields Save writes for a saved product or deal: the ones that differ
+ * from what the form started from. The rest stay as they are in the database,
  * even if they changed there since.
  */
 export function changedInputFields(

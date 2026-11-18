@@ -1,12 +1,10 @@
 import Image from "next/image"
-import type { Deal, DealItem } from "@/lib/deals-data"
+import Link from "next/link"
+import { formatSaleEnd } from "@/lib/catalog"
+import { DEAL_CONDITION_LABELS } from "@/lib/deals"
+import type { Deal } from "@/lib/deals-data"
 import { isPrivateMediaUrl } from "@/lib/media"
 import styles from "./deal-card.module.css"
-
-const CONDITIONS: Record<NonNullable<DealItem["condition"]>, string> = {
-  new: "New",
-  demo: "Demo",
-}
 
 function formatPrice(cents: number) {
   const digits = cents % 100 === 0 ? 0 : 2
@@ -18,8 +16,17 @@ function formatPrice(cents: number) {
   }).format(cents / 100)
 }
 
-/** A QDeal promotion: title, summary, its products, and a closing note. */
-export function DealCard({ deal }: { deal: Deal }) {
+/**
+ * A QDeal or featured sale: title, summary, its products, and a closing
+ * note. A featured sale also says when it ends.
+ */
+export function DealCard({
+  deal,
+  showEnd = false,
+}: {
+  deal: Deal
+  showEnd?: boolean
+}) {
   const titleId = `deal-${deal.id}`
   return (
     <article className={styles.card} aria-labelledby={titleId}>
@@ -28,6 +35,9 @@ export function DealCard({ deal }: { deal: Deal }) {
           {deal.title}
         </h2>
         {deal.summary ? <p className={styles.summary}>{deal.summary}</p> : null}
+        {showEnd && deal.endsAt ? (
+          <p className={styles.ends}>{formatSaleEnd(deal.endsAt)}</p>
+        ) : null}
       </div>
       {deal.image && (
         <Image
@@ -48,11 +58,17 @@ export function DealCard({ deal }: { deal: Deal }) {
             // brand and name together; the grid ignores them.
             <li key={item.id} className={styles.item}>
               <span className={styles.brand}>{item.brand}</span>{" "}
-              <span className={styles.name}>{item.name}</span>{" "}
+              {item.href ? (
+                <Link className={styles.name} href={item.href}>
+                  {item.name}
+                </Link>
+              ) : (
+                <span className={styles.name}>{item.name}</span>
+              )}{" "}
               <span className={styles.meta}>
                 {item.condition ? (
                   <span className={styles.condition}>
-                    {CONDITIONS[item.condition]}
+                    {DEAL_CONDITION_LABELS[item.condition]}
                   </span>
                 ) : null}{" "}
                 {item.priceCents !== null ? (

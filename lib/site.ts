@@ -13,6 +13,7 @@ export const PUBLIC_PAGES = [
   "/shop",
   "/news",
   "/news/archive",
+  "/sales",
   "/qdeal",
   "/in-store-policies",
   "/how-to-order",

@@ -16,6 +16,7 @@ import {
   releaseTool,
   scheduleBefore,
   scheduledAt,
+  skipChoice,
   withFields,
   type Release,
 } from "@/lib/admin/approval-choice"
@@ -33,7 +34,9 @@ type Step = "decide" | "release" | "feedback"
  * proposal approves it; any other goes back to the agent, which proposes it
  * that way and the chat approves that card itself
  * (lib/admin/approval-choice.ts). Deny asks what to change and sends the
- * note with the denial, so the agent can propose again.
+ * note with the denial, so the agent can propose again. A change the owner
+ * may simply not want (a new featured sale) can also be turned down in one
+ * step, and the agent goes on without it.
  */
 export function ApprovalActions({
   actions,
@@ -62,6 +65,7 @@ export function ApprovalActions({
   /** The button a step opened from, which gets focus back. */
   const opener = useRef<"approve" | "deny" | null>(null)
   const release = releaseTool(tool)
+  const skip = skipChoice(tool, input)
   const busy = sending || interaction.answer !== undefined || actions.resuming
 
   // Focus follows the step: its first control, or back to what opened it.
@@ -173,6 +177,16 @@ export function ApprovalActions({
             >
               Deny
             </button>
+            {skip && (
+              <button
+                type="button"
+                className={styles.quiet}
+                disabled={busy}
+                onClick={() => void respond("deny", skip.note)}
+              >
+                {skip.label}
+              </button>
+            )}
             {arrangedPhotos && (
               <button
                 type="button"

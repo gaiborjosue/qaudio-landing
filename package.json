@@ -20,7 +20,7 @@
     "check:launch": "node scripts/check-launch.mjs",
     "test:zernio": "node --test scripts/zernio.test.mjs",
     "test:google-business": "node --test scripts/google-business.test.mjs",
-    "test:deals": "node --test scripts/deals.test.mjs",
+    "test:deals": "node --test scripts/deals.test.mjs scripts/deals-tab.test.mjs",
     "test:speech": "node --test scripts/speech.test.mjs",
     "test:prefill": "node --test scripts/product-prefill.test.mjs",
     "test:products": "node --test scripts/products.test.mjs",
