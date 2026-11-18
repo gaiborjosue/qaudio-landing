@@ -7,6 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { byName } from "@/lib/admin/alphabetical"
 import { cn } from "@/lib/utils"
 import styles from "./choice.module.css"
 
@@ -15,13 +16,16 @@ export type ChoiceOption = {
   label: string
   /** A product condition's color cue: "new", "demo", or "used". */
   tone?: string
+  /** Stays above the A–Z options, like "All brands" or "No brand". */
+  first?: boolean
 }
 
 /**
  * shadcn's Select (Base UI) at the admin's scale, for the product editor and
  * table: a value, its options, and a placeholder. An empty string means
- * nothing is chosen. Options with a `tone` carry the condition colors, and so
- * does the trigger when the chosen one has one.
+ * nothing is chosen. Options list A–Z by label, after any marked `first`.
+ * Options with a `tone` carry the condition colors, and so does the trigger
+ * when the chosen one has one.
  */
 export function Choice({
   value,
@@ -47,9 +51,12 @@ export function Choice({
   "aria-invalid"?: true
 }) {
   const chosen = options.find((option) => option.value === value)
+  const listed = options.toSorted(
+    (a, b) => Number(!!b.first) - Number(!!a.first) || byName(a.label, b.label)
+  )
   return (
     <Select
-      items={options.map(({ value, label }) => ({ value, label }))}
+      items={listed.map(({ value, label }) => ({ value, label }))}
       value={value || null}
       onValueChange={(next) => onChange(typeof next === "string" ? next : "")}
       disabled={disabled}
@@ -70,7 +77,7 @@ export function Choice({
         className={cn(styles.content, "motion-reduce:animate-none")}
         alignItemWithTrigger={false}
       >
-        {options.map((option) => (
+        {listed.map((option) => (
           <SelectItem
             key={option.value}
             value={option.value}

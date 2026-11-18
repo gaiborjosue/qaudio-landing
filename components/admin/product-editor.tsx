@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { useRouter } from "next/navigation"
-import { motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import {
   Check,
   CircleCheck,
@@ -46,6 +46,12 @@ import {
   type ProductValues,
 } from "@/lib/admin/product-editor"
 import { productFromInput, type CatalogTaxonomy } from "@/lib/admin/preview"
+import {
+  conditionNotes,
+  conditionScore,
+  withConditionNotes,
+  withConditionScore,
+} from "@/lib/admin/condition-score"
 import { isUsedEquipment } from "@/lib/catalog"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import {
@@ -58,6 +64,7 @@ import { MarkdownText } from "@/components/markdown-text"
 import { Choice } from "./choice"
 import { SaleDateRange } from "./sale-date-range"
 import { ProductPhotos } from "./product-photos"
+import { ScoreSlider } from "./score-slider"
 import adminStyles from "./admin.module.css"
 import styles from "./product-editor.module.css"
 
@@ -883,6 +890,10 @@ export function ProductEditor({
 
   const used = isUsedEquipment(values.category_slug, values.condition)
   const sold = used && values.availability === "sold"
+  // The condition note holds used gear's score (the slider under the
+  // condition pills) and any other terms (the notes field).
+  const conditionNote = values.condition_note ?? ""
+  const notes = conditionNotes(conditionNote)
   const useListPrice =
     !values.price.trim() &&
     values.availability === "available" &&
@@ -925,7 +936,7 @@ export function ProductEditor({
                 value={values.brand_slug}
                 placeholder="Choose…"
                 options={[
-                  { value: "", label: "No brand" },
+                  { value: "", label: "No brand", first: true },
                   ...taxonomy.brands.map(({ slug, name }) => ({
                     value: slug,
                     label: name,
@@ -937,7 +948,7 @@ export function ProductEditor({
               />
             )
           )}
-          <fieldset className={styles.segmented}>
+          <fieldset className={`${styles.segmented} ${styles.conditionField}`}>
             <legend className={styles.label}>Condition</legend>
             {/* In the shop's condition-badge colors: the cue the details
               page gives the same value. */}
@@ -955,6 +966,33 @@ export function ProductEditor({
                 </label>
               ))}
             </div>
+            {/* Used gear's score slides out from under the pills into the
+              free space below them. */}
+            <AnimatePresence initial={false}>
+              {used && (
+                <motion.div
+                  key="score"
+                  className={styles.scorePanel}
+                  initial={{ opacity: 0, y: still ? 0 : -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: still ? 0 : -10 }}
+                  transition={{ duration: still ? 0 : 0.2, ease: "easeOut" }}
+                >
+                  <ScoreSlider
+                    value={conditionScore(conditionNote)}
+                    tone={values.condition.toLowerCase()}
+                    disabled={disabled || saving}
+                    aria-label="Condition score"
+                    onChange={(score) =>
+                      set(
+                        "condition_note",
+                        withConditionScore(conditionNote, score)
+                      )
+                    }
+                  />
+                </motion.div>
+              )}
+            </AnimatePresence>
           </fieldset>
           <fieldset className={styles.segmented}>
             <legend className={styles.label}>Status</legend>
@@ -1124,16 +1162,20 @@ export function ProductEditor({
               aria-labelledby={`${fieldId("availability")}-label`}
             />
           )}
-          {(used || values.condition_note) &&
+          {(used || notes) &&
             field(
               "condition_note",
-              "Condition score or notes",
+              "Condition notes",
               <input
                 type="text"
-                value={values.condition_note ?? ""}
-                placeholder="8/10"
-                maxLength={500}
-                onChange={(event) => set("condition_note", event.target.value)}
+                value={notes}
+                maxLength={500 - (conditionNote.length - notes.length)}
+                onChange={(event) =>
+                  set(
+                    "condition_note",
+                    withConditionNotes(conditionNote, event.target.value)
+                  )
+                }
                 {...invalid("condition_note")}
               />
             )}

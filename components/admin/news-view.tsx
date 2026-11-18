@@ -52,7 +52,7 @@ const STATUS_LABELS: Record<NewsStatus, string> = {
 type EditableStatus = Exclude<NewsStatus, "expired">
 const ALL = "all"
 const FILTERS = [
-  { value: ALL, label: "Any status" },
+  { value: ALL, label: "Any status", first: true },
   ...Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })),
 ]
 

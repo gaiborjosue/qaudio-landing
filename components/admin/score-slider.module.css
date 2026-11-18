@@ -1,0 +1,137 @@
+/* The condition score slider (score-slider.tsx): 0 to 10 with a tick per
+   point, filled up to the score. It wears the shop's condition-badge colors
+   like the condition control it belongs to (see choice.module.css): amber
+   for Used. The thumb carries the number. */
+
+.slider {
+  --tone-bg: #f0f0f0;
+  --tone-line: #dcdcdc;
+  --tone-ink: #404040;
+  --tone-dot: #8a8a8a;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-sizing: border-box;
+  height: 26px;
+  padding: 0 9px;
+  border: 1px solid var(--tone-line);
+  border-radius: 999px;
+  background: var(--tone-bg);
+  color: var(--tone-ink);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: pan-y;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.slider[data-tone="new"] {
+  --tone-bg: #e8f6ec;
+  --tone-line: #bfe4ca;
+  --tone-ink: #12632d;
+  --tone-dot: #22a553;
+}
+.slider[data-tone="demo"] {
+  --tone-bg: #e9f1fe;
+  --tone-line: #c4d8f8;
+  --tone-ink: #1c4fa0;
+  --tone-dot: #3b82f6;
+}
+.slider[data-tone="used"] {
+  --tone-bg: #fdf2dd;
+  --tone-line: #f2d9a1;
+  --tone-ink: #8a5100;
+  --tone-dot: #e19a1a;
+}
+.slider:active {
+  cursor: grabbing;
+}
+.slider:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.slider[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* The product table's size, without the end numbers. */
+.small {
+  height: 28px;
+  padding: 0 7px;
+}
+
+.end {
+  flex: none;
+  opacity: 0.8;
+}
+
+/* Room for half the thumb at each end keeps 0 and 10 inside the pill. */
+.track {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 2px;
+  margin-inline: 10px;
+  border-radius: 1px;
+  background: var(--tone-line);
+}
+.small .track {
+  margin-inline: 9px;
+}
+.fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: inherit;
+  background: var(--tone-dot);
+  transition: width 120ms ease-out;
+}
+.tick {
+  position: absolute;
+  top: 50%;
+  width: 2px;
+  height: 8px;
+  border-radius: 1px;
+  background: var(--tone-line);
+  transform: translate(-50%, -50%);
+}
+.tick[data-filled] {
+  background: var(--tone-dot);
+}
+.thumb {
+  position: absolute;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--tone-dot);
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.12);
+  color: var(--tone-ink);
+  font-weight: 600;
+  transform: translate(-50%, -50%);
+  transition:
+    left 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+.slider:not([aria-disabled="true"]):hover .thumb {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--tone-dot) 22%, transparent),
+    0 1px 2px rgb(0 0 0 / 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fill,
+  .thumb {
+    transition: none;
+  }
+}

@@ -69,3 +69,20 @@ export const taskPlanningGate: LanguageModelMiddleware = {
     return { ...params, tools, toolChoice: { type: "required" } }
   },
 }
+
+/** Eve's dynamic instructions see the model ID shared by both Sol routes. */
+export const omitTaskPlanningInstruction: LanguageModelMiddleware = {
+  transformParams: async ({ params }) => ({
+    ...params,
+    prompt: params.prompt.flatMap((message) => {
+      if (
+        message.role !== "system" ||
+        !message.content.includes(REQUIRE_TASK_PLAN)
+      ) {
+        return [message]
+      }
+      const content = message.content.replace(REQUIRE_TASK_PLAN, "").trim()
+      return content ? [{ ...message, content }] : []
+    }),
+  }),
+}

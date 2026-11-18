@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react"
 import { Pencil, Search, Trash2 } from "lucide-react"
+import { byName } from "@/lib/admin/alphabetical"
 import styles from "./admin.module.css"
 
 export type PickerItem = {
@@ -22,22 +23,28 @@ const fold = (text: string) =>
     .toLowerCase()
 
 /**
- * The Edit menu's list for one kind of item: a search field and each item
- * with Edit and (where it can be removed) Remove. Choosing one starts the
- * chat about that exact item.
+ * The Edit menu's list for one kind of item: a search field and each item,
+ * A–Z unless `ordered`, with Edit and (where it can be removed) Remove.
+ * Choosing one starts the chat about that exact item.
  */
 export function ItemPicker({
   items,
   noun,
+  ordered = false,
 }: {
   items: PickerItem[]
   /** Singular, lower case: "product", "news post". */
   noun: string
+  /** Keeps the given order, for items named by their dates. */
+  ordered?: boolean
 }) {
   const [query, setQuery] = useState("")
   const listId = useId()
   const words = fold(query).split(/\s+/).filter(Boolean)
-  const shown = items.filter((item) => {
+  const listed = ordered
+    ? items
+    : items.toSorted((a, b) => byName(a.title, b.title))
+  const shown = listed.filter((item) => {
     const text = fold(`${item.title} ${item.meta}`)
     return words.every((word) => text.includes(word))
   })

@@ -108,7 +108,7 @@
   padding: 0;
   border: 0;
 }
-.segmented > div {
+.segmented > div:not(.scorePanel) {
   display: inline-flex;
   width: fit-content;
   padding: 3px;
@@ -125,7 +125,7 @@
   opacity: 0;
   cursor: pointer;
 }
-.segmented span {
+.segmented label > span {
   display: block;
   padding: 6px 13px;
   border-radius: 999px;
@@ -186,6 +186,35 @@
 .segmented input:focus-visible + span {
   outline: 2px solid #111;
   outline-offset: 2px;
+}
+
+/* Used gear's score (score-slider.tsx): an expanded pill that slides out
+   from under the condition pills into the free space below them, the gap
+   above the manufacturer page's field, so nothing moves. Where the pills
+   start a row of their own, that space holds the next row's label, so the
+   score takes room of its own. */
+.conditionField {
+  position: relative;
+}
+.conditionField > div:not(.scorePanel) {
+  position: relative;
+  z-index: 1;
+}
+.scorePanel {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 100%;
+  margin-top: 4px;
+}
+@media (max-width: 700px) {
+  .facets {
+    align-items: flex-start;
+  }
+  .scorePanel {
+    position: static;
+    margin-top: 0;
+  }
 }
 
 .auditionField .label {

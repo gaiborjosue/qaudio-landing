@@ -371,8 +371,7 @@ test("Sol requires a successful plan in this turn, including read-only requests 
     delegated = false
   ) => taskPlanningInstruction(model, view, turn, delegated)
   assert.equal(required(viewOf()), REQUIRE_TASK_PLAN)
-  assert.equal(required(viewOf(), "gpt-6.1-sol"), REQUIRE_TASK_PLAN)
-  assert.equal(required(viewOf(), MAIN_MODEL_ID), null)
+  assert.equal(required(viewOf(), "gpt-6.2-sol"), REQUIRE_TASK_PLAN)
   assert.equal(required(viewOf(), FAST_MODEL_ID), null)
   assert.equal(required(viewOf(), PLAN_MODEL_ID, null), null)
   assert.equal(required(viewOf(), PLAN_MODEL_ID, "current", true), null)
@@ -589,7 +588,7 @@ test("Sol routing uses medium effort, shares the local ChatGPT guard, and never 
       assert.notEqual(fastModel.provider, "chatgpt-test")
       assert.equal(mainChatModel.options[PLAN_MODEL_ID].model, planModel)
       assert.equal(mainChatModel.options[PLAN_MODEL_ID].reasoning, "medium")
-      assert.equal(mainChatModel.options[MAIN_MODEL_ID].model, mainModel)
+      assert.equal(mainChatModel.options["sol-low"].model, mainModel)
       assert.equal(mainChatModel.options[FAST_MODEL_ID].model, fastModel)
       assert.equal(mainChatModel.options[FAST_MODEL_ID].reasoning, "xhigh")
       assert.match(
@@ -600,10 +599,12 @@ test("Sol routing uses medium effort, shares the local ChatGPT guard, and never 
         mainChatModel.options[FAST_MODEL_ID].description,
         /Do not use for 3 or more distinct requested tasks/
       )
+      assert.equal(mainChatModel.options["sol-low"].reasoning, "low")
       assert.equal(mainChatModel.fallback.model, mainModel)
+      assert.equal(mainChatModel.fallback.reasoning, "low")
       for (const flow of FLOWS)
         assert.ok(
-          mainChatModel.options[MAIN_MODEL_ID].description.includes(
+          mainChatModel.options["sol-low"].description.includes(
             flow.trigger
           )
         )
@@ -657,7 +658,7 @@ test("production requests use Sol medium and Ember xhigh through OpenRouter with
         },
       })
     }
-    const { planModel, fastModel } =
+    const { planModel, mainModel, fastModel } =
       await import("../agent/lib/models.ts?case=production-request")
     const result = await planModel.doGenerate({
       prompt: [
@@ -681,6 +682,16 @@ test("production requests use Sol medium and Ember xhigh through OpenRouter with
     )
     assert.equal(result.providerMetadata.openrouter.usage.cost, 0.002)
     assert.equal(result.providerMetadata.gateway.cost, 0.002)
+    await mainModel.doGenerate({
+      prompt: [
+        { role: "system", content: REQUIRE_TASK_PLAN },
+        { role: "user", content: [{ type: "text", text: "Test" }] },
+      ],
+    })
+    const lowRequest = requests.pop()
+    assert.equal(lowRequest.model, MAIN_MODEL_ID)
+    assert.equal(lowRequest.reasoning.effort, "low")
+    assert.ok(!JSON.stringify(lowRequest.messages).includes(REQUIRE_TASK_PLAN))
     const fastResult = await fastModel.doGenerate({
       prompt: [{ role: "user", content: [{ type: "text", text: "Hello" }] }],
     })

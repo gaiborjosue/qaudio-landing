@@ -192,6 +192,14 @@
 .cell > button {
   min-width: 112px;
 }
+/* Condition's select, used gear's score slider (score-slider.tsx), and its
+   availability share one width. */
+.conditionColumn .cell > button {
+  min-width: 132px;
+}
+.score {
+  width: 132px;
+}
 
 .equipment {
   display: grid;
@@ -199,12 +207,6 @@
   margin-top: 4px;
 }
 
-.conditionNote {
-  width: 112px;
-  padding: 0 7px;
-}
-
-.conditionNote,
 .price {
   height: 32px;
   border: 1px solid #cfcfcf;
@@ -232,7 +234,6 @@
   font-variant-numeric: tabular-nums;
   outline: none;
 }
-.conditionNote:focus-visible,
 .price:focus-within {
   outline: 2px solid #111;
   outline-offset: -2px;

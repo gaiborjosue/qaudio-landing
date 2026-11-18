@@ -29,6 +29,13 @@ const { sellingPrice, priceQualifications, conditionQualification } =
   await import("../lib/catalog.ts")
 const { valuesFrom, inputFromValues } =
   await import("../lib/admin/product-editor.ts")
+const {
+  conditionNotes,
+  conditionScore,
+  withConditionNotes,
+  withConditionScore,
+} = await import("../lib/admin/condition-score.ts")
+const { byName } = await import("../lib/admin/alphabetical.ts")
 const { saleInputSchema, saleProposalSchema, productSaleSchema } =
   await import("../lib/admin/schemas.ts")
 const { datesFromAnswer } = await import("../agent/lib/ask-dates.ts")
@@ -156,6 +163,51 @@ test("condition qualifications retain grades and final-sale terms without anothe
     "Final sale · 6 out of 10"
   )
   assert.equal(conditionQualification("9 out of 10"), "9 out of 10")
+})
+
+test("the score slider edits only the score in a condition note", () => {
+  const imported = "Used (final sale) · 6 out of 10"
+  assert.equal(conditionScore(imported), 6)
+  assert.equal(conditionScore("8/10"), 8)
+  assert.equal(conditionScore("10 out of 10"), 10)
+  assert.equal(conditionScore("Used (final sale)"), null)
+  assert.equal(conditionScore("11/10"), null)
+  assert.equal(conditionNotes(imported), "Used (final sale)")
+
+  assert.equal(
+    withConditionScore(imported, 8),
+    "Used (final sale) · 8 out of 10"
+  )
+  assert.equal(
+    conditionQualification(withConditionScore(imported, 8)),
+    "Final sale · 8 out of 10"
+  )
+  assert.equal(withConditionScore("", 0), "0 out of 10")
+  assert.equal(
+    withConditionScore("Used (final sale)", 7),
+    "Used (final sale) · 7 out of 10"
+  )
+  // The saved score leaves the note as imported, so nothing reads as changed.
+  assert.equal(withConditionScore("8/10", 8), "8/10")
+  assert.equal(withConditionScore(imported, null), "Used (final sale)")
+  assert.equal(withConditionScore("6 out of 10 · final sale", null), "final sale")
+  assert.equal(withConditionScore("", null), "")
+
+  // Notes typed beside a score come back exactly as typed.
+  for (const typed of ["", "final ", "final sale · ", "Used (final sale)"]) {
+    const note = withConditionNotes("6 out of 10", typed)
+    assert.equal(conditionNotes(note), typed)
+    assert.equal(conditionScore(note), 6)
+  }
+  assert.equal(withConditionNotes("", "final sale"), "final sale")
+  assert.equal(withConditionNotes("6 out of 10", "Mint, 9/10"), "Mint, 9/10")
+})
+
+test("admin dropdowns list names A–Z, ignoring case and accents, numbers in order", () => {
+  assert.deepEqual(
+    ["Series 10", "series 2", "Zu", "Ámbar", "B&W"].toSorted(byName),
+    ["Ámbar", "B&W", "series 2", "Series 10", "Zu"]
+  )
 })
 
 test("editing existing price controls preserves imported qualifications without note inputs", () => {

@@ -295,6 +295,7 @@ export const QuickMenus = memo(function QuickMenus({
         render: (close) => (
           <ItemPicker
             noun="schedule change"
+            ordered
             items={preview.schedule.changes.map((change) =>
               pick(
                 "schedule change",

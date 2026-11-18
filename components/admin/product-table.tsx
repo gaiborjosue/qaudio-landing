@@ -6,6 +6,7 @@ import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
 import { isUsedEquipment } from "@/lib/catalog"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
+import { conditionScore, withConditionScore } from "@/lib/admin/condition-score"
 import {
   NO_PRODUCT_FILTERS,
   type ProductFilters,
@@ -19,6 +20,7 @@ import type { ProductQuickEdit } from "@/lib/admin/schemas"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import { Choice } from "./choice"
 import { ProductThumb } from "./product-review-table"
+import { ScoreSlider } from "./score-slider"
 import adminStyles from "./admin.module.css"
 import styles from "./product-table.module.css"
 
@@ -305,7 +307,10 @@ export function ProductTable({
             <Choice
               small
               value={filters[facet.key] || ALL}
-              options={[{ value: ALL, label: facet.all }, ...facet.options]}
+              options={[
+                { value: ALL, label: facet.all, first: true },
+                ...facet.options,
+              ]}
               onChange={(value) =>
                 setFilter(facet.key, value === ALL ? "" : value)
               }
@@ -477,6 +482,10 @@ function ProductRow({
   const priceInvalid = mark("price") && invalidPrice(price)
   const condition = draft.condition ?? product.condition
   const used = isUsedEquipment(product.category.slug, condition)
+  // The table edits only the note's score, so each change starts from the
+  // saved note: going back to the saved score leaves nothing changed.
+  const savedNote = product.condition_note ?? ""
+  const score = conditionScore(draft.condition_note ?? savedNote)
   const availability = draft.availability ?? product.availability ?? "available"
   const sold = used && availability === "sold"
   const pair = product.price_unit === "pair"
@@ -493,7 +502,7 @@ function ProductRow({
         <span className={styles.brand}>{product.brand?.name ?? ""}</span>
       </th>
       <td className={styles.category}>{product.category.name}</td>
-      <td>
+      <td className={styles.conditionColumn}>
         <span className={styles.cell} data-changed={mark("condition")}>
           <Choice
             small
@@ -507,16 +516,17 @@ function ProductRow({
         {used && (
           <div className={styles.equipment}>
             <span className={styles.cell} data-changed={mark("condition_note")}>
-              <input
-                className={styles.conditionNote}
-                type="text"
-                value={draft.condition_note ?? product.condition_note ?? ""}
-                placeholder="Score (e.g. 8/10)"
-                maxLength={500}
+              <ScoreSlider
+                small
+                className={styles.score}
+                value={score}
+                tone={condition.toLowerCase()}
                 aria-label={`Condition score of ${product.name}`}
                 aria-describedby={changed("condition_note")}
-                onChange={(event) =>
-                  onEdit({ condition_note: event.target.value })
+                onChange={(next) =>
+                  onEdit({
+                    condition_note: withConditionScore(savedNote, next),
+                  })
                 }
               />
             </span>
