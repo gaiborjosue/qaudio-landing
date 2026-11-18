@@ -453,11 +453,50 @@
   font-weight: 500;
   white-space: nowrap;
 }
-/* A product's new photos, card line, and description, under the table. */
-.copy {
+/* Text in a cell, as what was removed (struck through, muted) and added
+   (bold on a light tint); a description scrolls within its cell. */
+.review .table [data-wide] {
+  min-width: 240px;
+}
+.text {
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.removed {
+  color: #8a8a8a;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.added {
+  border-radius: 3px;
+  background: #ececec;
+  color: #111;
+  font-weight: 600;
+  text-decoration: none;
+}
+.longText {
+  display: block;
+  min-width: 260px;
+  max-height: 180px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.longText > :first-child {
+  margin-top: 0;
+}
+.longText > :last-child {
+  margin-bottom: 0;
+}
+.longText:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+.photoChange {
   display: grid;
-  gap: 10px;
-  margin-top: 14px;
+  gap: 4px;
 }
 .photoStrip {
   display: flex;
@@ -466,10 +505,4 @@
   margin: 0;
   padding: 0;
   list-style: none;
-}
-.cardLine {
-  margin: 0;
-  color: #4a4a4a;
-  font-size: 14px;
-  line-height: 1.5;
 }

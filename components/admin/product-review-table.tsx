@@ -59,6 +59,8 @@ export type ReviewColumn<T> = {
   label: string
   /** Right-aligned figures. */
   numeric?: boolean
+  /** Room for a line of text or photos. */
+  wide?: boolean
   cell: (row: T) => ReactNode
 }
 
@@ -111,6 +113,7 @@ export function ProductReviewTable<T>({
                   key={column.label}
                   scope="col"
                   data-numeric={column.numeric || undefined}
+                  data-wide={column.wide || undefined}
                 >
                   {column.label}
                 </th>
@@ -139,6 +142,7 @@ export function ProductReviewTable<T>({
                     <td
                       key={column.label}
                       data-numeric={column.numeric || undefined}
+                      data-wide={column.wide || undefined}
                     >
                       {column.cell(row)}
                     </td>

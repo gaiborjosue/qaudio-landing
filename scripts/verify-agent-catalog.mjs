@@ -565,13 +565,11 @@ const renderChange = (input, products) =>
     })
   )
 const oneChange = renderChange(fixtures.update_products[1], [used])
-for (const text of [
-  "Published",
-  "Draft",
-  "Used (final sale) · 6 out of 10",
-  "Used (final sale) · 8 out of 10",
-])
+for (const text of ["Published", "Draft", "Used (final sale) · "])
   assert(oneChange.includes(text), text)
+// Text reads as what was removed and added, in place.
+assert(/<del[^>]*><span[^>]*>Removed: <\/span>6<\/del>/.test(oneChange))
+assert(/<ins[^>]*><span[^>]*>Added: <\/span>8<\/ins>/.test(oneChange))
 const other = "00000000-0000-4000-8000-000000000002"
 const manyChanges = renderChange(
   {
@@ -589,6 +587,33 @@ const manyChanges = renderChange(
 )
 assert(manyChanges.includes('aria-label="Product changes"'))
 assert(manyChanges.includes("2 products · Condition notes, Status"))
+// Copy changes sit in each product's row, never in a list under the table.
+const copyChanges = renderChange(
+  {
+    products: [
+      {
+        id,
+        name: "Sample",
+        updated_at: "2030-01-01T00:00:00+00:00",
+        changes: { short_description: "100Wpc power amplifier." },
+      },
+      {
+        id: other,
+        name: "Other",
+        updated_at: "2030-01-01T00:00:00+00:00",
+        changes: { short_description: "Compact amplifier." },
+      },
+    ],
+  },
+  [
+    { ...used, short_description: "100Wpc power amplifier. $450" },
+    { ...used, id: other, name: "Other", short_description: "Compact amplifier, $300." },
+  ]
+)
+const copyRows = copyChanges.match(/<tbody>.*<\/tbody>/s)?.[0] ?? ""
+assert(/<tr>.*Sample.*Removed: <\/span> \$450<\/del>.*<\/tr>/s.test(copyRows))
+assert(copyRows.includes("Removed: </span>, $300</del>"))
+assert(!copyChanges.slice(copyChanges.indexOf("</table>")).includes("amplifier"))
 // Lowering the regular price under a live sale is flagged before approval.
 assert(
   renderChange(

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { MarkdownText } from "@/components/markdown-text"
 import {
+  CHANGE_FIELDS,
   CHANGE_LABELS,
   productUpdate,
   writtenFields,
@@ -27,28 +28,36 @@ import {
   isUsedEquipment,
 } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
+import { wordDiff } from "@/lib/admin/text-diff"
 import {
   ConditionBadge,
   ProductReviewTable,
   ProductThumb,
-  type ReviewColumn,
 } from "./product-review-table"
 import styles from "./admin.module.css"
 import tableStyles from "./product-table.module.css"
 
 // The approval cards of the agent's product changes
 // (products__update_products, products__create_product), in the Products
-// tab's table. Each change reads "before → after", worked out with the same
-// code the save uses (lib/admin/product-changes.ts); "before" is the
-// product as this page loaded it.
+// tab's table, with every field in its product's row. A change reads
+// "before → after", and text as what was removed and added, worked out with
+// the same code the save uses (lib/admin/product-changes.ts); "before" is
+// the product as this page loaded it.
 
 type Photo = { path: string; alt: string }
 
 /** A field's value, before or after the change. */
 type Values = Partial<Record<ChangeField, unknown>>
 
-// Copy and photos get a section of their own under the table.
-const LONG: ReadonlySet<ChangeField> = new Set([
+// Text shown word by word, as what was removed and added.
+const TEXT: ReadonlySet<ChangeField> = new Set([
+  "name",
+  "condition_note",
+  "short_description",
+  "description",
+])
+// Fields that need room for a line of text or photos.
+const WIDE: ReadonlySet<ChangeField> = new Set([
   "short_description",
   "description",
   "images",
@@ -100,6 +109,7 @@ function changedValues(update: ProductUpdate, changes: ProductChanges): Values {
 
 const photos = (value: unknown) =>
   Array.isArray(value) ? (value as Photo[]) : []
+const text = (value: unknown) => (typeof value === "string" ? value : "")
 
 /** A field's value as the Products tab shows it. */
 function shown(
@@ -143,15 +153,81 @@ function shown(
         : "—"
     case "images":
       return plural(photos(value).length, "photo")
-    case "description":
-      return value ? "New text" : "None"
     default:
-      return typeof value === "string" && value.trim() ? value : "—"
+      return text(value).trim() || "—"
   }
 }
 
-/** "Before → after", or just "after" for a product this page hasn't loaded. */
-function Change({
+/**
+ * Text as what was removed (struck through) and added (marked), or just the
+ * new text for a product this page hasn't loaded. A description scrolls in
+ * its cell.
+ */
+function TextChange({
+  label,
+  before,
+  after,
+  long,
+}: {
+  label: string
+  before: string | null
+  after: string
+  long: boolean
+}) {
+  const parts =
+    before === null
+      ? [{ kind: "same" as const, text: after }]
+      : wordDiff(before, after)
+  const body = parts.some((part) => part.text.trim()) ? (
+    parts.map((part, index) =>
+      part.kind === "removed" ? (
+        <del key={index} className={tableStyles.removed}>
+          <span className="visually-hidden">Removed: </span>
+          {part.text}
+        </del>
+      ) : part.kind === "added" ? (
+        <ins key={index} className={tableStyles.added}>
+          <span className="visually-hidden">Added: </span>
+          {part.text}
+        </ins>
+      ) : (
+        part.text
+      )
+    )
+  ) : (
+    <span className={tableStyles.was}>None</span>
+  )
+  return long ? (
+    <div
+      className={`${tableStyles.text} ${tableStyles.longText}`}
+      role="region"
+      aria-label={label}
+      tabIndex={0}
+    >
+      {body}
+    </div>
+  ) : (
+    <span className={tableStyles.text}>{body}</span>
+  )
+}
+
+/** A product's photos in order, as small tiles. */
+function PhotoStrip({ images, label }: { images: Photo[]; label: string }) {
+  return images.length > 0 ? (
+    <ol className={tableStyles.photoStrip} aria-label={label}>
+      {images.map((image, index) => (
+        <li key={`${index}-${image.path}`}>
+          <ProductThumb src={mediaUrl(image.path)} alt={image.alt} />
+        </li>
+      ))}
+    </ol>
+  ) : (
+    <span className={tableStyles.was}>No photos</span>
+  )
+}
+
+/** One field's change in its cell: "—" where the product keeps it. */
+function FieldChange({
   field,
   before,
   after,
@@ -163,6 +239,27 @@ function Change({
   taxonomy: CatalogTaxonomy
 }) {
   if (!(field in after)) return <span className={tableStyles.was}>—</span>
+  if (TEXT.has(field)) {
+    return (
+      <TextChange
+        label={CHANGE_LABELS[field]}
+        before={before && text(before[field])}
+        after={text(after[field])}
+        long={field === "description"}
+      />
+    )
+  }
+  if (field === "images") {
+    const was = before && photos(before.images).length
+    return (
+      <span className={tableStyles.photoChange}>
+        <PhotoStrip images={photos(after.images)} label="New photos" />
+        {was !== null && (
+          <span className={tableStyles.was}>Was {plural(was, "photo")}</span>
+        )}
+      </span>
+    )
+  }
   return (
     <span className={tableStyles.change}>
       {before && (
@@ -181,54 +278,46 @@ function Change({
   )
 }
 
-/** A product's photos in order, as small tiles. */
-function PhotoStrip({ images, label }: { images: Photo[]; label: string }) {
-  return images.length > 0 ? (
-    <ol className={tableStyles.photoStrip} aria-label={label}>
-      {images.map((image, index) => (
-        <li key={`${index}-${image.path}`}>
-          <ProductThumb src={mediaUrl(image.path)} alt={image.alt} />
-        </li>
-      ))}
-    </ol>
-  ) : (
-    <p className={tableStyles.was}>No photos</p>
-  )
-}
-
-/** A product's new card line, description, or photos. */
-function Copy({
-  name,
-  after,
-  fields,
+/** One product's fields as rows: a label, then its cell. */
+function FieldTable({
+  label,
+  heading,
+  rows,
 }: {
-  name?: string
-  after: Values
-  fields: ChangeField[]
+  label: string
+  /** The value column's heading. */
+  heading: string
+  rows: { key: string; label: string; cell: ReactNode }[]
 }) {
-  const long = fields.filter((field) => LONG.has(field))
-  if (long.length === 0) return null
   return (
-    <section className={tableStyles.copy} aria-label={name}>
-      {name && <p className={styles.newsPreviewLabel}>{name}</p>}
-      {long.includes("images") && (
-        <PhotoStrip images={photos(after.images)} label="Photos" />
-      )}
-      {long.includes("short_description") && (
-        <p className={tableStyles.cardLine}>
-          {String(after.short_description ?? "")}
-        </p>
-      )}
-      {long.includes("description") && (
-        <div className={styles.newsArticlePreview} tabIndex={0}>
-          {String(after.description ?? "").trim() ? (
-            <MarkdownText text={String(after.description)} />
-          ) : (
-            <p className={tableStyles.was}>No description</p>
-          )}
-        </div>
-      )}
-    </section>
+    <div className={`${tableStyles.frame} ${tableStyles.review}`}>
+      <div
+        className={tableStyles.scroller}
+        role="region"
+        aria-label={label}
+        tabIndex={0}
+      >
+        <table className={tableStyles.table}>
+          <caption className="visually-hidden">{label}</caption>
+          <thead>
+            <tr>
+              <th scope="col">Field</th>
+              <th scope="col">{heading}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.key}>
+                <th scope="row" className={tableStyles.fieldName}>
+                  {row.label}
+                </th>
+                <td>{row.cell}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   )
 }
 
@@ -294,14 +383,19 @@ export function ProductUpdatesPreview({
       problem: saleProblem(product, after),
     }
   })
-  const fields = [
-    ...new Set(rows.flatMap((row) => row.fields).filter((f) => !LONG.has(f))),
-  ]
-  const long = rows.filter((row) => row.fields.some((f) => LONG.has(f)))
-  const summary = [...new Set(rows.flatMap((row) => row.fields))].map(
-    (field) => CHANGE_LABELS[field]
+  // Every field any product changes, in the form's order.
+  const fields = CHANGE_FIELDS.filter((field) =>
+    rows.some((row) => row.fields.includes(field))
   )
   const unloaded = rows.filter((row) => !row.product).length
+  const cell = (row: Row, field: ChangeField) => (
+    <FieldChange
+      field={field}
+      before={row.before}
+      after={row.after}
+      taxonomy={taxonomy}
+    />
+  )
 
   // One product: its fields as rows, so many changes stay readable.
   if (rows.length === 1) {
@@ -314,69 +408,24 @@ export function ProductUpdatesPreview({
           {unloaded > 0 && " · Not on this page yet"}
         </Note>
         {row.problem && <Note>{row.problem}</Note>}
-        {fields.length > 0 && (
-          <div className={`${tableStyles.frame} ${tableStyles.review}`}>
-            <div className={tableStyles.scroller}>
-              <table className={tableStyles.table}>
-                <caption className="visually-hidden">Product changes</caption>
-                <thead>
-                  <tr>
-                    <th scope="col">Field</th>
-                    <th scope="col">Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fields.map((field) => (
-                    <tr key={field}>
-                      <th scope="row" className={tableStyles.fieldName}>
-                        {CHANGE_LABELS[field]}
-                      </th>
-                      <td>
-                        <Change
-                          field={field}
-                          before={row.before}
-                          after={row.after}
-                          taxonomy={taxonomy}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-        <Copy after={row.after} fields={row.fields} />
+        <FieldTable
+          label="Product changes"
+          heading="Change"
+          rows={fields.map((field) => ({
+            key: field,
+            label: CHANGE_LABELS[field],
+            cell: cell(row, field),
+          }))}
+        />
       </>
     )
   }
 
-  const columns: ReviewColumn<Row>[] = fields.map((field) => ({
-    label: CHANGE_LABELS[field],
-    cell: (row) => (
-      <Change
-        field={field}
-        before={row.before}
-        after={row.after}
-        taxonomy={taxonomy}
-      />
-    ),
-  }))
-  // Copy changes show as a mark in the table, then in full below it.
-  if (long.length > 0) {
-    columns.push({
-      label: "Copy and photos",
-      cell: (row) =>
-        row.fields
-          .filter((field) => LONG.has(field))
-          .map((field) => CHANGE_LABELS[field])
-          .join(", ") || "—",
-    })
-  }
   return (
     <>
       <Note>
-        {plural(rows.length, "product")} · {summary.join(", ")}
+        {plural(rows.length, "product")} ·{" "}
+        {fields.map((field) => CHANGE_LABELS[field]).join(", ")}
         {unloaded > 0 && ` · ${unloaded} not on this page yet`}
       </Note>
       <ProductReviewTable
@@ -389,16 +438,12 @@ export function ProductUpdatesPreview({
           detail: row.product?.brand?.name,
           problem: row.problem,
         })}
-        columns={columns}
+        columns={fields.map((field) => ({
+          label: CHANGE_LABELS[field],
+          wide: WIDE.has(field),
+          cell: (row: Row) => cell(row, field),
+        }))}
       />
-      {long.map((row) => (
-        <Copy
-          key={row.id}
-          name={row.product?.name ?? row.name}
-          after={row.after}
-          fields={row.fields}
-        />
-      ))}
     </>
   )
 }
@@ -418,8 +463,8 @@ export function productFromCreate({
   }
 }
 
-/** products__create_product (and older chats' save_product): the product's
- * row as the Products tab lists it, its card line, photos, and description. */
+/** products__create_product (and older chats' save_product): every field of
+ * the new product as a row, its copy and photos included. */
 export function NewProductPreview({
   input,
   taxonomy,
@@ -436,6 +481,97 @@ export function NewProductPreview({
     isUsedEquipment(input.category_slug, input.condition)
       ? "draft"
       : input.status
+  const rows: { key: string; label: string; cell: ReactNode }[] = [
+    { key: "name", label: "Name", cell: product.name },
+    { key: "category", label: "Category", cell: product.category.name },
+    {
+      key: "brand",
+      label: "Brand",
+      cell: product.brand?.name ?? "No brand",
+    },
+    {
+      key: "condition",
+      label: "Condition",
+      cell: (
+        <span className={tableStyles.change}>
+          <ConditionBadge condition={product.condition} />
+          {input.condition_note}
+        </span>
+      ),
+    },
+    {
+      key: "price",
+      label: "Selling price",
+      cell: (
+        <>
+          {formatPrice(product.price_cents)}
+          {product.price_unit === "pair" && product.price_cents !== null
+            ? " /pair"
+            : ""}
+          {product.sale && (
+            <span className={tableStyles.sale}>
+              Sale · was {formatPrice(product.sale.regular_price_cents)}
+            </span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "msrp",
+      label: "List price",
+      cell: shown("msrp_cents", product.msrp_cents, taxonomy),
+    },
+    {
+      key: "audition",
+      label: "Audition",
+      cell: shown("ready_for_audition", product.ready_for_audition, taxonomy),
+    },
+    {
+      key: "status",
+      label: "Status",
+      cell: (
+        <>
+          {shown("status", status, taxonomy)}
+          {input.availability && input.availability !== "available" && (
+            <span className={tableStyles.sale}>
+              {shown("availability", input.availability, taxonomy)}
+            </span>
+          )}
+        </>
+      ),
+    },
+    {
+      key: "page",
+      label: "Manufacturer page",
+      cell: shown("manufacturer_url", input.manufacturer_url, taxonomy),
+    },
+    {
+      key: "card",
+      label: "Card line",
+      cell: shown("short_description", input.short_description, taxonomy),
+    },
+    {
+      key: "description",
+      label: "Description",
+      cell: input.description.trim() ? (
+        <div
+          className={tableStyles.longText}
+          role="region"
+          aria-label="Description"
+          tabIndex={0}
+        >
+          <MarkdownText text={input.description} />
+        </div>
+      ) : (
+        <span className={tableStyles.was}>None</span>
+      ),
+    },
+    {
+      key: "photos",
+      label: "Photos",
+      cell: <PhotoStrip images={input.images} label="Photos" />,
+    },
+  ]
   return (
     <>
       <Note>
@@ -444,86 +580,7 @@ export function NewProductPreview({
           ? "Published in the shop"
           : "Draft, hidden from the shop"}
       </Note>
-      <ProductReviewTable
-        label="Product"
-        rows={[product]}
-        rowKey={(row) => row.id}
-        product={(row) => ({
-          name: row.name,
-          photo: row.images[0]?.src,
-          detail: row.brand?.name,
-        })}
-        columns={[
-          { label: "Category", cell: (row) => row.category.name },
-          {
-            label: "Condition",
-            cell: (row) => (
-              <>
-                <ConditionBadge condition={row.condition} />
-                {input.condition_note && (
-                  <span className={tableStyles.sale}>
-                    {input.condition_note}
-                  </span>
-                )}
-              </>
-            ),
-          },
-          {
-            label: "Price",
-            numeric: true,
-            cell: (row) => (
-              <>
-                {formatPrice(row.price_cents)}
-                {row.price_unit === "pair" && row.price_cents !== null
-                  ? " /pair"
-                  : ""}
-                {row.sale && (
-                  <span className={tableStyles.sale}>
-                    Sale · was {formatPrice(row.sale.regular_price_cents)}
-                  </span>
-                )}
-              </>
-            ),
-          },
-          {
-            label: "MSRP",
-            numeric: true,
-            cell: (row) =>
-              row.msrp_cents === null ? "—" : formatPrice(row.msrp_cents),
-          },
-          {
-            label: "Audition",
-            cell: (row) => (row.ready_for_audition ? "Yes" : "No"),
-          },
-          {
-            label: "Status",
-            cell: () => (
-              <>
-                {shown("status", status, taxonomy)}
-                {input.availability && input.availability !== "available" && (
-                  <span className={tableStyles.sale}>
-                    {shown("availability", input.availability, taxonomy)}
-                  </span>
-                )}
-              </>
-            ),
-          },
-        ]}
-      />
-      <Copy
-        after={{
-          images: input.images,
-          short_description: input.short_description,
-          description: input.description,
-        }}
-        fields={[
-          "images",
-          ...(input.short_description.trim()
-            ? (["short_description"] as const)
-            : []),
-          "description",
-        ]}
-      />
+      <FieldTable label="New product" heading="Value" rows={rows} />
     </>
   )
 }

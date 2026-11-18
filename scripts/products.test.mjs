@@ -37,6 +37,7 @@ const {
 } = await import("../lib/admin/schemas.ts")
 const { changedInputFields, inputFromValues, rebaseValues, valuesFrom } =
   await import("../lib/admin/product-editor.ts")
+const { wordDiff } = await import("../lib/admin/text-diff.ts")
 
 const id = (n) => `00000000-0000-4000-8000-00000000000${n}`
 const AT = "2030-01-01T00:00:00+00:00"
@@ -417,5 +418,38 @@ test("an open form takes a newer save under the owner's own edits", () => {
       inputFromValues(latest)
     ),
     ["price_cents"]
+  )
+})
+
+test("a card shows text changes as what was removed and added", () => {
+  const parts = (before, after) =>
+    wordDiff(before, after).map(({ kind, text }) => `${kind}:${text}`)
+  assert.deepEqual(
+    parts("100Wpc power amplifier. $450", "100Wpc power amplifier."),
+    ["same:100Wpc power amplifier.", "removed: $450"]
+  )
+  assert.deepEqual(parts("Compact amplifier, $300.", "Compact amplifier."), [
+    "same:Compact amplifier",
+    "removed:, $300",
+    "same:.",
+  ])
+  assert.deepEqual(
+    parts("Used (final sale) · 6 out of 10", "Used (final sale) · 8 out of 10"),
+    ["same:Used (final sale) · ", "removed:6", "added:8", "same: out of 10"]
+  )
+  // A space between two changes joins them into one replacement.
+  assert.deepEqual(parts("a big red car here", "a big blue van here"), [
+    "same:a big ",
+    "removed:red car",
+    "added:blue van",
+    "same: here",
+  ])
+  assert.deepEqual(parts("", "New line."), ["added:New line."])
+  assert.deepEqual(parts("Same.", "Same."), ["same:Same."])
+  // Very long rewrites are shown whole rather than word by word.
+  const long = (word) => Array.from({ length: 800 }, () => word).join(" ")
+  assert.deepEqual(
+    wordDiff(long("a"), long("b")).map(({ kind }) => kind),
+    ["removed", "added"]
   )
 })
