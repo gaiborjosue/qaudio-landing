@@ -174,11 +174,17 @@ for (let i = 0; i < paths.length; i += 4) {
     paths.slice(i, i + 4).map(async (path) => {
       try {
         const { body, data } = await publicPage(path)
-        if (path === "/")
+        if (path === "/") {
           check(
             data.some((item) => item["@type"] === "ElectronicsStore"),
             "Home: local-business data missing"
           )
+          const html = body.replace(/<script\b[^>]*>.*?<\/script>/gs, "")
+          check(
+            /<p>\s*Yes, we do repairs\./.test(html),
+            "Home: repair FAQ answer missing from initial HTML"
+          )
+        }
         if (path.startsWith("/products/"))
           check(
             data.some((item) => item["@type"] === "Product"),

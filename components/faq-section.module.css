@@ -31,10 +31,11 @@
 /* Two equal columns; closed pills in a row share one height. Cells never
    resize: an open question floats over its neighbours instead. */
 .list {
+  --faq-gap: 10px;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: stretch;
-  gap: 10px;
+  gap: var(--faq-gap);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -43,6 +44,14 @@
 .item {
   position: relative;
   min-width: 0;
+}
+
+@media (width > 640px) {
+  .item:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+    justify-self: center;
+    width: calc((100% - var(--faq-gap)) / 2);
+  }
 }
 
 .item[data-open="true"] {
@@ -175,6 +184,13 @@ button.question > span:first-child {
   /* Tall cards are height-capped; their answer scrolls under the question. */
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Keep the answer in the HTML and out of the collapsed pill's layout. */
+.answer[inert] {
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
 }
 
 /* A styled scrollbar stays visible even where the system hides overlay

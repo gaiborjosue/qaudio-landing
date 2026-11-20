@@ -9,7 +9,7 @@ import {
   type ReactNode,
 } from "react"
 import { ArrowUpRight } from "lucide-react"
-import { AnimatePresence, MotionConfig, motion } from "motion/react"
+import { MotionConfig, motion } from "motion/react"
 import DepthCarousel from "./DepthCarousel"
 import { AlbumGrid } from "./album-grid"
 import styles from "./faq-section.module.css"
@@ -116,7 +116,7 @@ function RepairPhotos() {
 type Faq = {
   question: string
   // A null answer keeps the question visible but not expandable.
-  answer: ReactNode | null
+  answer: ((isOpen: boolean) => ReactNode) | null
   // Long answers open toward the roomier side and scroll inside the card.
   tall?: boolean
 }
@@ -125,7 +125,7 @@ const FAQS: Faq[] = [
   {
     question:
       "Do you provide custom installations for businesses and residential?",
-    answer: (
+    answer: () => (
       <>
         <p>Need help connecting or installing your AV system?</p>
         <p>
@@ -145,7 +145,7 @@ const FAQS: Faq[] = [
   {
     question: "Do you also repair audio equipment?",
     tall: true,
-    answer: (
+    answer: (isOpen) => (
       <>
         <p>
           Yes, we do repairs. We specialize in Anthem, Adcom, Arcam, NAD,
@@ -160,7 +160,7 @@ const FAQS: Faq[] = [
           <li>CD Players</li>
           <li>and more</li>
         </ul>
-        <RepairPhotos />
+        {isOpen && <RepairPhotos />}
         <p>
           Looking for a reliable, local dealer to repair that malfunctioning
           amplifier, replace a speaker’s woofer/tweeter or someone to resurrect
@@ -200,7 +200,7 @@ const FAQS: Faq[] = [
   },
   {
     question: "I can't make it to the store. Can you ship equipment to me?",
-    answer: (
+    answer: () => (
       <>
         <p>
           We accept orders by phone or email. Please call: <Phone />
@@ -374,30 +374,28 @@ export function FaqSection() {
                     ) : (
                       <p className={styles.question}>{question}</p>
                     )}
-                    <AnimatePresence initial={false} mode="popLayout">
-                      {isOpen && answer ? (
-                        <motion.div
-                          key="answer"
-                          layout="position"
-                          id={`${id}-answer`}
-                          role="region"
-                          aria-labelledby={`${id}-question`}
-                          className={styles.answer}
-                          initial={{
-                            opacity: 0,
-                            y: direction === "up" ? 6 : -6,
-                          }}
-                          animate={{
-                            opacity: 1,
-                            y: 0,
-                            transition: { duration: 0.24, delay: 0.16 },
-                          }}
-                          exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                        >
-                          {answer}
-                        </motion.div>
-                      ) : null}
-                    </AnimatePresence>
+                    {answer ? (
+                      <motion.div
+                        layout="position"
+                        id={`${id}-answer`}
+                        role="region"
+                        aria-labelledby={`${id}-question`}
+                        inert={!isOpen}
+                        className={styles.answer}
+                        initial={false}
+                        animate={
+                          isOpen
+                            ? {
+                                opacity: [0, 1],
+                                y: [direction === "up" ? 6 : -6, 0],
+                                transition: { duration: 0.24, delay: 0.16 },
+                              }
+                            : { opacity: 0, transition: { duration: 0.12 } }
+                        }
+                      >
+                        {answer(isOpen)}
+                      </motion.div>
+                    ) : null}
                   </motion.div>
                 </li>
               )
