@@ -23,6 +23,7 @@ import {
   Camera,
   Clock,
   Ellipsis,
+  Image,
   Newspaper,
   Package,
   PackagePlus,
@@ -105,6 +106,7 @@ export type QuickMenusProps = {
   ask: Ask
   onProduct: (request: ProductRequest) => void
   onDeal: (request: DealRequest) => void
+  onImageEdit: () => void
   flows: FlowSettings
   onFlow: (id: FlowId, on: boolean) => void
   disabled: boolean
@@ -139,6 +141,7 @@ export const QuickMenus = memo(function QuickMenus({
   ask: send,
   onProduct: openProduct,
   onDeal: openDeal,
+  onImageEdit,
   flows,
   onFlow,
   disabled,
@@ -351,6 +354,14 @@ export const QuickMenus = memo(function QuickMenus({
       icon: Camera,
       label: "Instagram post",
       onSelect: () => ask("I want to change an Instagram post."),
+    },
+    {
+      icon: Image,
+      label: "Edit image",
+      onSelect: () => {
+        onAction?.()
+        onImageEdit()
+      },
     },
   ]
 

@@ -6,6 +6,7 @@ import type { EveToolPart } from "eve/react"
 import { AsciiWake } from "@/components/ascii-wake"
 import type { ChatActions } from "./chat-actions"
 import { StoryEditor } from "./story-editor"
+import { storyEditMessage } from "@/lib/admin/story-edits"
 import { storyProgress, type StoryImage } from "@/lib/admin/story-images"
 import {
   madeStory,
@@ -380,7 +381,14 @@ function StoryViewer({
         </button>
       </div>
       {editing ? (
-        <StoryEditor image={image} actions={actions} onSent={onClose} />
+        <StoryEditor
+          image={image}
+          disabled={actions.resuming}
+          onApply={async (input) => {
+            await actions.send(storyEditMessage(input))
+            onClose()
+          }}
+        />
       ) : (
         <div className={styles.storyViewerStage}>
           <figure className={styles.storyViewerFrame}>

@@ -8,6 +8,28 @@ import sharp from "sharp"
 // Exercise the real paid-operation boundary with caller-session Storage fakes.
 registerHooks({
   resolve(specifier, context, next) {
+    if (context.parentURL?.endsWith("/app/admin/image-edit-actions.ts")) {
+      if (
+        specifier === "@/lib/admin/auth" ||
+        specifier === "@/lib/supabase/server"
+      ) {
+        const code =
+          specifier === "@/lib/admin/auth"
+            ? "export const getAdmin = () => globalThis.storyFixture.admin"
+            : "export const sessionSupabase = () => globalThis.storyFixture.client"
+        return {
+          url: `data:text/javascript,${encodeURIComponent(code)}`,
+          shortCircuit: true,
+        }
+      }
+      if (specifier.startsWith("@/lib/")) {
+        return {
+          url: new URL(`../../${specifier.slice(2)}.ts`, context.parentURL)
+            .href,
+          shortCircuit: true,
+        }
+      }
+    }
     if (
       specifier === "./supabase" &&
       /\/agent\/lib\/(story|media-session)\.ts$/.test(context.parentURL ?? "")
@@ -37,6 +59,7 @@ registerHooks({
 
 process.env.NEXT_PUBLIC_SUPABASE_URL ??= "https://media.example"
 const edits = await import("../lib/admin/story-edits.ts")
+const { applyImageEdit } = await import("../app/admin/image-edit-actions.ts")
 const { editStory, designStory } = await import("../agent/lib/story.ts")
 const { reviewStory } = await import("../agent/lib/story-review.ts")
 const { default: designTool } = await import("../agent/tools/design_story.ts")
@@ -393,7 +416,7 @@ async function fixture(t, options = {}) {
   const image = await sharp({
     create: {
       width: options.width ?? 1080,
-      height: 1920,
+      height: options.height ?? 1920,
       channels: 3,
       background: "#333",
     },
@@ -479,6 +502,46 @@ async function fixture(t, options = {}) {
   })
   return { sent, uploads, downloads }
 }
+
+test("uploaded photo edits verify the admin and call Klein once with the selected image and photo framing", async (t) => {
+  const f = await fixture(t, { width: 800, height: 600 })
+  const session = "00000000-0000-4000-8000-000000000001"
+  const path = `uploads/chat/${session}/00000000-0000-4000-8000-000000000002.jpg`
+  const input = { ...base, image: path, regions: [region("remove")] }
+  const admin = globalThis.storyFixture.admin
+  globalThis.storyFixture.admin = null
+  assert.match((await applyImageEdit(input)).problem, /Sign in/)
+  globalThis.storyFixture.admin = admin
+  assert.match((await applyImageEdit(base)).problem, /Upload an image/)
+  assert.deepEqual(f.downloads, [])
+  assert.deepEqual(f.sent, [])
+
+  const result = await applyImageEdit(input)
+  assert.equal(result.cost, 0.014)
+  assert.deepEqual(f.downloads, [path])
+  assert.equal(f.sent.length, 1)
+  const [{ body }] = f.sent
+  assert.equal(body.model, edits.STORY_EDIT_MODEL)
+  assert.equal(body.aspect_ratio, "auto")
+  assert.equal(body.input_references.length, 1)
+  assert.match(
+    body.input_references[0].image_url.url,
+    /^data:image\/jpeg;base64,/
+  )
+  assert.match(body.prompt, /source photo's aspect ratio/)
+  assert.doesNotMatch(body.prompt, /Instagram|1080 × 1920/)
+  const [box] = JSON.parse(body.prompt.split("\n\n").at(-1))
+  assert.deepEqual(box.src_bbox, input.regions[0].box)
+  assert.equal(f.uploads.length, 1)
+  assert.ok(f.uploads[0].path.startsWith(`uploads/chat/${session}/`))
+  assert.notEqual(f.uploads[0].path, path)
+  assert.deepEqual(result.image, {
+    path: f.uploads[0].path,
+    width: 800,
+    height: 600,
+  })
+  assert.equal((await sharp(f.uploads[0].bytes).metadata()).format, "jpeg")
+})
 
 for (const [name, definition, input] of [
   ["first design", designTool, first],

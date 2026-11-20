@@ -124,7 +124,7 @@ export function adjustStoryBox(
 }
 
 /** Source/target rows follow BFL's documented keep/move/new/remove grammar. */
-export function storyEditPrompt(input: StoryEditInput) {
+function editPrompt(input: StoryEditInput, frame: "story" | "photo") {
   const rows = input.regions.map((row, index) => {
     const fresh = row.operation === "change" || row.operation === "add"
     return {
@@ -158,14 +158,18 @@ export function storyEditPrompt(input: StoryEditInput) {
     })
     .join(" ")
   return [
-    "Edit the existing Instagram story in <ref_image_0>. This is the complete current design, not a style reference. Apply only the requested changes; do not redesign it.",
+    frame === "story"
+      ? "Edit the existing Instagram story in <ref_image_0>. This is the complete current design, not a style reference. Apply only the requested changes; do not redesign it."
+      : "Edit the original photo in <ref_image_0>. Apply only the requested changes.",
     input.instructions,
     commands,
     rows.length
       ? `Edit ${names} using the element table below. Boxes use [top, left, bottom, right] on a 0–1000 grid. A New row replaces or adds content in its target box; a Remove row clears its source box and reconstructs the background; a Move row moves that content to its target box and restores the vacated background. Keep every unlisted element and everything outside the edited regions unchanged.`
       : "Keep all unmentioned content, layout, colours, typography, and lighting unchanged.",
-    `Keep the canvas ${STORY_FRAME.width} × ${STORY_FRAME.height}, 9:16. Preserve the Q Audio logo exactly, all unchanged text and numbers, and the identity and finish of every product. Do not invent facts or prices. Keep new text and readable logos between y=${STORY_FRAME.top} and y=${STORY_FRAME.height - STORY_FRAME.bottom}, at least ${STORY_FRAME.side}px from either side.`,
-    STORY_BACKGROUND_RULE,
+    frame === "story"
+      ? `Keep the canvas ${STORY_FRAME.width} × ${STORY_FRAME.height}, 9:16. Preserve the Q Audio logo exactly, all unchanged text and numbers, and the identity and finish of every product. Do not invent facts or prices. Keep new text and readable logos between y=${STORY_FRAME.top} and y=${STORY_FRAME.height - STORY_FRAME.bottom}, at least ${STORY_FRAME.side}px from either side.`
+      : "Match the source photo's aspect ratio and framing. Preserve unchanged product details, labels, logos, colors, and finishes.",
+    frame === "story" ? STORY_BACKGROUND_RULE : "",
     input.photos.length
       ? "Further references supply only the objects or artwork requested by the owner; preserve the first image's composition."
       : "",
@@ -175,26 +179,45 @@ export function storyEditPrompt(input: StoryEditInput) {
     .join("\n\n")
 }
 
+export function storyEditPrompt(input: StoryEditInput) {
+  return editPrompt(input, "story")
+}
+
+function editRequest(
+  prompt: string,
+  aspect_ratio: "9:16" | "auto",
+  urls: string[]
+) {
+  return {
+    model: STORY_EDIT_MODEL,
+    prompt,
+    resolution: "2K",
+    aspect_ratio,
+    output_format: "jpeg",
+    n: 1,
+    input_references: urls.map((url) => ({
+      type: "image_url",
+      image_url: { url },
+    })),
+  }
+}
+
+export function photoEditRequest(input: StoryEditInput, source: string) {
+  return editRequest(editPrompt(input, "photo"), "auto", [source])
+}
+
 /** Klein has no GPT quality/background fields; 2K retains this 1920px frame. */
 export function storyEditRequest(
   input: StoryEditInput,
   source: string,
   photoUrl: (path: string) => string
 ) {
-  return {
-    model: STORY_EDIT_MODEL,
-    prompt: storyEditPrompt(input),
-    resolution: "2K",
-    aspect_ratio: "9:16",
-    output_format: "jpeg",
-    n: 1,
-    input_references: [
-      source,
-      ...[...new Set(input.photos)]
-        .filter((path) => path !== input.image)
-        .map(photoUrl),
-    ].map((url) => ({ type: "image_url", image_url: { url } })),
-  }
+  return editRequest(storyEditPrompt(input), "9:16", [
+    source,
+    ...[...new Set(input.photos)]
+      .filter((path) => path !== input.image)
+      .map(photoUrl),
+  ])
 }
 
 /** Keep the whole returned design, extending its scene rather than adding bars. */

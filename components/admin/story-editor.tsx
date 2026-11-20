@@ -10,7 +10,6 @@ import {
 } from "react"
 import { Popover } from "@base-ui/react/popover"
 import { Eraser, Info, Move, Plus, Replace, Trash2, X } from "lucide-react"
-import type { ChatActions } from "./chat-actions"
 import { mediaUrl } from "@/lib/media"
 import {
   STORY_REGIONS_MAX,
@@ -18,8 +17,8 @@ import {
   storyBoxFromPoints,
   storyBoxStyle,
   storyEditInput,
-  storyEditMessage,
   storyPoint,
+  type StoryEditInput,
   type StoryBox,
   type StoryRegion,
 } from "@/lib/admin/story-edits"
@@ -80,16 +79,18 @@ const MIDDLE: StoryBox = [350, 250, 650, 750]
  * Edits a story design by areas the owner drags out on the image (or adds
  * with Enter from the keyboard), each with an action, plus overall
  * feedback. Areas are measured against the displayed image, including on
- * phones; the edit goes back to the agent as a `Story edit:` line.
+ * phones. The caller submits edits in its own workflow.
  */
 export function StoryEditor({
   image,
-  actions,
-  onSent,
+  photo = false,
+  disabled = false,
+  onApply,
 }: {
   image: StoryImage
-  actions: ChatActions
-  onSent: () => void
+  photo?: boolean
+  disabled?: boolean
+  onApply: (input: StoryEditInput) => Promise<string | void>
 }) {
   const id = useId()
   const [regions, setRegions] = useState<Region[]>([])
@@ -106,7 +107,8 @@ export function StoryEditor({
   const [width, setWidth] = useState<number>()
   const active = selected === null ? null : regions[selected]
   const action = ACTIONS.find((item) => item.value === active?.operation)
-  const busy = sending || actions.resuming
+  const busy = sending || disabled
+  const aspectRatio = image.width / image.height
   const full = regions.length >= STORY_REGIONS_MAX
   const parsed = storyEditInput.safeParse({
     image: image.path,
@@ -119,11 +121,12 @@ export function StoryEditor({
     if (!element) return
     const observer = new ResizeObserver(([entry]) => {
       const { width, height } = entry.contentRect
-      if (width > 0 && height > 0) setWidth(Math.min(width, (height * 9) / 16))
+      if (width > 0 && height > 0)
+        setWidth(Math.min(width, height * aspectRatio))
     })
     observer.observe(element)
     return () => observer.disconnect()
-  }, [])
+  }, [aspectRatio])
 
   const update = (change: Partial<Region>) => {
     if (selected === null) return
@@ -207,12 +210,12 @@ export function StoryEditor({
       }}
     >
       <div className={styles.canvasSlot} ref={slot}>
-        <div className={styles.canvas} style={{ width }}>
-          {/* eslint-disable-next-line @next/next/no-img-element -- the stored story, at its exact frame */}
+        <div className={styles.canvas} style={{ width, aspectRatio }}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- the stored image at its own aspect ratio */}
           <img
             crossOrigin="anonymous"
             src={mediaUrl(image.path)}
-            alt="Story image to edit"
+            alt={photo ? "Photo to edit" : "Story image to edit"}
             width={image.width}
             height={image.height}
             draggable={false}
@@ -223,7 +226,7 @@ export function StoryEditor({
             data-full={(!placing && full) || undefined}
             role="group"
             tabIndex={busy ? -1 : 0}
-            aria-label="Story image"
+            aria-label={photo ? "Photo" : "Story image"}
             aria-describedby={`${id}-hint`}
             onKeyDown={(event) => {
               if (event.target !== event.currentTarget || busy) return
@@ -375,10 +378,14 @@ export function StoryEditor({
           setSending(true)
           setError(null)
           try {
-            await actions.send(storyEditMessage(parsed.data))
-            onSent()
+            const problem = await onApply(parsed.data)
+            if (problem) setError(problem)
           } catch {
-            setError("Couldn’t send these edits. Try again.")
+            setError(
+              photo
+                ? "Couldn’t finish the edit. Try again."
+                : "Couldn’t send these edits. Try again."
+            )
           } finally {
             lock.current = false
             setSending(false)
@@ -528,7 +535,7 @@ export function StoryEditor({
             className={styles.submit}
             disabled={!parsed.success || busy}
           >
-            {sending ? "Sending…" : "Apply edits"}
+            {sending ? (photo ? "Editing…" : "Sending…") : "Apply edits"}
           </button>
         </fieldset>
       </form>

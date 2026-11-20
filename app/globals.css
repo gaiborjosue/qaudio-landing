@@ -988,9 +988,6 @@ html:has(.site-loader:is([data-state="loading"], [data-state="finishing"])) {
 .is-scroll-active .vinyl-tilt {
   will-change: transform;
 }
-.is-scroll-active .vinyl-surround {
-  perspective: 1200px;
-}
 .record-player--static {
   display: none;
 }

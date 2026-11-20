@@ -47,6 +47,7 @@ import type { ChatActions } from "@/components/admin/chat-actions"
 import { DatesPrompt } from "@/components/admin/dates-prompt"
 import { FlowStepper } from "@/components/admin/flow-stepper"
 import { useFlowSettings } from "@/components/admin/flows-menu"
+import { ImageEditDialog } from "@/components/admin/image-edit-dialog"
 import { ItemList } from "@/components/admin/item-list"
 import {
   CopyAction,
@@ -83,7 +84,10 @@ import {
   useMessageScrollerScrollable,
 } from "@/components/ui/message-scroller"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { UploadDropzone } from "@/components/ui/upload-dropzone"
+import {
+  UploadDropzone,
+  type DropzoneUpload,
+} from "@/components/ui/upload-dropzone"
 import {
   discardUpload,
   PHOTO_MAX_BYTES,
@@ -122,7 +126,7 @@ import { responseUsage } from "@/lib/admin/response-usage"
 import { ChatSession, isDormantDevelopmentEnd } from "@/lib/admin/chat-session"
 import { ChatCacheRefresh } from "@/lib/admin/site-cache"
 import { browserSupabase } from "@/lib/supabase/browser"
-import { toast } from "./admin-toast"
+import { dismissToast, toast } from "./admin-toast"
 import { useChatNotices } from "./chat-notices"
 import styles from "./admin.module.css"
 
@@ -486,7 +490,7 @@ export function AdminChat({
   // What the quick actions need, kept as one object that changes only when
   // they do, so the composer doesn't redraw with every streamed update.
   const disabled = resuming || ending || starting
-  const quick = useMemo<QuickMenusProps>(
+  const quick = useMemo<Omit<QuickMenusProps, "onImageEdit">>(
     () => ({
       preview,
       ask,
@@ -1465,6 +1469,14 @@ type Photo = {
 }
 
 const MAX_MB = Math.round(PHOTO_MAX_BYTES / 1e6)
+const IMAGE_EDIT_DRAFT = "Hey tune, i want to edit this image"
+
+type ImageEditDraft = {
+  sessionId: string
+  notice: number
+  upload?: DropzoneUpload
+  image?: UploadedPhoto
+}
 
 const Composer = memo(function Composer({
   send,
@@ -1490,12 +1502,15 @@ const Composer = memo(function Composer({
   onText: Dispatch<SetStateAction<string>>
   field: RefObject<HTMLTextAreaElement | null>
   /** The quick actions: above the field, or folded into its button. */
-  quick: QuickMenusProps
+  quick: Omit<QuickMenusProps, "onImageEdit">
   mediaDraftId: () => string
   eveSessionId?: string
 }) {
   const [photos, setPhotos] = useState<Photo[]>([])
   const [panelOpen, setPanelOpen] = useState(false)
+  const [imageEdit, setImageEdit] = useState<ImageEditDraft | null>(null)
+  const imageEditUpload = useRef<AbortController | null>(null)
+  const editingImage = imageEdit !== null
   // Send pressed while photos are still uploading: it goes once they land.
   const [queued, setQueued] = useState(false)
   const sending = useRef(false)
@@ -1516,14 +1531,37 @@ const Composer = memo(function Composer({
   // A message in the field (the same test that enables Send): the quick
   // actions are shortcuts for starting one, so they fold into a button.
   const composing = text.trim() !== "" || photos.length > 0
-  const voice = useVoiceInput(active && !disabled, voiceReset)
+  const voice = useVoiceInput(active && !disabled && !editingImage, voiceReset)
   const dictating = voice.phase !== "idle"
+  const cancelVoice = voice.cancel
+  const startImageEdit = useCallback(() => {
+    if (disabled || !active || sending.current || editingImage) return
+    cancelVoice()
+    setImageEdit({
+      sessionId: crypto.randomUUID(),
+      notice: toast("info", {
+        title: "Upload the image you want to edit",
+        place: "chat",
+      }),
+    })
+    setPanelOpen(true)
+  }, [active, cancelVoice, disabled, editingImage])
+  const composerQuick = useMemo(
+    () => ({ ...quick, onImageEdit: startImageEdit }),
+    [quick, startImageEdit]
+  )
   const wasDictating = useRef(false)
   useEffect(() => {
-    if (wasDictating.current && !dictating && active && !disabled)
+    if (
+      wasDictating.current &&
+      !dictating &&
+      active &&
+      !disabled &&
+      !editingImage
+    )
       field.current?.focus()
     wasDictating.current = dictating
-  }, [dictating, active, disabled, field])
+  }, [dictating, active, disabled, editingImage, field])
   const voiceLabel =
     voice.phase === "recording"
       ? "Stop recording"
@@ -1547,17 +1585,80 @@ const Composer = memo(function Composer({
     if (refocus) trigger.current?.focus()
   }
 
+  const closeImageEdit = () => {
+    if (!imageEdit) return
+    imageEditUpload.current?.abort()
+    imageEditUpload.current = null
+    dismissToast(imageEdit.notice)
+    setImageEdit(null)
+    setPanelOpen(false)
+    requestAnimationFrame(() => trigger.current?.focus())
+  }
+
   // While open: focus goes to "browse files", and a press anywhere outside
   // the button and the popover closes it, leaving focus where it lands.
   useEffect(() => {
-    if (!panelOpen) return
+    if (!panelOpen || !active) return
     panel.current?.querySelector<HTMLElement>(".upl-browse")?.focus()
     const onPointerDown = (event: PointerEvent) => {
       if (!anchor.current?.contains(event.target as Node)) setPanelOpen(false)
     }
     document.addEventListener("pointerdown", onPointerDown)
     return () => document.removeEventListener("pointerdown", onPointerDown)
-  }, [panelOpen])
+  }, [active, editingImage, panelOpen])
+
+  const uploadImageEdit = async (files: File[]) => {
+    if (
+      !imageEdit ||
+      imageEditUpload.current ||
+      imageEdit.image ||
+      !files.length
+    )
+      return
+    if (files.length > 1) {
+      toast("warning", { title: "Choose one image to edit", place: "chat" })
+      return
+    }
+    const [file] = files
+    const controller = new AbortController()
+    imageEditUpload.current = controller
+    dismissToast(imageEdit.notice)
+    setPanelOpen(true)
+    const upload: DropzoneUpload = {
+      id: crypto.randomUUID(),
+      name: file.name || "Pasted image",
+      size: file.size,
+      progress: 0,
+      status: "uploading",
+    }
+    const updateImageEdit = (change: Partial<ImageEditDraft>) => {
+      setImageEdit((current) =>
+        current?.sessionId === imageEdit.sessionId
+          ? { ...current, ...change }
+          : current
+      )
+    }
+    updateImageEdit({ upload })
+    try {
+      const image = await uploadPhoto(file, {
+        mediaSession: { id: imageEdit.sessionId },
+        onProgress: (progress) =>
+          updateImageEdit({ upload: { ...upload, progress } }),
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) {
+        void discardUpload(image.path).catch(() => {})
+        return
+      }
+      updateImageEdit({ image, upload: undefined })
+      setPanelOpen(false)
+    } catch {
+      if (!controller.signal.aborted)
+        updateImageEdit({ upload: { ...upload, status: "failed" } })
+    } finally {
+      if (imageEditUpload.current === controller) imageEditUpload.current = null
+    }
+  }
 
   const update = (id: string, change: Partial<Photo>) =>
     setPhotos((current) =>
@@ -1647,7 +1748,8 @@ const Composer = memo(function Composer({
         place: "chat",
       })
     }
-    upload(fit)
+    if (editingImage) void uploadImageEdit(fit)
+    else upload(fit)
   }
 
   // Taking a photo back deletes its upload: a finished one from storage, and
@@ -1681,7 +1783,7 @@ const Composer = memo(function Composer({
    * twice and anything added meanwhile stays; a failed send puts it back.
    */
   const submit = async () => {
-    if (disabled || busy || dictating || sending.current) return
+    if (editingImage || disabled || busy || dictating || sending.current) return
     const typed = text.trim()
     const queuedPhotos = photos
     if (!typed && queuedPhotos.length === 0) return
@@ -1759,9 +1861,9 @@ const Composer = memo(function Composer({
   return (
     <>
       <QuickActionsRow
-        shown={!composing}
+        shown={!composing && !editingImage}
         lift={photos.length > 0 ? PHOTOS_LIFT : 0}
-        quick={quick}
+        quick={composerQuick}
       />
       <form
         className={styles.composer}
@@ -1770,7 +1872,11 @@ const Composer = memo(function Composer({
           void submit()
         }}
         onKeyDown={(event) => {
-          if (event.key === "Escape" && dictating) {
+          if (event.key !== "Escape") return
+          if (editingImage) {
+            event.preventDefault()
+            closeImageEdit()
+          } else if (dictating) {
             event.preventDefault()
             voice.cancel()
           }
@@ -1781,7 +1887,7 @@ const Composer = memo(function Composer({
           addFiles(event.dataTransfer.files)
         }}
       >
-        {photos.length > 0 && (
+        {!editingImage && photos.length > 0 && (
           <ul className={styles.photos} aria-label="Photos to send">
             {photos.map((photo, index) => (
               <li key={photo.id} data-status={photo.status}>
@@ -1833,7 +1939,7 @@ const Composer = memo(function Composer({
               ref={trigger}
               type="button"
               className={styles.iconButton}
-              aria-label="Add photos"
+              aria-label={editingImage ? "Upload image to edit" : "Add photos"}
               aria-expanded={panelOpen}
               aria-controls="add-photos"
               onClick={() =>
@@ -1857,32 +1963,57 @@ const Composer = memo(function Composer({
                   onKeyDown={(event) => {
                     if (event.key === "Escape") {
                       event.stopPropagation()
-                      closePanel(true)
+                      if (editingImage) closeImageEdit()
+                      else closePanel(true)
                     }
                   }}
                 >
                   <div className={styles.morphHeader}>
-                    <h3 id="add-photos-title">Add photos</h3>
+                    <h3 id="add-photos-title">
+                      {editingImage ? "Upload an image to edit" : "Add photos"}
+                    </h3>
                     <button
                       type="button"
                       className={styles.iconButton}
-                      aria-label="Close photos"
-                      onClick={() => closePanel(true)}
+                      aria-label={
+                        editingImage ? "Cancel image edit" : "Close photos"
+                      }
+                      onClick={
+                        editingImage ? closeImageEdit : () => closePanel(true)
+                      }
                     >
                       <X size={18} aria-hidden="true" />
                     </button>
                   </div>
                   <UploadDropzone
+                    key={editingImage ? "image-edit" : "chat-photos"}
                     maxBytes={PHOTO_MAX_BYTES}
-                    onFiles={upload}
-                    uploads={photos.map((photo) => ({
-                      id: photo.id,
-                      name: photo.name,
-                      size: photo.size,
-                      progress: photo.progress,
-                      status: photo.status === "ready" ? "done" : photo.status,
-                    }))}
+                    multiple={!editingImage}
+                    onFiles={
+                      editingImage
+                        ? (files) => void uploadImageEdit(files)
+                        : upload
+                    }
+                    uploads={
+                      imageEdit
+                        ? imageEdit.upload
+                          ? [imageEdit.upload]
+                          : []
+                        : photos.map((photo) => ({
+                            id: photo.id,
+                            name: photo.name,
+                            size: photo.size,
+                            progress: photo.progress,
+                            status:
+                              photo.status === "ready" ? "done" : photo.status,
+                          }))
+                    }
                   />
+                  {imageEdit?.upload?.status === "failed" && (
+                    <p className={styles.hint} role="alert">
+                      Couldn’t upload that image. Try again.
+                    </p>
+                  )}
                 </motion.div>
               )}
             </AnimatePresence>
@@ -1890,10 +2021,10 @@ const Composer = memo(function Composer({
           {/* The quick actions, folded beside the photo button while the
             field holds a message. */}
           <AnimatePresence initial={false}>
-            {composing && (
+            {composing && !editingImage && (
               <QuickActionsMore
                 key="quick-actions"
-                quick={quick}
+                quick={composerQuick}
                 bounds={inputRow}
               />
             )}
@@ -1906,11 +2037,11 @@ const Composer = memo(function Composer({
               ref={field}
               id="admin-message"
               rows={1}
-              value={text}
+              value={editingImage ? IMAGE_EDIT_DRAFT : text}
               placeholder={dictating ? "" : "Ask for a change…"}
               hidden={dictating}
               // Held as it is while the message waits for its photos.
-              readOnly={dictating || queued}
+              readOnly={editingImage || dictating || queued}
               onChange={(event) => setText(event.target.value)}
               onPaste={(event) => {
                 // Screenshots and copied images; some browsers list them only
@@ -1940,7 +2071,7 @@ const Composer = memo(function Composer({
                 }
               }}
             />
-            {voice.phase !== "idle" && (
+            {!editingImage && voice.phase !== "idle" && (
               <VoiceWaveform
                 stream={voice.stream}
                 phase={voice.phase}
@@ -1948,84 +2079,103 @@ const Composer = memo(function Composer({
               />
             )}
           </div>
-          <button
-            type="button"
-            className={`${styles.iconButton} ${styles.microphone}`}
-            aria-label={voiceLabel}
-            title={voiceLabel}
-            data-recording={voice.phase === "recording" || undefined}
-            disabled={disabled || !active}
-            onClick={() => {
-              if (voice.phase === "recording") voice.stop()
-              else if (dictating) voice.cancel()
-              else {
-                closePanel(false)
-                void voice.start((transcript) => {
-                  setText((current) =>
-                    current.trimEnd()
-                      ? `${current.trimEnd()} ${transcript}`
-                      : transcript
-                  )
-                })
+          {!editingImage && (
+            <button
+              type="button"
+              className={`${styles.iconButton} ${styles.microphone}`}
+              aria-label={voiceLabel}
+              title={voiceLabel}
+              data-recording={voice.phase === "recording" || undefined}
+              disabled={disabled || !active}
+              onClick={() => {
+                if (voice.phase === "recording") voice.stop()
+                else if (dictating) voice.cancel()
+                else {
+                  closePanel(false)
+                  void voice.start((transcript) => {
+                    setText((current) =>
+                      current.trimEnd()
+                        ? `${current.trimEnd()} ${transcript}`
+                        : transcript
+                    )
+                  })
+                }
+              }}
+            >
+              {voice.phase === "recording" ? (
+                <Square size={16} fill="currentColor" aria-hidden="true" />
+              ) : dictating ? (
+                <X size={19} aria-hidden="true" />
+              ) : (
+                <Mic size={20} strokeWidth={1.6} aria-hidden="true" />
+              )}
+            </button>
+          )}
+          {editingImage ? (
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label="Cancel image edit"
+              title="Cancel image edit"
+              onClick={closeImageEdit}
+            >
+              <X size={20} aria-hidden="true" />
+            </button>
+          ) : (
+            <ChromaticButton
+              type={busy ? "button" : "submit"}
+              className={styles.send}
+              aria-label={busy ? "Stop response" : "Send"}
+              title={busy ? "Stop response" : "Send"}
+              data-responding={busy || undefined}
+              data-active={active || undefined}
+              onClick={busy ? () => void cancel() : undefined}
+              color="#b126ff"
+              colorMode="spectrum"
+              speed={0.7}
+              paused={busy || !active}
+              phase={0}
+              feather={100}
+              projectionScale={174.7}
+              intensity={0.9}
+              grain={0.105}
+              seed={7}
+              borderRadius={50}
+              hoverEffect="brighten"
+              entrance="blur-up"
+              entranceSpeed={1}
+              entranceBlur={10}
+              entranceDistance={20}
+              entranceScale={0.65}
+              disabled={
+                disabled ||
+                (!busy &&
+                  (queued ||
+                    dictating ||
+                    (!text.trim() && photos.length === 0)))
               }
-            }}
-          >
-            {voice.phase === "recording" ? (
-              <Square size={16} fill="currentColor" aria-hidden="true" />
-            ) : dictating ? (
-              <X size={19} aria-hidden="true" />
-            ) : (
-              <Mic size={20} strokeWidth={1.6} aria-hidden="true" />
-            )}
-          </button>
-          <ChromaticButton
-            type={busy ? "button" : "submit"}
-            className={styles.send}
-            aria-label={busy ? "Stop response" : "Send"}
-            title={busy ? "Stop response" : "Send"}
-            data-responding={busy || undefined}
-            data-active={active || undefined}
-            onClick={busy ? () => void cancel() : undefined}
-            color="#b126ff"
-            colorMode="spectrum"
-            speed={0.7}
-            paused={busy || !active}
-            phase={0}
-            feather={100}
-            projectionScale={174.7}
-            intensity={0.9}
-            grain={0.105}
-            seed={7}
-            borderRadius={50}
-            hoverEffect="brighten"
-            entrance="blur-up"
-            entranceSpeed={1}
-            entranceBlur={10}
-            entranceDistance={20}
-            entranceScale={0.65}
-            disabled={
-              disabled ||
-              (!busy &&
-                (queued || dictating || (!text.trim() && photos.length === 0)))
-            }
-          >
-            {busy ? (
-              <>
-                <span className={styles.responseVinyl} aria-hidden="true" />
-                <Square
-                  className={styles.stopSymbol}
-                  size={16}
-                  fill="currentColor"
-                  strokeWidth={0}
-                  aria-hidden="true"
-                />
-              </>
-            ) : (
-              <ArrowUp size={20} aria-hidden="true" />
-            )}
-          </ChromaticButton>
+            >
+              {busy ? (
+                <>
+                  <span className={styles.responseVinyl} aria-hidden="true" />
+                  <Square
+                    className={styles.stopSymbol}
+                    size={16}
+                    fill="currentColor"
+                    strokeWidth={0}
+                    aria-hidden="true"
+                  />
+                </>
+              ) : (
+                <ArrowUp size={20} aria-hidden="true" />
+              )}
+            </ChromaticButton>
+          )}
         </div>
       </form>
+      {active && imageEdit?.image && (
+        <ImageEditDialog image={imageEdit.image} onClose={closeImageEdit} />
+      )}
     </>
   )
 })

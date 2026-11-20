@@ -164,6 +164,7 @@ export function UploadDropzone({
   bounce = 40,
   corner = 20,
   split = false,
+  multiple = true,
 }: {
   /** Files on the wire and finished, in the order they were added. */
   uploads: DropzoneUpload[]
@@ -175,6 +176,8 @@ export function UploadDropzone({
   corner?: number
   /** Show the drop target and file-picker button side by side. */
   split?: boolean
+  /** Allow choosing and dropping more than one image. */
+  multiple?: boolean
 }) {
   const still = useStillness()
   const [over, setOver] = useState(false)
@@ -234,6 +237,10 @@ export function UploadDropzone({
   const take = (list: FileList | File[]) => {
     const files = [...list]
     if (files.length === 0) return
+    if (!multiple && files.length > 1) {
+      refuseIt("Choose one image")
+      return
+    }
     const images = files.filter((file) => file.type.startsWith("image/"))
     const fit = images.filter((file) => file.size <= maxBytes)
     if (images.length < files.length) refuseIt("Images only")
@@ -325,9 +332,16 @@ export function UploadDropzone({
               </span>
               <span className="upl-say" role="status">
                 <b>
-                  {refuse ?? (over ? "Drop to upload" : "Drag photos here")}
+                  {refuse ??
+                    (over
+                      ? "Drop to upload"
+                      : multiple
+                        ? "Drag photos here"
+                        : "Drag an image here")}
                 </b>
-                <span>Up to {mb} MB each</span>
+                <span>
+                  Up to {mb} MB{multiple ? " each" : ""}
+                </span>
               </span>
             </>
           ) : (
@@ -408,7 +422,7 @@ export function UploadDropzone({
         ref={input}
         type="file"
         accept="image/*"
-        multiple
+        multiple={multiple}
         hidden
         onChange={(e) => {
           take(e.currentTarget.files ?? [])

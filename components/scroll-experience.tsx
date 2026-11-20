@@ -8,6 +8,12 @@ import { RecordPlayer } from "@/components/record-player"
 import { HISTORY, StoryHistory } from "@/components/story-history"
 import { StorySkip } from "@/components/story-skip"
 import { readScrollPosition, rememberScrollPosition } from "@/lib/scroll-memory"
+import {
+  RECORD_PLANE,
+  TONEARM_TIPS,
+  TURNTABLE_FRAME,
+  type TonearmTip,
+} from "@/lib/turntable-geometry"
 
 gsap.registerPlugin(useGSAP, ScrollTrigger)
 
@@ -45,8 +51,7 @@ const SLIDE_DURATION = 1
 const HISTORY_END = HISTORY_START + SLIDE_DURATION * HISTORY.length
 const ARM_RETURN_START = HISTORY_END + 0.45
 const SEQUENCE_END = ARM_RETURN_START + 0.6
-// How far the needle travels inward across the record, in SVG units.
-const NEEDLE_TRAVEL = 90
+const RECORD_TILT = (Math.acos(RECORD_PLANE.foreshortening) * 180) / Math.PI
 const MOTION = {
   closeRowsAt: [2.4, 3.15, 3.85, ALIGN_START + 0.6],
   closeDuration: 0.5,
@@ -107,7 +112,6 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
           const armLayer = root.querySelector<HTMLElement>(
             ".record-player--arm-overlay"
           )!
-          const arm = armLayer.querySelector<SVGGElement>(".turntable-arm")!
           const copy = root.querySelector<HTMLElement>(".story-copy")!
           const skip = root.querySelector<HTMLElement>(".story-skip")!
           const rows = Array.from(
@@ -123,13 +127,8 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
           const slides = Array.from(
             track.querySelectorAll<HTMLElement>(".history-slide")
           )
-          const tubes = Array.from(
-            armLayer.querySelectorAll<SVGPathElement>(".turntable-tube")
-          )
-          const tubePaths = tubes.map((tube) => tube.getAttribute("d")!)
-          // Stretch each tube's straight run so it still meets the headshell.
-          const sweptTube = (d: string) =>
-            d.replace(/L623 (\d+)$/, (_, y) => `L${623 - NEEDLE_TRAVEL} ${y}`)
+          const tube =
+            armLayer.querySelector<SVGLineElement>(".turntable-tube")!
           const headshell = armLayer.querySelector<SVGGElement>(
             ".turntable-headshell"
           )!
@@ -154,9 +153,29 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             rows[index].offsetHeight / 2
           const travelTo = (center: number) => center - originalCenter()
           const platterCenter = () =>
-            player.offsetTop + player.offsetHeight * (97 / 300)
+            player.offsetTop +
+            player.offsetHeight * (RECORD_PLANE.y / TURNTABLE_FRAME.height)
+          const platterOffset = () =>
+            player.offsetWidth * (RECORD_PLANE.x / TURNTABLE_FRAME.width - 0.5)
           const platterScale = () =>
-            (player.offsetWidth * 0.53) / disc.offsetWidth
+            (player.offsetWidth * (2 * RECORD_PLANE.radius)) /
+            (TURNTABLE_FRAME.width * disc.offsetWidth)
+          const approachHeight = () => {
+            const lastRow = rows[rows.length - 1]
+            const copyBottom =
+              copy.offsetTop + lastRow.offsetTop + lastRow.offsetHeight
+            const recordHalfHeight =
+              (player.offsetWidth / TURNTABLE_FRAME.width) *
+              RECORD_PLANE.radius *
+              RECORD_PLANE.foreshortening
+            // Leave room for the visible back edge of the tilted record.
+            const clearance =
+              platterCenter() - recordHalfHeight - copyBottom - 8
+            return (
+              platterCenter() -
+              Math.min(mobile ? 34 : 54, Math.max(0, clearance))
+            )
+          }
           // Phones part each row at its own word break, and the record moves
           // to that break, so long halves can use the full width.
           const gapEdges = (index: number) => [
@@ -228,16 +247,12 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             xPercent: 0,
             y: 28,
           })
-          // Perspective lives on the parent in CSS; WebKit renders a
-          // transform-level perspective() less foreshortened than Chromium.
+          // Parallel projection gives the disc the same ellipse as the platter.
           gsap.set(tilt, {
             rotationX: 0,
             transformOrigin: "50% 50%",
           })
           gsap.set([player, armLayer], { autoAlpha: 0, y: 24 })
-          // Keep the hinge fixed in SVG space, including across responsive resizes.
-          gsap.set(arm, { attr: { transform: "rotate(9 820 69)" } })
-          gsap.set(headshell, { attr: { transform: "translate(0 0)" } })
 
           const timeline = gsap.timeline({
             defaults: { ease: "none" },
@@ -275,6 +290,21 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               },
             },
           })
+
+          const moveTonearm = (
+            { x, y }: TonearmTip,
+            at: number | string,
+            duration: number,
+            ease = "none"
+          ) => {
+            timeline
+              .to(tube, { attr: { x2: x, y2: y }, duration, ease }, at)
+              .to(
+                headshell,
+                { attr: { transform: `translate(${x} ${y})` }, duration, ease },
+                at
+              )
+          }
 
           timeline
             .addLabel("leave-hero", 0)
@@ -377,14 +407,18 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
             .addLabel("tilt-above-player", FLIP_START)
             .to(
               tilt,
-              { rotationX: 87, duration: FLIP_DURATION, ease: "sine.inOut" },
+              {
+                rotationX: RECORD_TILT,
+                duration: FLIP_DURATION,
+                ease: "sine.inOut",
+              },
               "tilt-above-player"
             )
             .to(
               vinyl,
               {
-                x: () => -player.offsetWidth * 0.085,
-                y: () => travelTo(platterCenter() - (mobile ? 34 : 54)),
+                x: platterOffset,
+                y: () => travelTo(approachHeight()),
                 duration: ALIGN_DURATION,
                 ease: "sine.inOut",
               },
@@ -410,15 +444,10 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               },
               "land-on-platter"
             )
-            .to(
-              arm,
-              {
-                attr: { transform: "rotate(0 820 69)" },
-                duration: 0.5,
-                ease: "power2.inOut",
-              },
-              ARM_START
-            )
+
+          moveTonearm(TONEARM_TIPS.outerGroove, ARM_START, 0.5, "power2.inOut")
+
+          timeline
             // The quote leaves left as the history track arrives from the right.
             .addLabel("history", HISTORY_START)
             .fromTo(
@@ -441,15 +470,12 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               },
               "history"
             )
-            // The needle tracks inward across the record as the story plays.
-            .to(
-              headshell,
-              {
-                attr: { transform: `translate(${-NEEDLE_TRAVEL} 0)` },
-                duration: HISTORY_END - HISTORY_START,
-              },
-              "history"
-            )
+
+          moveTonearm(
+            TONEARM_TIPS.innerGroove,
+            "history",
+            HISTORY_END - HISTORY_START
+          )
 
           slides.slice(1).forEach((_, index) => {
             timeline.to(
@@ -462,47 +488,19 @@ export function ScrollExperience({ children }: { children: ReactNode }) {
               HISTORY_START + SLIDE_DURATION * (index + 1)
             )
           })
-          tubes.forEach((tube, index) => {
-            timeline
-              .to(
-                tube,
-                {
-                  attr: { d: sweptTube(tubePaths[index]) },
-                  duration: HISTORY_END - HISTORY_START,
-                },
-                "history"
-              )
-              .to(
-                tube,
-                {
-                  attr: { d: tubePaths[index] },
-                  duration: 0.45,
-                  ease: "power2.inOut",
-                },
-                ARM_RETURN_START + 0.15
-              )
-          })
           // The record ends: the arm lifts and swings back to its rest.
-          timeline
-            .addLabel("arm-return", ARM_RETURN_START)
-            .to(
-              arm,
-              {
-                attr: { transform: "rotate(9 820 69)" },
-                duration: 0.3,
-                ease: "power2.inOut",
-              },
-              "arm-return"
-            )
-            .to(
-              headshell,
-              {
-                attr: { transform: "translate(0 0)" },
-                duration: 0.45,
-                ease: "power2.inOut",
-              },
-              ARM_RETURN_START + 0.15
-            )
+          moveTonearm(
+            TONEARM_TIPS.lifted,
+            ARM_RETURN_START,
+            0.15,
+            "power2.inOut"
+          )
+          moveTonearm(
+            TONEARM_TIPS.rest,
+            ARM_RETURN_START + 0.15,
+            0.45,
+            "power2.inOut"
+          )
 
           rows.forEach((_, index) => {
             timeline.to(
