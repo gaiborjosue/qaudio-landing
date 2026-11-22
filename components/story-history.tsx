@@ -1,5 +1,6 @@
 import Image from "next/image"
 import { HistoryMap } from "@/components/history-map"
+import brooklineStreet from "@/public/story/brookline-street.webp"
 
 type Photo = { src: string; width: number; height: number; alt: string }
 
@@ -71,10 +72,10 @@ export const HISTORY: Chapter[] = [
     text: "In October 2013 we moved to a larger storefront at 5 Brookline Street in Central Square, across from the Middle East, a five-minute walk up Mass Ave from where it started.",
     photos: [
       {
-        src: "/story/brookline-street.webp",
-        width: 765,
-        height: 1020,
-        alt: "Q Audio’s storefront at 5 Brookline Street, Central Square",
+        src: brooklineStreet.src,
+        width: brooklineStreet.width,
+        height: brooklineStreet.height,
+        alt: "A person seated outside Q Audio’s storefront on Brookline Street",
       },
     ],
   },

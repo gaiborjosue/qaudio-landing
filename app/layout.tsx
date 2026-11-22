@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Bodoni_Moda, Epilogue } from "next/font/google"
 import "./globals.css"
+import { SiteAnalytics } from "@/components/site-analytics"
 import { SiteLoader } from "@/components/site-loader"
 import { SITE_ORIGIN } from "@/lib/site"
 import { pageMetadata } from "@/lib/seo"
@@ -46,6 +47,7 @@ export default function RootLayout({
       <body>
         <SiteLoader />
         {children}
+        {process.env.NODE_ENV === "production" && <SiteAnalytics />}
       </body>
     </html>
   )
