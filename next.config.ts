@@ -73,6 +73,9 @@ const nextConfig: NextConfig = {
     content: { stale: 300, revalidate: 300 },
   },
   images: {
+    // Catalog cards can use sub-640px variants at both 1x and 2x density.
+    imageSizes: [32, 48, 64, 96, 128, 256, 288, 384, 448, 544],
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048, 2400],
     localPatterns: [
       { pathname: "/**", search: "" },
       // Only catalog artwork uses a query to bypass the old cached redirects.

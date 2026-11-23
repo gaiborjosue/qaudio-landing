@@ -1,7 +1,7 @@
-import type { ReactNode } from "react"
+import { useState, type ReactNode } from "react"
 import Image from "next/image"
 import catalogStyles from "@/components/product-catalog.module.css"
-import { isPrivateMediaUrl } from "@/lib/media"
+import { isPrivateMediaUrl, productThumbnailUrl } from "@/lib/media"
 import styles from "./product-table.module.css"
 
 const CONDITION_TONES = ["new", "demo", "used"]
@@ -11,24 +11,29 @@ const CONDITION_TONES = ["new", "demo", "used"]
 export function ProductThumb({
   src,
   alt = "",
+  className = styles.photo,
 }: {
   src?: string
   alt?: string
+  className?: string
 }) {
+  const [failed, setFailed] = useState<string>()
+  const thumbnail = src && src !== failed ? productThumbnailUrl(src) : undefined
   return src ? (
     <Image
-      className={styles.photo}
-      src={src}
+      className={className}
+      src={thumbnail ?? src}
       alt={alt}
       title={alt || undefined}
       width={40}
       height={40}
       sizes="40px"
-      unoptimized={isPrivateMediaUrl(src)}
+      unoptimized={!!thumbnail || isPrivateMediaUrl(src)}
+      onError={thumbnail ? () => setFailed(src) : undefined}
       crossOrigin="anonymous"
     />
   ) : (
-    <span className={styles.photo} />
+    <span className={className} />
   )
 }
 

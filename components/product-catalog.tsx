@@ -609,7 +609,7 @@ export function ProductCatalog({ products }: { products: Product[] }) {
                     {product.images[0] ? (
                       <Photo
                         image={product.images[0]}
-                        sizes="(max-width: 700px) 85vw, 280px"
+                        sizes="(max-width: 700px) calc(100vw - 80px), (max-width: 1000px) 220px, 270px"
                         eager={index === 0}
                       />
                     ) : (

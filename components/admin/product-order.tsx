@@ -1,10 +1,10 @@
 "use client"
 
-import Image from "next/image"
 import { SortableList } from "@/components/ui/sortable-list"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import type { ReorderProductsInput } from "@/lib/admin/schemas"
 import { formatPrice } from "@/lib/catalog"
+import { ProductThumb } from "./product-review-table"
 import styles from "./admin.module.css"
 
 /** "Turntables", "Marantz", or "all products": what a reorder arranges. */
@@ -52,21 +52,12 @@ export function ProductOrder({
       onReorder={(next) => onReorder(next.map((product) => product.id))}
       itemLabel={(product) => product.name}
       renderItem={(product) => {
-        const photo = product.images[0]
         return (
           <>
-            {photo ? (
-              <Image
-                className={styles.orderPhoto}
-                src={photo.src}
-                alt=""
-                width={40}
-                height={40}
-                sizes="40px"
-              />
-            ) : (
-              <span className={styles.orderPhoto} />
-            )}
+            <ProductThumb
+              className={styles.orderPhoto}
+              src={product.images[0]?.src}
+            />
             <span className={styles.orderText}>
               <span className={styles.orderName}>{product.name}</span>
               <span className={styles.orderMeta}>

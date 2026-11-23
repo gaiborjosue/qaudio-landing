@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js"
+import { productThumbnailPath } from "../media"
 import type { Database } from "../supabase/database"
 import { UPLOADS } from "./schemas"
 import { isPrivateUpload, mediaBucket } from "./media-lifecycle"
@@ -11,6 +12,47 @@ export type DatabaseError = { code?: string; message: string }
 
 /** Words a database error for whoever reads it: the model or the owner. */
 export type Fail = (what: string, error: DatabaseError) => Error
+
+const alreadyExists = (message: string) =>
+  /already exists|duplicate/i.test(message)
+
+/** Prepare the 2x admin tile before publishing a product original that uses it. */
+async function productPhotoWithThumbnail(
+  supabase: SupabaseClient<Database>,
+  source: string,
+  filename: string
+) {
+  const original = `products/photo-v1-${filename}`
+  const thumbnail = productThumbnailPath(original)
+  if (!thumbnail) return
+
+  const bucket = mediaBucket(source)
+  const { error: trackingError } = await supabase.rpc("prepare_media_copy", {
+    p_bucket: bucket,
+    p_path: source,
+    p_destination: thumbnail,
+  })
+  if (trackingError) return
+
+  const media = supabase.storage.from("media")
+  if ((await media.exists(thumbnail)).data) return original
+
+  const { data: photo } = await supabase.storage.from(bucket).download(source)
+  if (!photo) return
+  const { default: sharp } = await import("sharp")
+  const bytes = await sharp(await photo.arrayBuffer(), {
+    limitInputPixels: 40_000_000,
+  })
+    .autoOrient()
+    .resize(80, 80, { fit: "inside", withoutEnlargement: true })
+    .webp({ quality: 80 })
+    .toBuffer()
+  const { error } = await media.upload(thumbnail, bytes, {
+    cacheControl: "31536000",
+    contentType: "image/webp",
+  })
+  if (!error || alreadyExists(error.message)) return original
+}
 
 /**
  * Copies photos the admin chat uploaded (uploads/…) into their section's
@@ -38,7 +80,16 @@ export async function placeUploads(
       placed.set(path, path)
       continue
     }
-    const destination = `${folder}/${path.split("/").pop()}`
+    const filename = path.slice(path.lastIndexOf("/") + 1)
+    // Thumbnail generation is optional. A photo save can still succeed if
+    // Storage or the image decoder couldn't produce the smaller variant.
+    const productPhoto =
+      folder === "products"
+        ? await productPhotoWithThumbnail(supabase, path, filename).catch(
+            () => undefined
+          )
+        : undefined
+    const destination = productPhoto ?? `${folder}/${filename}`
     const { error: trackingError } = await supabase.rpc("prepare_media_copy", {
       p_bucket: mediaBucket(path),
       p_path: path,
@@ -55,7 +106,7 @@ export async function placeUploads(
         destination,
         isPrivateUpload(path) ? { destinationBucket: "media" } : undefined
       )
-    if (error && !/already exists|duplicate/i.test(error.message)) {
+    if (error && !alreadyExists(error.message)) {
       throw fail("Photo", { message: error.message })
     }
     placed.set(path, destination)

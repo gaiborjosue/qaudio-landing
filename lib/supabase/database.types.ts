@@ -375,6 +375,7 @@ export type Database = {
           path: string
           product_id: string
           sort_order: number
+          thumbnail_path: string | null
           width: number
         }
         Insert: {
@@ -385,6 +386,7 @@ export type Database = {
           path: string
           product_id: string
           sort_order?: number
+          thumbnail_path?: never
           width: number
         }
         Update: {
@@ -395,6 +397,7 @@ export type Database = {
           path?: string
           product_id?: string
           sort_order?: number
+          thumbnail_path?: never
           width?: number
         }
         Relationships: [

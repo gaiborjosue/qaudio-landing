@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { registerHooks } from "node:module"
 import test from "node:test"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import sharp from "sharp"
 
 registerHooks({
   resolve(specifier, context, next) {
@@ -30,7 +31,7 @@ registerHooks({
 const { cleanupRequest } =
   await import("../supabase/functions/media-cleanup/cleanup.ts")
 const lifecycle = await import("../lib/admin/media-lifecycle.ts")
-const { mediaUrl } = await import("../lib/media.ts")
+const { mediaUrl, productThumbnailUrl } = await import("../lib/media.ts")
 const { photoLines, photoLine } = await import("../lib/admin/photo-lines.ts")
 const { placeUploads } = await import("../lib/admin/uploads.ts")
 const { viewPhotosFor } = await import("../agent/tools/view_photos.ts")
@@ -149,6 +150,105 @@ test("promoting a private source registers and pins the destination before a cro
   ])
   assert.equal(calls.length, 2)
 })
+
+test("product saves generate an immutable admin tile once and keep the original", async () => {
+  const original = `products/photo-v1-${id}.webp`
+  const thumbnail = `${original}.thumb.webp`
+  const legacy = `products/${id}.webp`
+  const calls = []
+  const image = await sharp({
+    create: { width: 320, height: 160, channels: 3, background: "black" },
+  })
+    .webp()
+    .toBuffer()
+  let saved = false
+  let corrupt = false
+  const client = {
+    async rpc(name, args) {
+      assert.equal(name, "prepare_media_copy")
+      assert.equal(args.p_bucket, "chat-uploads")
+      assert.equal(args.p_path, path)
+      calls.push(["track", args.p_destination])
+      return { error: null }
+    },
+    storage: {
+      from(bucket) {
+        return {
+          async exists(key) {
+            assert.equal(bucket, "media")
+            assert.equal(key, thumbnail)
+            return { data: saved }
+          },
+          async download(source) {
+            assert.equal(bucket, "chat-uploads")
+            calls.push(["download", source])
+            return { data: new Blob([corrupt ? "invalid image" : image]) }
+          },
+          async upload(key, bytes, options) {
+            assert.equal(bucket, "media")
+            assert.deepEqual(options, {
+              cacheControl: "31536000",
+              contentType: "image/webp",
+            })
+            const { format, width, height } = await sharp(bytes).metadata()
+            assert.deepEqual(
+              { format, width, height },
+              { format: "webp", width: 80, height: 40 }
+            )
+            calls.push(["upload", key])
+            saved = true
+            return { error: null }
+          },
+          async copy(source, key, options) {
+            assert.equal(bucket, "chat-uploads")
+            assert.equal(source, path)
+            assert.deepEqual(options, { destinationBucket: "media" })
+            calls.push(["copy", key])
+            return { error: null }
+          },
+        }
+      },
+    },
+  }
+  const place = () =>
+    placeUploads(
+      client,
+      [path, path, legacy],
+      "products",
+      (_what, error) => new Error(error.message)
+    )
+  const placed = await place()
+  assert.equal(placed(path), original)
+  assert.equal(placed(legacy), legacy)
+  assert.equal(productThumbnailUrl(mediaUrl(original)), mediaUrl(thumbnail))
+  assert.equal(productThumbnailUrl(mediaUrl(legacy)), undefined)
+  assert.equal(productThumbnailUrl(mediaUrl(path)), undefined)
+  assert.deepEqual(calls.splice(0), [
+    ["track", thumbnail],
+    ["download", path],
+    ["upload", thumbnail],
+    ["track", original],
+    ["copy", original],
+  ])
+
+  assert.equal((await place())(path), original)
+  assert.deepEqual(calls.splice(0), [
+    ["track", thumbnail],
+    ["track", original],
+    ["copy", original],
+  ])
+
+  saved = false
+  corrupt = true
+  assert.equal((await place())(path), legacy)
+  assert.deepEqual(calls, [
+    ["track", thumbnail],
+    ["download", path],
+    ["track", legacy],
+    ["copy", legacy],
+  ])
+})
+
 test("discarding private staged media checks references before deletion", async () => {
   const calls = []
   const client = {
