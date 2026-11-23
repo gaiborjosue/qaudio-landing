@@ -1,6 +1,6 @@
 import Link from "next/link"
 import { StructuredData } from "@/components/structured-data"
-import { breadcrumbs, pageMetadata } from "@/lib/seo"
+import { breadcrumbs, pageMetadata, returnPolicyStructuredData } from "@/lib/seo"
 
 export const metadata = pageMetadata({
   title: "In-store policies",
@@ -14,6 +14,7 @@ export const metadata = pageMetadata({
 export default function PoliciesPage() {
   return (
     <>
+      <StructuredData value={returnPolicyStructuredData()} />
       <StructuredData
         value={breadcrumbs([
           { name: "Home", path: "/" },

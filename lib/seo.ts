@@ -161,6 +161,24 @@ export function storeStructuredData(schedule: StoreSchedule) {
   }
 }
 
+const RETURN_POLICY_URL = siteUrl("/in-store-policies")
+const RETURN_POLICY_ID = `${RETURN_POLICY_URL}#return-policy`
+
+export function returnPolicyStructuredData() {
+  return {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "@id": STORE_ID,
+    name: SITE_NAME,
+    url: siteUrl(),
+    hasMerchantReturnPolicy: {
+      "@type": "MerchantReturnPolicy",
+      "@id": RETURN_POLICY_ID,
+      merchantReturnLink: RETURN_POLICY_URL,
+    },
+  }
+}
+
 export function productStructuredData(product: Product) {
   const url = siteUrl(productHref(product))
   return {
@@ -182,7 +200,7 @@ export function productStructuredData(product: Product) {
           url,
           price: (product.price_cents / 100).toFixed(2),
           priceCurrency: "USD",
-          availability: "https://schema.org/InStock",
+          availability: "https://schema.org/InStoreOnly",
           seller: {
             "@type": "Organization",
             "@id": STORE_ID,
@@ -190,6 +208,7 @@ export function productStructuredData(product: Product) {
             url: siteUrl(),
           },
           availableAtOrFrom: { "@id": STORE_ID },
+          hasMerchantReturnPolicy: { "@id": RETURN_POLICY_ID },
           ...(product.sale && {
             priceValidUntil: storeClock(new Date(product.sale.ends_at)).date,
           }),

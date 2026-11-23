@@ -26,6 +26,7 @@ const {
   pageMetadata,
   jsonLd,
   productStructuredData,
+  returnPolicyStructuredData,
   storeStructuredData,
   articleStructuredData,
   productDescription,
@@ -145,7 +146,18 @@ test("product offers follow the same live sale price and never advertise sold/un
   assert.equal(schema.offers.price, "800.00")
   assert.equal(schema.offers.priceValidUntil, "2026-11-08")
   assert.equal(schema.offers.url, "https://www.qaudio.com/products/turntable")
-  assert.equal(schema.offers.availability, "https://schema.org/InStock")
+  assert.equal(schema.offers.availability, "https://schema.org/InStoreOnly")
+  assert.equal(Object.hasOwn(schema.offers, "shippingDetails"), false)
+  const policy = returnPolicyStructuredData()
+  assert.equal(schema.offers.seller["@id"], policy["@id"])
+  assert.deepEqual(schema.offers.hasMerchantReturnPolicy, {
+    "@id": "https://www.qaudio.com/in-store-policies#return-policy",
+  })
+  assert.deepEqual(policy.hasMerchantReturnPolicy, {
+    "@type": "MerchantReturnPolicy",
+    "@id": schema.offers.hasMerchantReturnPolicy["@id"],
+    merchantReturnLink: "https://www.qaudio.com/in-store-policies",
+  })
   for (const change of [
     { availability: "sold" },
     { availability: "unavailable" },
