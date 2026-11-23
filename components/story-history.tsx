@@ -1,6 +1,7 @@
 import Image from "next/image"
 import { HistoryMap } from "@/components/history-map"
 import brooklineStreet from "@/public/story/brookline-street.webp"
+import vassarStreet from "@/public/story/vassar-street.webp"
 
 type Photo = { src: string; width: number; height: number; alt: string }
 
@@ -38,9 +39,9 @@ export const HISTORY: Chapter[] = [
     text: "In early fall 1980 the storeroom opened as a shop for pre-owned hi-fi, and new brands followed for nearby colleges. Hafler amplifier kits sold briskly to MIT students.",
     photos: [
       {
-        src: "/story/vassar-street.webp",
-        width: 700,
-        height: 525,
+        src: vassarStreet.src,
+        width: vassarStreet.width,
+        height: vassarStreet.height,
         alt: "The original Q Audio storefront at 95 Vassar Street, Cambridge",
       },
     ],
