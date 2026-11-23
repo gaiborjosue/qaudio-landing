@@ -158,6 +158,10 @@ test("product offers follow the same live sale price and never advertise sold/un
     "@id": schema.offers.hasMerchantReturnPolicy["@id"],
     merchantReturnLink: "https://www.qaudio.com/in-store-policies",
   })
+  assert.deepEqual(
+    productStructuredData({ ...product, availability: "back_order" }).offers,
+    { ...schema.offers, availability: "https://schema.org/BackOrder" }
+  )
   for (const change of [
     { availability: "sold" },
     { availability: "unavailable" },

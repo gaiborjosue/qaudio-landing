@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 import type { Product } from "./catalog"
-import { productHref } from "./catalog"
+import { isOrderableAvailability, productHref } from "./catalog"
 import type { NewsPost } from "./news"
 import { WEEKDAYS, storeClock, type StoreSchedule } from "./store-hours"
 import {
@@ -194,13 +194,16 @@ export function productStructuredData(product: Product) {
     }),
     category: product.category.name,
     ...(product.price_cents !== null &&
-      product.availability === "available" && {
+      isOrderableAvailability(product.availability) && {
         offers: {
           "@type": "Offer",
           url,
           price: (product.price_cents / 100).toFixed(2),
           priceCurrency: "USD",
-          availability: "https://schema.org/InStoreOnly",
+          availability:
+            product.availability === "back_order"
+              ? "https://schema.org/BackOrder"
+              : "https://schema.org/InStoreOnly",
           seller: {
             "@type": "Organization",
             "@id": STORE_ID,

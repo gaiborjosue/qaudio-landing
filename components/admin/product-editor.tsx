@@ -38,7 +38,6 @@ import {
   changedInputFields,
   inputFromValues,
   parseDollars,
-  PRODUCT_AVAILABILITY_OPTIONS,
   PREFILL_FIELDS,
   rebaseValues,
   slugify,
@@ -54,7 +53,11 @@ import {
   withConditionNotes,
   withConditionScore,
 } from "@/lib/admin/condition-score"
-import { isUsedEquipment } from "@/lib/catalog"
+import {
+  isOrderableAvailability,
+  isUsedEquipment,
+  PRODUCT_AVAILABILITY_OPTIONS,
+} from "@/lib/catalog"
 import { toStoreDateTime } from "@/lib/admin/store-time"
 import {
   productCardLineInputSchema,
@@ -973,7 +976,7 @@ export function ProductEditor({
   const notes = conditionNotes(conditionNote)
   const useListPrice =
     !values.price.trim() &&
-    values.availability === "available" &&
+    isOrderableAvailability(values.availability) &&
     parseDollars(values.msrp) > 0
 
   return (

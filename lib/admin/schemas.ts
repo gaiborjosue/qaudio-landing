@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { PRODUCT_AVAILABILITY_OPTIONS } from "../catalog"
 import {
   hashtagCount,
   INSTAGRAM_CAPTION_MAX,
@@ -159,6 +160,12 @@ export const productSaleSchema = z
     "A sale must start before it ends."
   )
 
+const availability = z
+  .enum(PRODUCT_AVAILABILITY_OPTIONS.map((option) => option.value))
+  .describe(
+    "Use back_order when the item is available to order and awaiting stock. Used gear marked sold is saved as a draft. Use unavailable for an item the store cannot currently supply."
+  )
+
 export const productInputSchema = z.object({
   id: z
     .uuid()
@@ -200,7 +207,7 @@ export const productInputSchema = z.object({
     ),
   price_note: z.string().max(500).optional(),
   condition_note: z.string().max(500).optional(),
-  availability: z.enum(["available", "sold", "unavailable"]).optional(),
+  availability: availability.optional(),
   price_unit: z.enum(["each", "pair"]),
   condition: z.enum(["New", "Demo", "Used"]),
   ready_for_audition: z.boolean(),
@@ -417,7 +424,7 @@ export const productQuickEditSchema = z
     price_cents: z.int().positive().nullable().optional(),
     condition: z.enum(["New", "Demo", "Used"]).optional(),
     condition_note: z.string().max(500).optional(),
-    availability: z.enum(["available", "sold", "unavailable"]).optional(),
+    availability: availability.optional(),
     ready_for_audition: z.boolean().optional(),
     status: z.enum(["draft", "published"]).optional(),
   })
@@ -452,12 +459,6 @@ const conditionNote = z
   .describe(
     "The whole condition note, replacing it (terms like “Used (final sale)”, and the score as “N out of 10”). For the score alone use condition_score."
   )
-const availability = z
-  .enum(["available", "sold", "unavailable"])
-  .describe(
-    "sold: gone (used gear that's sold is also saved as a draft); unavailable: not in stock now."
-  )
-
 /** What products__update_products changes on one product; omitted fields
  * stay as they are. */
 export const productChangesSchema = productInputSchema
@@ -536,7 +537,6 @@ export const createProductInputSchema = productInputSchema
       ),
     condition_score: conditionScore.optional(),
     condition_note: conditionNote.optional(),
-    availability: availability.optional(),
   })
 
 // News posts: body blocks follow NewsBlock in lib/news.ts, with image `src`

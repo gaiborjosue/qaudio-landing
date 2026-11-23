@@ -4,17 +4,14 @@ import { useId, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, ChevronRight, Pencil, Search, Trash2 } from "lucide-react"
 import { saveProductTableEdits } from "@/app/admin/actions"
-import { isUsedEquipment } from "@/lib/catalog"
+import { isUsedEquipment, PRODUCT_AVAILABILITY_OPTIONS } from "@/lib/catalog"
 import type { AdminProduct, CatalogTaxonomy } from "@/lib/admin/preview"
 import { conditionScore, withConditionScore } from "@/lib/admin/condition-score"
 import {
   NO_PRODUCT_FILTERS,
   type ProductFilters,
 } from "@/lib/admin/product-filters"
-import {
-  parseDollars,
-  PRODUCT_AVAILABILITY_OPTIONS,
-} from "@/lib/admin/product-editor"
+import { parseDollars } from "@/lib/admin/product-editor"
 import { saleStatus } from "@/lib/admin/sale"
 import type { ProductQuickEdit } from "@/lib/admin/schemas"
 import { toStoreDateTime } from "@/lib/admin/store-time"

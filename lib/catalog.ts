@@ -26,6 +26,17 @@ export type ProductImage = {
   caption?: string
 }
 
+export const PRODUCT_AVAILABILITY_OPTIONS = [
+  { value: "available", label: "Available" },
+  { value: "back_order", label: "Back Order" },
+  { value: "sold", label: "Sold out" },
+  { value: "unavailable", label: "Unavailable" },
+] as const
+
+export function isOrderableAvailability(availability: string | undefined) {
+  return availability === "available" || availability === "back_order"
+}
+
 /** Keep source qualifications without repeating the price, unit or status labels. */
 export function priceQualifications(note = "", condition = "") {
   const startingAt = /\bstarting\s+at\b/i.test(note)

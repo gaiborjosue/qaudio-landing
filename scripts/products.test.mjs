@@ -28,11 +28,13 @@ registerHooks({
 
 const { productUpdate, writtenFields } =
   await import("../lib/admin/product-changes.ts")
-const { saveProduct, updateProducts } =
+const { saveProduct, saveProductQuickEdits, updateProducts } =
   await import("../lib/admin/product-save.ts")
 const {
   createProductInputSchema,
   productFieldsSchema,
+  productInputSchema,
+  productQuickEditSchema,
   updateProductsInputSchema,
 } = await import("../lib/admin/schemas.ts")
 const { changedInputFields, inputFromValues, rebaseValues, valuesFrom } =
@@ -396,6 +398,35 @@ test("the product form saves only the fields the owner changed", async () => {
     Object.keys(copy.log.find((q) => q.op === "update").body).sort(),
     ["description_closing", "description_intro", "features"]
   )
+})
+
+test("a back order saves through the product editors and stays published", async () => {
+  const row = product(1, { price_cents: 129900, short_description: "A line." })
+  const values = valuesFrom(row)
+  const input = productInputSchema.parse(
+    inputFromValues({ ...values, availability: "back_order" }, values)
+  )
+  assert.equal(input.status, "published")
+  assert.equal(createProductInputSchema.parse(input).availability, "back_order")
+  const fields = changedInputFields(input, inputFromValues(values))
+  assert.deepEqual(fields, ["availability"])
+
+  const changes = { availability: "back_order" }
+  const quick = productQuickEditSchema.parse({ id: row.id, ...changes })
+  const proposal = updateProductsInputSchema.parse({
+    products: [{ id: row.id, name: row.name, updated_at: AT, changes }],
+  })
+  for (const save of [
+    (db) => saveProduct(db, input, fail, new Set(fields)),
+    (db) => saveProductQuickEdits(db, [quick], fail),
+    (db) => updateProducts(db, proposal, fail),
+  ]) {
+    const current = { ...row }
+    await save(fakeDb([current]))
+    assert.equal(current.availability, "back_order")
+    assert.equal(current.status, "published")
+    assert.equal(current.price_cents, 129900)
+  }
 })
 
 test("an open form takes a newer save under the owner's own edits", () => {

@@ -88,6 +88,9 @@ function ProductPrice({
     product.price_note,
     product.condition
   )
+  const backOrder = product.availability === "back_order" && (
+    <span>Back Order</span>
+  )
   if (
     product.availability === "sold" ||
     product.availability === "unavailable" ||
@@ -100,6 +103,7 @@ function ProductPrice({
           : product.availability === "unavailable"
             ? "Unavailable"
             : "Price on request"}
+        {backOrder}
         {qualification.text && <span>{qualification.text}</span>}
       </p>
     )
@@ -122,6 +126,7 @@ function ProductPrice({
       <span>
         {label}USD / {product.price_unit}
       </span>
+      {backOrder}
       {qualification.text && <span>{qualification.text}</span>}
       {!detail && onSale && listed && (
         <span>

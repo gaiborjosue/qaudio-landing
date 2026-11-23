@@ -9,7 +9,6 @@ import {
   type ProductBasis,
   type ProductUpdate,
 } from "@/lib/admin/product-changes"
-import { PRODUCT_AVAILABILITY_OPTIONS } from "@/lib/admin/product-editor"
 import {
   productFromInput,
   type AdminProduct,
@@ -26,6 +25,7 @@ import {
   descriptionFromColumns,
   formatPrice,
   isUsedEquipment,
+  PRODUCT_AVAILABILITY_OPTIONS,
 } from "@/lib/catalog"
 import { mediaUrl } from "@/lib/media"
 import { wordDiff } from "@/lib/admin/text-diff"
