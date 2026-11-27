@@ -63,6 +63,45 @@
   mix-blend-mode: multiply;
 }
 
+/* A slide drawn by renderItem fills its card. */
+.depth-carousel__content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* autoHeight: the cards share one grid cell in flow, so the stage (and the
+   carousel) is as tall as the tallest card, and every card stretches to it. */
+.depth-carousel--auto {
+  height: auto;
+  min-height: 0;
+  align-items: stretch;
+}
+
+.depth-carousel--auto .depth-carousel__stage {
+  position: relative;
+  inset: auto;
+  flex: 1;
+  display: grid;
+  align-items: stretch;
+  justify-items: center;
+}
+
+.depth-carousel--auto .depth-carousel__card {
+  position: relative;
+  top: auto;
+  left: auto;
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.depth-carousel--auto .depth-carousel__content {
+  flex: 1 0 auto;
+  height: auto;
+}
+
 .depth-carousel__arrow {
   position: absolute;
   top: 50%;

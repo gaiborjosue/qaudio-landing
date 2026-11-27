@@ -217,3 +217,91 @@ a.name:focus-visible {
   height: auto;
   margin-top: 24px;
 }
+
+/* A featured sale in the Sales page's carousel (data-portrait): a tall card
+   whose parent sets its size. The details keep their height, products stack
+   as on narrow screens, and the image is centered on a light mat in the
+   space left below them, so one card height suits any image shape. */
+.card[data-portrait] {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  border-radius: 24px;
+}
+
+.card[data-portrait] .head {
+  padding: 28px 26px 0;
+}
+
+.card[data-portrait] .title {
+  font-size: 24px;
+}
+
+.card[data-portrait] .summary {
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.card[data-portrait] .items {
+  display: block;
+  margin-top: 20px;
+  padding: 0 26px;
+}
+
+.card[data-portrait] .item {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "brand meta"
+    "name meta";
+  column-gap: 14px;
+  row-gap: 3px;
+  align-items: center;
+  padding: 12px 0;
+}
+
+.card[data-portrait] .brand {
+  grid-area: brand;
+}
+
+.card[data-portrait] .brand:empty {
+  display: none;
+}
+
+.card[data-portrait] .name {
+  grid-area: name;
+  font-size: 16px;
+}
+
+.card[data-portrait] .meta {
+  grid-area: meta;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.frame {
+  position: relative;
+  flex: 1 1 180px;
+  min-height: 180px;
+  margin: 20px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: #f6f6f6;
+}
+
+.card[data-portrait] > .frame {
+  padding: 0;
+}
+
+.frame img {
+  padding: 14px;
+  object-fit: contain;
+  object-position: center;
+  mix-blend-mode: multiply;
+}
+
+.card[data-portrait] .note {
+  margin-top: auto;
+  padding: 14px 26px 16px;
+}

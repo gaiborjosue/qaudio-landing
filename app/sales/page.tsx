@@ -1,5 +1,6 @@
 import type { Metadata } from "next"
 import { DealCard } from "@/components/deal-card"
+import { FeaturedSales } from "@/components/featured-sales"
 import { SaleProducts } from "@/components/sale-products"
 import { SoundwaveHeading } from "@/components/soundwave-heading"
 import { StructuredData } from "@/components/structured-data"
@@ -39,14 +40,18 @@ export default async function SalesPage() {
         <h1>Sales</h1>
       </SoundwaveHeading>
       {featured.length > 0 && (
-        <section
-          className={styles.featured}
-          aria-label="Featured sales"
-          data-single={featured.length === 1 || undefined}
-        >
-          {featured.map((deal) => (
-            <DealCard key={deal.id} deal={deal} showEnd />
-          ))}
+        <section className={styles.featured} aria-label="Featured sales">
+          <FeaturedSales>
+            {featured.map((deal, index) => (
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                showEnd
+                portrait
+                eager={index === 0}
+              />
+            ))}
+          </FeaturedSales>
         </section>
       )}
       {onSale.length > 0 ? (

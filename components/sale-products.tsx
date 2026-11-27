@@ -1,13 +1,17 @@
 "use client"
 
-import { useState } from "react"
+import { useId, useState } from "react"
 import type { Product } from "@/lib/catalog"
+import { Choice } from "./admin/choice"
 import { ProductCatalog } from "./product-catalog"
 import styles from "./sale-products.module.css"
 
 type Option = { slug: string; name: string }
 
 const byName = new Intl.Collator("en", { numeric: true, sensitivity: "base" })
+
+/** No filter: the dropdown needs a value. */
+const ALL = "all"
 
 /** The distinct options among the products, A–Z. */
 function optionsOf(list: (Option | null)[]) {
@@ -16,7 +20,7 @@ function optionsOf(list: (Option | null)[]) {
   return [...seen.values()].sort((a, b) => byName.compare(a.name, b.name))
 }
 
-/** A row of toggle pills: All, then each option. */
+/** A titled dropdown, as in the admin's product table: All, then each option. */
 function Filter({
   label,
   options,
@@ -28,19 +32,22 @@ function Filter({
   value: string | null
   onChange: (slug: string | null) => void
 }) {
+  const labelId = useId()
   return (
-    <div className={styles.filter} role="group" aria-label={label}>
-      {[{ slug: null, name: "All" }, ...options].map((option) => (
-        <button
-          key={option.slug ?? ""}
-          type="button"
-          className={styles.chip}
-          aria-pressed={value === option.slug}
-          onClick={() => onChange(option.slug)}
-        >
-          {option.name}
-        </button>
-      ))}
+    <div className={styles.filter}>
+      <span id={labelId} className={styles.label}>
+        {label}
+      </span>
+      <Choice
+        small
+        value={value ?? ALL}
+        options={[
+          { value: ALL, label: "All", first: true },
+          ...options.map(({ slug, name }) => ({ value: slug, label: name })),
+        ]}
+        onChange={(next) => onChange(next === ALL ? null : next)}
+        aria-labelledby={labelId}
+      />
     </div>
   )
 }

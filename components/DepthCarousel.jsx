@@ -4,6 +4,13 @@
 // Local changes: a `label` prop, a `gutter` prop for the side space reserved
 // when scaling, only horizontal wheel/trackpad input moves the carousel, and
 // latest props sync into refs in a layout effect instead of during render.
+// For slides with content (the Sales page's featured sales): `renderItem`
+// draws each slide instead of an image (slides behind the front one are
+// inert), `autoHeight` keeps the cards in flow so they all take the tallest
+// card's height (cardHeight becomes a minimum), card sizes may be CSS lengths
+// (the math then measures the card), cards are placed from the first render
+// so the server's HTML already shows the stack, and arrow keys pressed inside
+// a slide stay with it.
 
 import {
   useCallback,
@@ -15,6 +22,36 @@ import {
 } from "react"
 import gsap from "gsap"
 import "./DepthCarousel.css"
+
+/**
+ * @typedef {object} DepthCarouselProps
+ * @property {any[]} [items] Images (`{ image, alt }` or URLs), or anything `renderItem` draws.
+ * @property {number | string} [cardWidth] Pixels, or a CSS length.
+ * @property {number | string} [cardHeight] Pixels, or a CSS length; a minimum with `autoHeight`.
+ * @property {number} [radius]
+ * @property {string} [tint]
+ * @property {number} [depth]
+ * @property {number} [spread]
+ * @property {number} [tilt]
+ * @property {"left" | "right"} [tiltDirection]
+ * @property {number} [perspective]
+ * @property {number} [visibleCards]
+ * @property {number} [falloff]
+ * @property {number} [blur]
+ * @property {number} [duration]
+ * @property {string} [ease]
+ * @property {boolean} [autoplay]
+ * @property {number} [autoplayDelay]
+ * @property {boolean} [loop]
+ * @property {boolean} [showControls]
+ * @property {boolean} [showIndicators]
+ * @property {string} [label]
+ * @property {number} [gutter]
+ * @property {boolean} [autoHeight]
+ * @property {(item: any, index: number, active: boolean) => import("react").ReactNode} [renderItem]
+ * @property {(index: number, item: any) => void} [onChange]
+ * @property {string} [className]
+ */
 
 const DEFAULT_ITEMS = [
   { image: "https://picsum.photos/seed/depth1/800/1000", alt: "Slide 1" },
@@ -29,6 +66,56 @@ const clamp = (v, min, max) => Math.min(Math.max(v, min), max)
 const normalizeItem = (it) =>
   typeof it === "string" ? { image: it, alt: "" } : it
 
+// The width the math uses: cardWidth, or a CSS length's measured size.
+const cardPixels = (cfg, cards) =>
+  typeof cfg.cardWidth === "number"
+    ? cfg.cardWidth
+    : cards[0]?.offsetWidth || 300
+
+// Card i's inline styles with the carousel at `pos`, and its tint's opacity.
+function placement(i, pos, cfg, sc) {
+  const n = cfg.count
+  const dir = cfg.tiltDirection === "left" ? -1 : 1
+
+  let d = i - pos
+  if (cfg.loop && n > 1) {
+    d = ((d % n) + n) % n
+    if (d > n / 2) d -= n
+  }
+
+  const back = Math.max(0, d)
+  const az = Math.abs(d)
+  const shown = az <= cfg.visibleCards + 0.5
+
+  const tz = -cfg.depth * d
+  const tx = dir * cfg.spread * d
+  const ry = dir * cfg.tilt * clamp(d, 0, 1)
+
+  let opacity = d < 0 ? Math.max(0, 1 + d) : 1
+  if (!shown) opacity = 0
+
+  const brightness = Math.max(0.15, 1 - back * cfg.falloff)
+  const blurPx =
+    cfg.blur > 0
+      ? Math.min(cfg.blur, (back / Math.max(1, cfg.visibleCards)) * cfg.blur)
+      : 0
+  const zi = Math.round(2000 - d * 20)
+  // In-flow cards are centered by the stage's grid instead.
+  const center = cfg.autoHeight ? "" : "translate(-50%, -50%) "
+
+  return {
+    card: {
+      transform: `${center}scale(${sc}) translateX(${tx.toFixed(2)}px) translateZ(${tz.toFixed(2)}px) rotateY(${ry.toFixed(3)}deg)`,
+      opacity: opacity.toFixed(3),
+      filter: `brightness(${brightness.toFixed(3)}) blur(${blurPx.toFixed(2)}px)`,
+      zIndex: String(zi),
+      pointerEvents: shown && opacity > 0.05 ? "auto" : "none",
+    },
+    tint: clamp(back * cfg.falloff * 1.25, 0, 0.86).toFixed(3),
+  }
+}
+
+/** @type {(props: DepthCarouselProps) => import("react").JSX.Element} */
 const DepthCarousel = ({
   items = DEFAULT_ITEMS,
   cardWidth = 300,
@@ -52,6 +139,8 @@ const DepthCarousel = ({
   showIndicators = true,
   label = "Depth carousel",
   gutter = 120,
+  autoHeight = false,
+  renderItem,
   onChange,
   className = "",
 }) => {
@@ -80,79 +169,48 @@ const DepthCarousel = ({
 
   const [active, setActive] = useState(0)
 
+  const cfg = {
+    count,
+    depth,
+    spread,
+    tilt,
+    tiltDirection,
+    visibleCards,
+    falloff,
+    blur,
+    duration,
+    ease,
+    loop,
+    cardWidth,
+    gutter,
+    autoplayDelay,
+    autoHeight,
+  }
+
   const layout = useCallback((pos) => {
     const cfg = cfgRef.current
     const n = cfg.count
     if (!n) return
-    const dir = cfg.tiltDirection === "left" ? -1 : 1
-    const sc = scaleRef.current
 
     for (let i = 0; i < n; i++) {
       const el = cardRefs.current[i]
       if (!el) continue
-
-      let d = i - pos
-      if (cfg.loop && n > 1) {
-        d = ((d % n) + n) % n
-        if (d > n / 2) d -= n
-      }
-
-      const back = Math.max(0, d)
-      const az = Math.abs(d)
-      const shown = az <= cfg.visibleCards + 0.5
-
-      const tz = -cfg.depth * d
-      const tx = dir * cfg.spread * d
-      const ry = dir * cfg.tilt * clamp(d, 0, 1)
-
-      let opacity = d < 0 ? Math.max(0, 1 + d) : 1
-      if (!shown) opacity = 0
-
-      const brightness = Math.max(0.15, 1 - back * cfg.falloff)
-      const blurPx =
-        cfg.blur > 0
-          ? Math.min(
-              cfg.blur,
-              (back / Math.max(1, cfg.visibleCards)) * cfg.blur
-            )
-          : 0
-      const zi = Math.round(2000 - d * 20)
-
-      el.style.transform = `translate(-50%, -50%) scale(${sc}) translateX(${tx.toFixed(2)}px) translateZ(${tz.toFixed(2)}px) rotateY(${ry.toFixed(3)}deg)`
-      el.style.opacity = opacity.toFixed(3)
-      el.style.filter = `brightness(${brightness.toFixed(3)}) blur(${blurPx.toFixed(2)}px)`
-      el.style.zIndex = String(zi)
-      el.style.pointerEvents = shown && opacity > 0.05 ? "auto" : "none"
-
+      const { card, tint } = placement(i, pos, cfg, scaleRef.current)
+      Object.assign(el.style, card)
       const ov = overlayRefs.current[i]
-      if (ov)
-        ov.style.opacity = clamp(back * cfg.falloff * 1.25, 0, 0.86).toFixed(3)
+      if (ov) ov.style.opacity = tint
     }
   }, [])
 
   // Latest props for handlers and effects, synced before any of them run.
   useLayoutEffect(() => {
     onChangeRef.current = onChange
-    cfgRef.current = {
-      count,
-      depth,
-      spread,
-      tilt,
-      tiltDirection,
-      visibleCards,
-      falloff,
-      blur,
-      duration,
-      ease,
-      loop,
-      cardWidth,
-      gutter,
-      autoplayDelay,
-    }
+    cfgRef.current = cfg
     // Card size can change with the container, so refit the scale.
     const root = rootRef.current
     if (root && root.clientWidth) {
-      const needed = cardWidth + Math.abs(spread) * 2 + gutter
+      const needed =
+        cardPixels(cfg, cardRefs.current) + Math.abs(spread) * 2 + gutter
       scaleRef.current = clamp(root.clientWidth / needed, 0.4, 1)
       layout(posRef.current)
     }
@@ -223,7 +281,8 @@ const DepthCarousel = ({
     const ro = new ResizeObserver((entries) => {
       const w = entries[0].contentRect.width
       const cfg = cfgRef.current
-      const needed = cfg.cardWidth + Math.abs(cfg.spread) * 2 + cfg.gutter
+      const needed =
+        cardPixels(cfg, cardRefs.current) + Math.abs(cfg.spread) * 2 + cfg.gutter
       scaleRef.current = clamp(w / needed, 0.4, 1)
       layout(posRef.current)
     })
@@ -242,7 +301,11 @@ const DepthCarousel = ({
       tweenRef.current?.kill()
       const raw = e.deltaX
       const delta = e.deltaMode === 1 ? raw * 24 : raw
-      const step = clamp(delta / (cfg.cardWidth * 0.9), -0.6, 0.6)
+      const step = clamp(
+        delta / (cardPixels(cfg, cardRefs.current) * 0.9),
+        -0.6,
+        0.6
+      )
       posRef.current += step
       layout(posRef.current)
       if (wheelTimerRef.current) clearTimeout(wheelTimerRef.current)
@@ -278,7 +341,10 @@ const DepthCarousel = ({
       const drag = dragRef.current
       if (!drag) return
       const cfg = cfgRef.current
-      const stepPx = Math.max(cfg.cardWidth * 0.55 * scaleRef.current, 40)
+      const stepPx = Math.max(
+        cardPixels(cfg, cardRefs.current) * 0.55 * scaleRef.current,
+        40
+      )
       const dx = e.clientX - drag.x
       if (!drag.moved && Math.abs(dx) > 4) {
         drag.moved = true
@@ -302,13 +368,18 @@ const DepthCarousel = ({
     dragRef.current = null
     if (!drag.moved) return
     const cfg = cfgRef.current
-    const stepPx = Math.max(cfg.cardWidth * 0.55 * scaleRef.current, 40)
+    const stepPx = Math.max(
+      cardPixels(cfg, cardRefs.current) * 0.55 * scaleRef.current,
+      40
+    )
     const projected = posRef.current - (drag.v * 180) / stepPx
     setFocus(Math.round(projected), true)
   }, [setFocus])
 
   const onKeyDown = useCallback(
     (e) => {
+      // Arrow keys inside a slide (on its links) stay there.
+      if (stageRef.current?.contains(e.target)) return
       if (e.key === "ArrowLeft") {
         e.preventDefault()
         navigateBy(-1)
@@ -404,7 +475,7 @@ const DepthCarousel = ({
   return (
     <div
       ref={rootRef}
-      className={`depth-carousel ${className}`.trim()}
+      className={`depth-carousel${autoHeight ? " depth-carousel--auto" : ""} ${className}`.trim()}
       style={{ "--dc-perspective": `${perspective}px` }}
       role="group"
       aria-roledescription="carousel"
@@ -417,34 +488,47 @@ const DepthCarousel = ({
       onKeyDown={onKeyDown}
     >
       <div className="depth-carousel__stage" ref={stageRef}>
-        {data.map((item, i) => (
-          <div
-            key={i}
-            className="depth-carousel__card"
-            ref={(el) => (cardRefs.current[i] = el)}
-            style={{
-              width: cardWidth,
-              height: cardHeight,
-              borderRadius: radius,
-            }}
-            aria-roledescription="slide"
-            aria-label={`${i + 1} of ${count}`}
-            aria-hidden={active !== i}
-            onClick={() => onCardClick(i)}
-          >
-            <img
-              className="depth-carousel__img"
-              src={item.image}
-              alt={item.alt || ""}
-              draggable={false}
-            />
-            <span
-              className="depth-carousel__tint"
-              ref={(el) => (overlayRefs.current[i] = el)}
-              style={{ background: tint }}
-            />
-          </div>
-        ))}
+        {data.map((item, i) => {
+          // Where the card starts; layout() moves it from there. These
+          // values only change with the props, so renders never undo it.
+          const start = placement(i, 0, cfg, 1)
+          return (
+            <div
+              key={i}
+              className="depth-carousel__card"
+              ref={(el) => (cardRefs.current[i] = el)}
+              style={{
+                width: cardWidth,
+                height: autoHeight ? undefined : cardHeight,
+                minHeight: autoHeight ? cardHeight : undefined,
+                borderRadius: radius,
+                ...start.card,
+              }}
+              aria-roledescription="slide"
+              aria-label={`${i + 1} of ${count}`}
+              aria-hidden={active !== i}
+              onClick={() => onCardClick(i)}
+            >
+              {renderItem ? (
+                <div className="depth-carousel__content" inert={active !== i}>
+                  {renderItem(item, i, active === i)}
+                </div>
+              ) : (
+                <img
+                  className="depth-carousel__img"
+                  src={item.image}
+                  alt={item.alt || ""}
+                  draggable={false}
+                />
+              )}
+              <span
+                className="depth-carousel__tint"
+                ref={(el) => (overlayRefs.current[i] = el)}
+                style={{ background: tint, opacity: start.tint }}
+              />
+            </div>
+          )
+        })}
       </div>
 
       {showControls && count > 1 && (

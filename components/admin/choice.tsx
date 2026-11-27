@@ -22,10 +22,10 @@ export type ChoiceOption = {
 
 /**
  * shadcn's Select (Base UI) at the admin's scale, for the product editor and
- * table: a value, its options, and a placeholder. An empty string means
- * nothing is chosen. Options list A–Z by label, after any marked `first`.
- * Options with a `tone` carry the condition colors, and so does the trigger
- * when the chosen one has one.
+ * table (and the Sales page's filters): a value, its options, and a
+ * placeholder. An empty string means nothing is chosen. Options list A–Z by
+ * label, after any marked `first`. Options with a `tone` carry the condition
+ * colors, and so does the trigger when the chosen one has one.
  */
 export function Choice({
   value,

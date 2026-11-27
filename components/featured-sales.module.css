@@ -1,0 +1,127 @@
+/* The Sales page's featured sales (featured-sales.tsx): portrait cards sized
+   from the content width, one centered or several in React Bits' Depth
+   Carousel, restyled for the white page like the FAQ's repair photos: white
+   cards, grayscale images behind the front one, and icon-well arrows
+   flanking the dots in a row beneath the stack. */
+.root {
+  container-type: inline-size;
+}
+
+/* Cards keep twice the carousel's spread free beside them (featured-sales.tsx),
+   then a 3:4 portrait shape at least; longer details make every card taller. */
+.carousel,
+.single {
+  --deal-space: 192px;
+  --deal-card-w: clamp(240px, 100cqw - var(--deal-space), 400px);
+  --deal-card-h: calc(var(--deal-card-w) * 4 / 3);
+}
+
+@container (width < 640px) {
+  .carousel {
+    --deal-space: 80px;
+  }
+}
+
+.single {
+  --deal-space: 0px;
+  display: flex;
+  flex-direction: column;
+  width: var(--deal-card-w);
+  min-height: var(--deal-card-h);
+  margin-inline: auto;
+}
+
+/* Room for the controls row beneath the stack. */
+.carousel {
+  padding-bottom: 64px;
+}
+
+.root .carousel:focus-visible {
+  border-radius: 28px;
+  outline: 2px solid #111;
+  outline-offset: 6px;
+}
+
+/* Cards recede to the right, so the stage shifts left to center the stack. */
+.carousel :global(.depth-carousel__stage) {
+  transform: translateX(calc(var(--deal-shift, 0px) * -1));
+}
+
+.carousel :global(.depth-carousel__card) {
+  background: #fff;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.08),
+    0 24px 48px -24px rgb(0 0 0 / 0.3);
+}
+
+/* The front card is read and dragged; the ones behind come forward on click. */
+.carousel :global(.depth-carousel__card[aria-hidden="false"]) {
+  cursor: inherit;
+}
+
+.carousel :global(.depth-carousel__card) img {
+  transition: filter 0.45s ease;
+}
+
+.carousel :global(.depth-carousel__card[aria-hidden="true"]) img {
+  filter: grayscale(1);
+}
+
+.carousel :global(.depth-carousel__arrow) {
+  top: auto;
+  bottom: 0;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: rgb(0 0 0 / 0.065);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.6);
+  backdrop-filter: none;
+  color: #111;
+  transform: none;
+}
+
+/* The arrows flank the dots, whose pill grows 15px per sale. */
+.carousel :global(.depth-carousel__arrow--prev) {
+  right: calc(50% + 34px + (var(--deal-count) - 1) * 7.5px);
+  left: auto;
+}
+
+.carousel :global(.depth-carousel__arrow--next) {
+  right: auto;
+  left: calc(50% + 34px + (var(--deal-count) - 1) * 7.5px);
+}
+
+.carousel :global(.depth-carousel__arrow:hover) {
+  background: rgb(0 0 0 / 0.11);
+}
+
+.carousel :global(.depth-carousel__arrow:active) {
+  transform: scale(0.94);
+}
+
+.carousel :global(.depth-carousel__arrow:focus-visible),
+.carousel :global(.depth-carousel__dot:focus-visible) {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+
+/* Centered on the arrows' row. */
+.carousel :global(.depth-carousel__dots) {
+  bottom: 8.5px;
+  background: rgb(0 0 0 / 0.06);
+  backdrop-filter: none;
+}
+
+.carousel :global(.depth-carousel__dot) {
+  background: rgb(0 0 0 / 0.22);
+}
+
+.carousel :global(.depth-carousel__dot.is-active) {
+  background: #111;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .carousel :global(.depth-carousel__card) img {
+    transition: none;
+  }
+}

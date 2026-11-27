@@ -18,18 +18,30 @@ function formatPrice(cents: number) {
 
 /**
  * A QDeal or featured sale: title, summary, its products, and a closing
- * note. A featured sale also says when it ends.
+ * note. A featured sale also says when it ends. In portrait (the Sales
+ * page's carousel), the image sits below the details, centered in the space
+ * the card has left.
  */
 export function DealCard({
   deal,
   showEnd = false,
+  portrait = false,
+  eager = false,
 }: {
   deal: Deal
   showEnd?: boolean
+  portrait?: boolean
+  /** The image is likely the largest thing on screen. */
+  eager?: boolean
 }) {
   const titleId = `deal-${deal.id}`
+  const image = deal.image
   return (
-    <article className={styles.card} aria-labelledby={titleId}>
+    <article
+      className={styles.card}
+      aria-labelledby={titleId}
+      data-portrait={portrait || undefined}
+    >
       <div className={styles.head}>
         <h2 id={titleId} className={styles.title}>
           {deal.title}
@@ -39,16 +51,17 @@ export function DealCard({
           <p className={styles.ends}>{formatSaleEnd(deal.endsAt)}</p>
         ) : null}
       </div>
-      {deal.image && (
+      {image && !portrait && (
         <Image
           className={styles.poster}
-          src={deal.image.src}
-          unoptimized={isPrivateMediaUrl(deal.image.src)}
+          src={image.src}
+          unoptimized={isPrivateMediaUrl(image.src)}
           crossOrigin="anonymous"
-          alt={deal.image.alt}
-          width={deal.image.width}
-          height={deal.image.height}
+          alt={image.alt}
+          width={image.width}
+          height={image.height}
           sizes="(max-width: 760px) 90vw, 700px"
+          loading={eager ? "eager" : undefined}
         />
       )}
       {deal.items.length > 0 ? (
@@ -81,6 +94,19 @@ export function DealCard({
           ))}
         </ul>
       ) : null}
+      {image && portrait && (
+        <div className={styles.frame}>
+          <Image
+            src={image.src}
+            unoptimized={isPrivateMediaUrl(image.src)}
+            crossOrigin="anonymous"
+            alt={image.alt}
+            fill
+            sizes="(max-width: 700px) 80vw, 360px"
+            loading={eager ? "eager" : undefined}
+          />
+        </div>
+      )}
       {deal.note ? <p className={styles.note}>{deal.note}</p> : null}
     </article>
   )

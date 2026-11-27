@@ -1,16 +1,6 @@
 /* /sales (app/sales/page.tsx): the shop's page and heading, with the
-   featured sale cards above the products on sale. */
+   featured sales (components/featured-sales.tsx) above the products on
+   sale. */
 .featured {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
-  align-items: start;
-  gap: 24px;
-  margin-bottom: 64px;
-}
-
-/* A single featured sale sits centered, at the width it'd have beside a
-   second one. */
-.featured[data-single] {
-  grid-template-columns: min(100%, 540px);
-  justify-content: center;
+  margin-bottom: 56px;
 }
