@@ -6,13 +6,18 @@ import { z } from "zod"
 import { addDays, STORE_TIME_ZONE, WEEKDAYS } from "../store-hours"
 import { fromStoreDateTime, toStoreDateTime } from "./store-time"
 import type { GoogleBusinessStatus } from "./google-business-types"
+import { GOOGLE_BUSINESS_TOPIC_TYPES } from "./google-business-types"
 import type { ZernioConfig } from "./zernio-api"
 import type {
   GoogleBusinessHoursInput,
   GoogleBusinessPostInput,
   GoogleBusinessTarget,
 } from "./schemas"
-import { instagramPhotoSchema } from "./schemas"
+import {
+  googleBusinessOfferSchema,
+  googleBusinessPostWindowSchema,
+  instagramPhotoSchema,
+} from "./schemas"
 
 type Fetcher = typeof fetch
 const via = (fetcher: Fetcher) => ({
@@ -378,6 +383,20 @@ export async function setGoogleBusinessHours(
 }
 
 const cta = z.object({ type: z.string(), url: z.string() })
+const googlePostEvent = z.object({
+  title: z.string(),
+  schedule: z.object({
+    startDate: googleDate,
+    endDate: googleDate,
+    startTime: googleTime.optional(),
+    endTime: googleTime.optional(),
+  }),
+})
+const googlePostOffer = z.object({
+  couponCode: z.string().optional(),
+  redeemOnlineUrl: z.string().optional(),
+  termsConditions: z.string().optional(),
+})
 const postTarget = z.object({
   platform: z.string(),
   accountId: z.union([z.string(), z.object({ _id: z.string() })]),
@@ -386,6 +405,8 @@ const postTarget = z.object({
       locationId: z.string().optional(),
       topicType: z.string().optional(),
       callToAction: cta.optional(),
+      event: z.unknown().optional(),
+      offer: z.unknown().optional(),
     })
     .nullish(),
 })
@@ -409,6 +430,8 @@ const postSchema = z.object({
             business: z.string(),
           }),
           photo: instagramPhotoSchema.optional(),
+          window: googleBusinessPostWindowSchema.optional(),
+          offer: googleBusinessOfferSchema.optional(),
         })
         .optional(),
     })
@@ -428,10 +451,62 @@ function ownsPost(post: GooglePost, target: GoogleBusinessTarget) {
     )
   )
 }
+
+function readPostWindow(raw: unknown) {
+  const event = googlePostEvent.safeParse(raw).data
+  if (!event) return
+  const { startDate, endDate, startTime, endTime } = event.schedule
+  const clock = (
+    time: z.infer<typeof googleTime> | undefined,
+    fallback: string
+  ) =>
+    typeof time === "string"
+      ? time
+      : time
+        ? [time.hours ?? 0, time.minutes ?? 0]
+            .map((part) => String(part).padStart(2, "0"))
+            .join(":")
+        : fallback
+  return googleBusinessPostWindowSchema.safeParse({
+    title: event.title,
+    starts_at: `${dateKey(startDate)}T${clock(startTime, "00:00")}`,
+    ends_at: `${dateKey(endDate)}T${clock(endTime, "23:59")}`,
+  }).data
+}
+
+function readOfferDetails(raw: unknown) {
+  const offer = googlePostOffer.safeParse(raw).data
+  return (
+    offer &&
+    googleBusinessOfferSchema.safeParse({
+      coupon_code: offer.couponCode,
+      redemption_url: offer.redeemOnlineUrl,
+      terms: offer.termsConditions,
+    }).data
+  )
+}
+
 function summarizePost(post: GooglePost, target: GoogleBusinessTarget) {
+  const platform = post.platforms[0]?.platformSpecificData
+  const kind =
+    platform?.topicType === "EVENT"
+      ? "event"
+      : platform?.topicType === "OFFER"
+        ? "offer"
+        : "update"
+  const tune = post.metadata?.tuneGoogleBusiness
   return {
     id: post._id,
     status: post.status,
+    kind,
+    window:
+      kind === "update"
+        ? null
+        : (readPostWindow(platform?.event) ?? tune?.window ?? null),
+    offer:
+      kind === "offer"
+        ? (readOfferDetails(platform?.offer) ?? tune?.offer ?? null)
+        : null,
     content: post.content ?? "",
     scheduled_for:
       post.scheduledFor && !Number.isNaN(Date.parse(post.scheduledFor))
@@ -439,13 +514,11 @@ function summarizePost(post: GooglePost, target: GoogleBusinessTarget) {
         : null,
     revision: googleBusinessRevision(post),
     editable:
-      Boolean(post.metadata?.tuneGoogleBusiness) &&
-      canonical(post.metadata?.tuneGoogleBusiness?.target) ===
-        canonical(target) &&
+      Boolean(tune) &&
+      canonical(tune?.target) === canonical(target) &&
       ["draft", "scheduled"].includes(post.status),
-    photo: post.metadata?.tuneGoogleBusiness?.photo ?? null,
-    call_to_action:
-      post.platforms[0]?.platformSpecificData?.callToAction ?? null,
+    photo: tune?.photo ?? null,
+    call_to_action: kind === "offer" ? null : (platform?.callToAction ?? null),
   }
 }
 async function readPost(
@@ -511,6 +584,21 @@ export function googleBusinessScheduleProblem(when: string, now = Date.now()) {
     : null
 }
 
+export async function checkGoogleBusinessPostingTarget(
+  config: ZernioConfig,
+  target: GoogleBusinessTarget,
+  fetcher: Fetcher = fetch
+) {
+  assertGoogleBusinessWrites()
+  await safe(async () => {
+    const current = await checkTarget(config, target, fetcher)
+    if (current.verified === false)
+      throw new GoogleBusinessError(
+        "Google Business is not verified. Resolve verification in Zernio or Google before creating a post."
+      )
+  })
+}
+
 /** Preflight before uploads, and again immediately before the provider write. */
 export async function prepareGoogleBusinessPost(
   config: ZernioConfig,
@@ -519,13 +607,19 @@ export async function prepareGoogleBusinessPost(
 ) {
   assertGoogleBusinessWrites()
   return safe(async () => {
-    const current = await checkTarget(config, input.target, fetcher)
-    if (current.verified === false)
-      throw new GoogleBusinessError(
-        "Google Business is not verified. Resolve verification in Zernio or Google before creating a post."
-      )
     const problem = googleBusinessScheduleProblem(input.when)
     if (problem) throw new GoogleBusinessError(problem)
+    if (
+      input.window &&
+      input.when !== "draft" &&
+      (input.when === "now"
+        ? toStoreDateTime(new Date(Date.now()))
+        : input.when) >= input.window.ends_at
+    )
+      throw new GoogleBusinessError(
+        "Choose a publish time before the Google Offer or Event ends."
+      )
+    await checkGoogleBusinessPostingTarget(config, input.target, fetcher)
     if (input.id) {
       const existing = await readPost(config, input.target, input.id, fetcher)
       if (
@@ -537,6 +631,35 @@ export async function prepareGoogleBusinessPost(
         )
     }
   })
+}
+
+function googleBusinessPostDetails(input: GoogleBusinessPostInput) {
+  const kind = input.kind ?? "update"
+  const window = input.window
+  const offer = input.offer
+  return {
+    locationId: input.target.location_id,
+    topicType: GOOGLE_BUSINESS_TOPIC_TYPES[kind],
+    ...(input.call_to_action && { callToAction: input.call_to_action }),
+    ...(window && {
+      event: {
+        title: window.title,
+        schedule: {
+          startDate: dateParts(window.starts_at.slice(0, 10)),
+          startTime: timeParts(window.starts_at.slice(11)),
+          endDate: dateParts(window.ends_at.slice(0, 10)),
+          endTime: timeParts(window.ends_at.slice(11)),
+        },
+      },
+    }),
+    ...(kind === "offer" && {
+      offer: {
+        couponCode: offer?.coupon_code,
+        redeemOnlineUrl: offer?.redemption_url,
+        termsConditions: offer?.terms,
+      },
+    }),
+  }
 }
 
 /** Photo URLs are produced by the approved agent upload, never model-supplied. */
@@ -559,11 +682,7 @@ export async function saveGoogleBusinessPost(
         {
           platform: "googlebusiness",
           accountId: input.target.account_id,
-          platformSpecificData: {
-            locationId: input.target.location_id,
-            topicType: "STANDARD",
-            ...(input.call_to_action && { callToAction: input.call_to_action }),
-          },
+          platformSpecificData: googleBusinessPostDetails(input),
         },
       ],
       timezone: STORE_TIME_ZONE,
@@ -572,6 +691,8 @@ export async function saveGoogleBusinessPost(
           v: 1,
           target: input.target,
           ...(input.photo && { photo: input.photo }),
+          ...(input.window && { window: input.window }),
+          ...(input.offer && { offer: input.offer }),
         },
       },
       ...(input.when === "draft"

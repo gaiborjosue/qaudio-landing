@@ -13,14 +13,11 @@ import { BRAND_LOGO_PNG } from "./brand-logo"
 import type { ModelCost } from "../../lib/admin/model-cost"
 import { fitStoryFrame } from "./story-frame"
 import {
-  CHAT_BUCKET,
-  PRIVATE_CACHE_SECONDS,
   mediaBucket,
   readableMediaUrl,
-  registerChatImage,
   discardStagedMedia,
-  attachChatImages,
 } from "../../lib/admin/media-lifecycle"
+import { stageChatJpeg } from "./media"
 import { sessionMedia } from "./media-session"
 import {
   storyEditInput,
@@ -190,31 +187,17 @@ async function makeStory(
     } catch {
       continue
     }
-    const session = await sessionMedia(ctx)
-    const path = await registerChatImage(supabase, session, "jpg")
-    const { error } = await supabase.storage
-      .from(CHAT_BUCKET)
-      .upload(path, fitted.bytes, {
-        contentType: "image/jpeg",
-        cacheControl: PRIVATE_CACHE_SECONDS,
-        upsert: false,
-      })
-    if (error) {
-      // Keep what landed from piling up: these were never shown.
-      if (images.length > 0)
-        await discardStory(
-          images.map((item) => item.path),
-          ctx
-        )
-      return {
-        problem: /jwt|token/i.test(error.message)
-          ? "The admin session expired; send any message and try again."
-          : "Couldn't save the designs to the media library; try again.",
-        usage,
-      }
-    }
-    await attachChatImages(supabase, session, [path])
-    images.push({ path, width: fitted.width, height: fitted.height })
+    const staged = await stageChatJpeg(
+      supabase,
+      await sessionMedia(ctx),
+      fitted.bytes
+    )
+    if ("problem" in staged) return { problem: staged.problem, usage }
+    images.push({
+      path: staged.path,
+      width: fitted.width,
+      height: fitted.height,
+    })
   }
   if (images.length === 0) {
     return {

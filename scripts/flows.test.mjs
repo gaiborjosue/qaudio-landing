@@ -559,6 +559,10 @@ test("a message about a sale is steered to the product-sale flow", () => {
     /don't start it/
   )
   assert.equal(flows.flowHint("news for this sale", []), null)
+  assert.match(
+    flows.flowHint("Post the sale from our news page to Google as well", all),
+    /Google Business post.*standalone/
+  )
 })
 
 test("flow_progress input names the flow's own steps", () => {
@@ -579,10 +583,10 @@ test("the stepper follows a flow run through the conversation", () => {
     role: "user",
     parts: [{ type: "text", text }],
   })
-  const call = (name, input, state = "completed") => ({
+  const call = (name, input, state = "completed", output) => ({
     role: "assistant",
     parts: [
-      { type: "tool", name, callId: `${name}-${Math.random()}`, input, state },
+      { type: "tool", name, callId: `${name}-${Math.random()}`, input, state, output },
     ],
   })
   const progress = (input, state) => call("flow_progress", input, state)
@@ -601,6 +605,7 @@ test("the stepper follows a flow run through the conversation", () => {
     status: "active",
     steps: [
       "active",
+      "pending",
       "pending",
       "pending",
       "pending",
@@ -629,6 +634,7 @@ test("the stepper follows a flow run through the conversation", () => {
         "pending",
         "pending",
         "pending",
+        "pending",
       ],
     }
   )
@@ -647,7 +653,16 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "skipped", "skipped", "waiting", "pending"],
+      steps: [
+        "done",
+        "done",
+        "done",
+        "skipped",
+        "skipped",
+        "waiting",
+        "pending",
+        "pending",
+      ],
     }
   )
   // The featured sale's card waits like any other step's.
@@ -660,7 +675,16 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "done", "waiting", "pending", "pending"],
+      steps: [
+        "done",
+        "done",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+        "pending",
+        "pending",
+      ],
     }
   )
   // The story's design is picked; its card waits.
@@ -676,7 +700,16 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "skipped", "done", "done", "waiting"],
+      steps: [
+        "done",
+        "done",
+        "done",
+        "skipped",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+      ],
     }
   )
   // A denied card leaves its step under way for the next proposal.
@@ -691,8 +724,56 @@ test("the stepper follows a flow run through the conversation", () => {
     ),
     {
       status: "active",
-      steps: ["done", "done", "done", "done", "done", "waiting", "pending"],
+      steps: [
+        "done",
+        "done",
+        "done",
+        "done",
+        "done",
+        "waiting",
+        "pending",
+        "pending",
+      ],
     }
+  )
+  const instagramDone = [
+    owner(),
+    progress({ flow: "product-sale", step: "instagram" }),
+    call("instagram__save_post", {}, "completed"),
+  ]
+  assert.equal(view(...instagramDone).status, "active")
+  const google = progress({ flow: "product-sale", step: "google" })
+  const design = call("googlebusiness__design_offer", {})
+  assert.equal(view(...instagramDone, google, design).steps.at(-1), "active")
+  const offer = (state) =>
+    call("googlebusiness__save_post", { kind: "offer" }, state)
+  assert.equal(view(...instagramDone, offer("completed")).status, "active")
+  assert.equal(
+    view(...instagramDone, google, design, offer("approval")).steps.at(-1),
+    "waiting"
+  )
+  assert.equal(
+    view(...instagramDone, google, design, offer("completed")).status,
+    "done"
+  )
+  assert.equal(
+    view(
+      owner(),
+      call("flow_progress", { flow: "product-sale" }, "completed", {
+        steps: ["instagram: Instagram story"],
+      }),
+      call("instagram__save_post", {}, "completed")
+    ).status,
+    "done"
+  )
+  assert.equal(
+    view(
+      ...instagramDone,
+      google,
+      progress({ flow: "product-sale", step: "google", status: "skipped" }),
+      progress({ flow: "product-sale", status: "done" })
+    ).steps.at(-1),
+    "skipped"
   )
   assert.deepEqual(
     view(

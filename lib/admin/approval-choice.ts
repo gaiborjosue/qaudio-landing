@@ -4,6 +4,7 @@ import {
   instagramPostInputSchema,
   newsPostInputSchema,
   googleBusinessPostInputSchema,
+  googleBusinessPostWindowSchema,
 } from "./schemas"
 import { formatStoreDateTime, STORE_DATETIME } from "./store-time"
 import { previewToolName } from "./tool-names"
@@ -39,7 +40,14 @@ export const skippedStep = (note: string | undefined) =>
  * owner may not want on the Sales page.
  */
 export function skipChoice(tool: string, input: unknown) {
-  if (releaseTool(tool) !== "save_deal") return null
+  const name = releaseTool(tool)
+  if (name === "save_google_business_post") {
+    const post = parse(name, input)
+    return post?.kind === "offer" && !post.id
+      ? { label: "Skip Offer", note: `${SKIP_STEP}: skip this Google Offer.` }
+      : null
+  }
+  if (name !== "save_deal") return null
   const deal = parse("save_deal", input)
   return deal && deal.kind === "sale" && !deal.id
     ? {
@@ -165,7 +173,9 @@ export function scheduleBefore(tool: ReleaseTool, input: unknown) {
       ? post?.expires_at
       : tool === "save_deal"
         ? post?.ends_at
-        : null
+        : tool === "save_google_business_post"
+          ? googleBusinessPostWindowSchema.safeParse(post?.window).data?.ends_at
+          : null
   return isTime(ends) ? ends : null
 }
 
@@ -183,6 +193,11 @@ export function releaseFields(
 ): Post | null {
   const post = parse(tool, input)
   if (!post || (release === "schedule" && !isTime(at))) return null
+  if (tool === "save_google_business_post" && release !== "draft") {
+    const ends = scheduleBefore(tool, input)
+    const publishAt = release === "now" ? now : at
+    if (ends && publishAt && publishAt >= ends) return null
+  }
   if (tool === "save_instagram_post" || tool === "save_google_business_post") {
     return { when: release === "schedule" ? at : release }
   }

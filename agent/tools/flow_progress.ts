@@ -41,6 +41,11 @@ export default defineTool({
       productSaleFlow.update((previous) => ({
         step: status === "skipped" ? null : current.id,
         newsPostId: step ? previous.newsPostId : null,
+        ...(status === "active" &&
+          current.id === "google" &&
+          previous.googleOfferImage && {
+            googleOfferImage: previous.googleOfferImage,
+          }),
       }))
     }
     const next = flow.steps

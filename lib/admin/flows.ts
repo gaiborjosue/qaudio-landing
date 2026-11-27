@@ -36,9 +36,9 @@ export const FLOWS = [
     id: "product-sale",
     name: "Product sale",
     summary:
-      "News post, sale prices, a Sales page feature, then a designed Instagram story",
+      "News post, sale prices, a Sales page feature, Instagram Story and Google Offer",
     trigger:
-      "the owner tells you about a sale, discount, or promotion on shop products or a brand (often with its promotion graphic), whatever they ask for about it: a news post, an Instagram post or story, new prices, or all of it",
+      "the owner tells you about a sale, discount, or promotion on shop products or a brand and asks for a news post, an Instagram post or story, new prices, or the full promotion. A request just to post or update a Google Business Offer is standalone, including when repurposing an existing sale or news post.",
     steps: [
       {
         id: "products",
@@ -88,6 +88,18 @@ export const FLOWS = [
         instructions:
           'After the design review returns continued, load the instagram skill and discover instagram__. Propose the design as a story with instagram__save_post: kind story, the returned design\'s path, width, and height as its one photo (the owner may continue with an earlier version; use the returned design), fit cover, alt text from what it shows, no caption. Its when matches the news post: "now" if it went live now, its time if that\'s within 7 days, otherwise "draft". If the owner requests changes to the design, use edit_story (FLUX Klein) with the current design and that feedback, copying any Story edit regions exactly, wait for its Continue, then propose the design it returns for fresh approval. Never call design_story for revisions or restart this flow for feedback.',
       },
+      {
+        id: "google",
+        label: "Google Offer",
+        tool: "googlebusiness__save_post",
+        instructions: [
+          "Load google-business and discover googlebusiness__. Check get_account and get_location. If disconnected, read-only or explicitly unverified, report that and mark this step skipped.",
+          'Use the approved sale-price dates, or the confirmed promotion dates when no prices were saved, for window.starts_at and window.ends_at. For a start of "now", use the actual start time if known, otherwise the current store time. Skip this step if the sale has ended.',
+          "Call googlebusiness__design_offer with the same original reference photos passed to design_story (promotion graphic or news cover and product photos). Never send or reuse the rendered Instagram Story. Inspect the new landscape design with view_photos. If it contains contact information or other unsuitable details, follow the google-business skill before proposing anything.",
+          'Propose a native Offer with googlebusiness__save_post: kind "offer", the approved window with a short title, the returned Google design as its photo, and concise copy without contact details. For one published sale product use its verified https://www.qaudio.com/products/<slug> as offer.redemption_url; for a sale visible on the Sales page use https://www.qaudio.com/sales. Include coupon or terms only when applicable.',
+          'Propose "now" for a live sale, its future start if within the scheduling window, otherwise "draft". If Instagram was saved as a draft, propose a Google draft. The Google card has separate approval. A Skip step note skips this last step.',
+        ].join(" "),
+      },
     ],
   },
   {
@@ -122,8 +134,22 @@ export const FLOW_ATTRIBUTE = "flows"
 /** The direct tool that starts a flow and moves it along. */
 export const FLOW_TOOL = "flow_progress"
 
-export const flowById = (id: string): Flow | undefined =>
-  FLOWS.find((flow) => flow.id === id)
+export function flowById(id: string, startOutput?: unknown): Flow | undefined {
+  const flow = FLOWS.find((flow) => flow.id === id)
+  // A recorded run keeps the steps it started with. Earlier sale runs ended
+  // immediately after the Instagram save, even without an explicit done call.
+  if (
+    flow?.id === "product-sale" &&
+    startOutput &&
+    typeof startOutput === "object" &&
+    "steps" in startOutput &&
+    Array.isArray(startOutput.steps) &&
+    startOutput.steps.includes("instagram: Instagram story") &&
+    !startOutput.steps.includes("google: Google Offer")
+  )
+    return { ...flow, steps: flow.steps.filter((step) => step.id !== "google") }
+  return flow
+}
 
 /** Which flows are on, by id; every one is on unless turned off. */
 export type FlowSettings = Record<FlowId, boolean>
@@ -197,6 +223,8 @@ const SALE_WORDS =
 // choice), which can mention a sale without the owner asking about one.
 const AGENT_LINE =
   /^(?:Photo uploaded|Item|Order|Order saved|Photo order|Approved photo order|Approved as|Skip step): .*$/gm
+const GOOGLE_BUSINESS_WORDS =
+  /\b(?:google (?:business(?: profile)?|maps|listing|offer|post)|(?:to|on|via) google|gbp)\b/i
 
 /**
  * A nudge for a message that mentions a sale, so a news post about one goes
@@ -206,7 +234,11 @@ const AGENT_LINE =
  * on.
  */
 export function flowHint(text: string, on: readonly FlowId[]) {
-  if (!SALE_WORDS.test(text.replace(AGENT_LINE, ""))) return null
+  const request = text.replace(AGENT_LINE, "")
+  if (!SALE_WORDS.test(request)) return null
+  if (GOOGLE_BUSINESS_WORDS.test(request)) {
+    return "If the owner is asking just for a Google Business post, including an Offer based on existing news or a sale, handle it with the google-business skill as standalone. If the Product sale flow is already running, follow its current step. Start it only if it is on and the full sale promotion applies."
+  }
   if (on.includes("product-sale")) {
     return "This message mentions a sale, discount, or promotion. Unless a flow is already under way for it, anything the owner asks about it (a news post, an Instagram post or story, prices) starts the product-sale flow, not news-instagram."
   }
@@ -320,11 +352,10 @@ export function flowState(messages: readonly Message[]): FlowView | null {
         const parsed = progressInput(part.input)
         if (!parsed) continue
         const { flow: id, step, status } = parsed
-        const flow = flowById(id)!
         if (!run || run.flow.id !== id || run.status !== "active") {
           if (status !== "active") continue
           run = {
-            flow,
+            flow: flowById(id, step ? undefined : part.output)!,
             current: 0,
             status: "active",
             skipped: new Set(),
@@ -337,7 +368,7 @@ export function flowState(messages: readonly Message[]): FlowView | null {
           continue
         }
         const index = step
-          ? flow.steps.findIndex((item) => item.id === step)
+          ? run.flow.steps.findIndex((item) => item.id === step)
           : 0
         if (status === "skipped") run.skipped.add(step!)
         else run.current = Math.max(run.current, index)
@@ -359,6 +390,12 @@ export function flowState(messages: readonly Message[]): FlowView | null {
       })
       if (index < 0) continue
       const step = run.flow.steps[index]
+      if (
+        step.id === "google" &&
+        (run.current !== index ||
+          (part.input as { kind?: unknown } | undefined)?.kind !== "offer")
+      )
+        continue
       if (name === "edit_story") {
         run.current = index
         for (const later of run.flow.steps.slice(index + 1))

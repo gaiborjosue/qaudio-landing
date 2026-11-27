@@ -6,7 +6,8 @@ import type {
   GoogleBusinessPostInput,
 } from "@/lib/admin/schemas"
 import { mediaUrl } from "@/lib/media"
-import { formatStoreDateTime } from "@/lib/admin/store-time"
+import { formatStoreDateTime, fromStoreDateTime } from "@/lib/admin/store-time"
+import { GOOGLE_BUSINESS_POST_LABELS } from "@/lib/admin/google-business-types"
 import { formatHours, WEEKDAYS } from "@/lib/store-hours"
 import styles from "./google-business-preview.module.css"
 
@@ -141,13 +142,22 @@ export function GoogleBusinessPostPreview({
 }: {
   post: GoogleBusinessPostInput
 }) {
+  const kind = GOOGLE_BUSINESS_POST_LABELS[post.kind]
+  const action =
+    post.kind === "offer"
+      ? { label: "View Offer", url: post.offer?.redemption_url }
+      : post.call_to_action && {
+          label: post.call_to_action.type.replaceAll("_", " "),
+          url: post.call_to_action.url,
+        }
   return (
     <section
       className={styles.preview}
-      aria-label="Google Business post preview"
+      aria-label={`Google Business ${kind} preview`}
     >
       <p className={styles.meta}>
-        Google Business · {post.target.business} · {post.target.location_id}
+        Google Business · {kind} · {post.target.business} ·{" "}
+        {post.target.location_id}
       </p>
       {post.photo && (
         <div className={styles.photo}>
@@ -160,13 +170,54 @@ export function GoogleBusinessPostPreview({
           />
         </div>
       )}
+      {post.window && (
+        <>
+          <h4 className={styles.postTitle}>{post.window.title}</h4>
+          <dl className={styles.postDetails}>
+            <dt>Starts</dt>
+            <dd>
+              <time dateTime={fromStoreDateTime(post.window.starts_at)}>
+                {formatStoreDateTime(post.window.starts_at)} ET
+              </time>
+            </dd>
+            <dt>{post.kind === "offer" ? "Expires" : "Ends"}</dt>
+            <dd>
+              <time dateTime={fromStoreDateTime(post.window.ends_at)}>
+                {formatStoreDateTime(post.window.ends_at)} ET
+              </time>
+            </dd>
+            {post.offer?.coupon_code && (
+              <>
+                <dt>Coupon</dt>
+                <dd>{post.offer.coupon_code}</dd>
+              </>
+            )}
+            {post.offer?.terms && (
+              <>
+                <dt>Terms</dt>
+                <dd>{post.offer.terms}</dd>
+              </>
+            )}
+          </dl>
+        </>
+      )}
       <p className={styles.content}>{post.content}</p>
-      {post.call_to_action && (
+      {action && (
         <div inert className={styles.action}>
-          <a href={post.call_to_action.url} tabIndex={-1}>
-            {post.call_to_action.type.replaceAll("_", " ")}
-          </a>
-          <span>{post.call_to_action.url}</span>
+          {action.url ? (
+            <>
+              <a
+                href={action.url}
+                tabIndex={-1}
+                className={styles.actionButton}
+              >
+                {action.label}
+              </a>
+              <span>{action.url}</span>
+            </>
+          ) : (
+            <span className={styles.actionButton}>{action.label}</span>
+          )}
         </div>
       )}
       <p className={styles.meta}>

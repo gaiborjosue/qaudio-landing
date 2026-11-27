@@ -3,6 +3,7 @@ import { existsSync } from "node:fs"
 import { registerHooks } from "node:module"
 import test from "node:test"
 import { fileURLToPath, pathToFileURL } from "node:url"
+import sharp from "sharp"
 
 registerHooks({
   resolve(specifier, context, next) {
@@ -25,6 +26,8 @@ const schemas = await import("../lib/admin/schemas.ts")
 const choices = await import("../lib/admin/approval-choice.ts")
 const { cardHeading } = await import("../lib/admin/card-heading.ts")
 const { connectionHealth } = await import("../lib/admin/connection-health.ts")
+const { fitGoogleOfferImage, googleOfferImageRequest } =
+  await import("../agent/lib/google-offer-image.ts")
 const config = {
   apiKey: "fake-google-business-test-key",
   profileId: "000000000000000000000001",
@@ -62,6 +65,21 @@ const hoursInput = () => ({
   changes: [{ starts_on: "2030-11-26", ends_on: "2030-11-27", kind: "closed" }],
 })
 const postInput = { target, content: "Holiday opening hours.", when: "draft" }
+const offerInput = {
+  ...postInput,
+  kind: "offer",
+  content: "Save on select turntables this weekend.",
+  window: {
+    title: "Turntable weekend",
+    starts_at: "2030-11-02T09:00",
+    ends_at: "2030-11-04T23:59",
+  },
+  offer: {
+    redemption_url: "https://www.qaudio.com/sales",
+    coupon_code: "WEEKEND",
+    terms: "In-stock models only.",
+  },
+}
 const record = (overrides = {}) => ({
   _id: "000000000000000000000003",
   status: "draft",
@@ -503,6 +521,173 @@ test("mock draft, immediate and scheduled posts carry precise target, CTA, and i
       }
     }
   }))
+
+test("native Offer and Event carry explicit store-local validity independently of release", () =>
+  withWrites(async () => {
+    const oldNow = Date.now
+    Date.now = () => Date.parse("2030-11-01T12:00:00Z")
+    try {
+      const schedule = {
+        startDate: { year: 2030, month: 11, day: 2 },
+        startTime: { hours: 9, minutes: 0 },
+        endDate: { year: 2030, month: 11, day: 4 },
+        endTime: { hours: 23, minutes: 59 },
+      }
+      for (const kind of ["offer", "event"]) {
+        const input = schemas.googleBusinessPostInputSchema.parse({
+          ...offerInput,
+          kind,
+          when: "2030-11-02T09:00",
+          offer: kind === "offer" ? offerInput.offer : undefined,
+          call_to_action:
+            kind === "event"
+              ? { type: "LEARN_MORE", url: "https://www.qaudio.com" }
+              : undefined,
+        })
+        const m = mock({ post: record({ status: "scheduled" }) })
+        const result = await api.saveGoogleBusinessPost(
+          config,
+          input,
+          "stable-native-key",
+          "https://cdn.example.com/photo.jpg",
+          m.fetch
+        )
+        const { body } = m.calls.find(({ method }) => method === "POST")
+        assert.equal(body.scheduledFor, "2030-11-02T13:00:00.000Z")
+        assert.equal(body.timezone, "America/New_York")
+        assert.deepEqual(body.platforms[0].platformSpecificData, {
+          locationId: target.location_id,
+          topicType: kind.toUpperCase(),
+          event: { title: input.window.title, schedule },
+          ...(kind === "offer"
+            ? {
+                offer: {
+                  redeemOnlineUrl: input.offer.redemption_url,
+                  couponCode: input.offer.coupon_code,
+                  termsConditions: input.offer.terms,
+                },
+              }
+            : { callToAction: input.call_to_action }),
+        })
+        assert.deepEqual(body.mediaItems, [
+          {
+            type: "image",
+            url: "https://cdn.example.com/photo.jpg",
+            mimeType: "image/jpeg",
+          },
+        ])
+        assert.equal(result.kind, kind)
+        assert.deepEqual(result.window, input.window)
+        assert.deepEqual(result.offer, input.offer ?? null)
+      }
+      Date.now = () => Date.parse("2030-11-05T05:00:00Z")
+      const expired = mock()
+      await assert.rejects(
+        api.saveGoogleBusinessPost(
+          config,
+          { ...offerInput, when: "now" },
+          "key",
+          null,
+          expired.fetch
+        ),
+        /before the Google Offer or Event ends/
+      )
+      assert.equal(expired.calls.length, 0)
+    } finally {
+      Date.now = oldNow
+    }
+  }))
+
+test("offer approval preserves the post type and native dates when changing release", () => {
+  const tool = "save_google_business_post"
+  const before = "2030-11-02T08:00"
+  const end = offerInput.window.ends_at
+  assert.equal(choices.scheduleBefore(tool, offerInput), end)
+  assert.equal(
+    choices.releaseFields(tool, offerInput, "schedule", end, before),
+    null
+  )
+  assert.equal(choices.releaseFields(tool, offerInput, "now", null, end), null)
+  assert.match(choices.skipChoice(tool, offerInput).note, /^Skip step:/)
+  const fields = choices.releaseFields(tool, offerInput, "now", null, before)
+  assert.deepEqual(choices.withFields(tool, offerInput, fields), {
+    ...offerInput,
+    when: "now",
+  })
+})
+
+test("Google copy rejects contact details and native types require a valid window", () => {
+  for (const input of [
+    { ...offerInput, window: undefined },
+    {
+      ...offerInput,
+      window: { ...offerInput.window, ends_at: "2030-11-02T08:00" },
+    },
+    {
+      ...offerInput,
+      window: { ...offerInput.window, ends_at: "2030-02-30T23:59" },
+    },
+    { ...offerInput, when: offerInput.window.ends_at },
+    {
+      ...offerInput,
+      call_to_action: { type: "SHOP", url: "https://www.qaudio.com/sales" },
+    },
+    { ...offerInput, offer: { redemption_url: "http://www.qaudio.com/sales" } },
+    { ...offerInput, content: "Call (617) 555-0142." },
+    { ...offerInput, content: "Call +44 20 7946 0958." },
+    {
+      ...offerInput,
+      window: { ...offerInput.window, title: "Email hello@example.com" },
+    },
+    { ...offerInput, offer: { ...offerInput.offer, terms: "DM @qaudio" } },
+    { ...postInput, kind: "event" },
+    { ...postInput, content: "Text 617-555-0142." },
+  ])
+    assert.equal(
+      schemas.googleBusinessPostInputSchema.safeParse(input).success,
+      false
+    )
+  assert.equal(
+    schemas.googleBusinessPostInputSchema.safeParse({
+      ...offerInput,
+      content: "20% off the R3 Meta. Demo @ 4 pm.",
+    }).success,
+    true
+  )
+})
+
+test("Google offer generation requests landscape art from references and frames a 1200 × 900 JPEG", async () => {
+  const references = [
+    "https://example.com/news.jpg",
+    "https://example.com/turntable.jpg",
+  ]
+  const request = googleOfferImageRequest(
+    "Use the pictured turntable for the sale.",
+    references
+  )
+  assert.equal(request.aspect_ratio, "4:3")
+  assert.deepEqual(
+    request.input_references.slice(1).map(({ image_url }) => image_url.url),
+    references
+  )
+  assert.match(request.prompt, /phone numbers, email addresses, social handles/)
+  const image = (width, height) =>
+    sharp({
+      create: { width, height, channels: 3, background: "#555555" },
+    })
+      .png()
+      .toBuffer()
+  const jpeg = await fitGoogleOfferImage(await image(1440, 1080))
+  const meta = await sharp(jpeg).metadata()
+  assert.deepEqual(
+    [meta.width, meta.height, meta.format, meta.space],
+    [1200, 900, "jpeg", "srgb"]
+  )
+  await assert.rejects(
+    fitGoogleOfferImage(await image(1080, 1920)),
+    /landscape design/
+  )
+})
 test("stale post, foreign post, published deletion, partial publish and provider errors fail safely", () =>
   withWrites(async () => {
     const post = record()

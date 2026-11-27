@@ -17,6 +17,7 @@ import {
   toStoreDateTime,
 } from "./store-time"
 import { DEAL_CONDITIONS, DEAL_KINDS } from "../deals"
+import { GOOGLE_BUSINESS_POST_KINDS } from "./google-business-types"
 
 // Inputs of the admin agent's write tools. The agent validates tool calls with
 // them, and the admin chat renders previews from the same (validated) input.
@@ -1003,6 +1004,49 @@ export const googleBusinessHoursInputSchema = z
           message: "Google hours ranges must not overlap.",
         })
   })
+const googleBusinessPostTime = z
+  .string()
+  .regex(STORE_DATETIME)
+  .refine((value) => {
+    try {
+      return (
+        calendarDate.safeParse(value.slice(0, 10)).success &&
+        toStoreDateTime(fromStoreDateTime(value)) === value
+      )
+    } catch {
+      return false
+    }
+  }, "Use a real America/New_York date and time.")
+
+export const googleBusinessPostWindowSchema = z
+  .object({
+    title: z.string().trim().min(1).max(150),
+    starts_at: googleBusinessPostTime.describe(
+      "Start in store time. Use T00:00 for a date-only start."
+    ),
+    ends_at: googleBusinessPostTime.describe(
+      "End in store time. Use T23:59 for an end date with no time."
+    ),
+  })
+  .refine(({ starts_at, ends_at }) => ends_at > starts_at, {
+    path: ["ends_at"],
+    message: "The end must be after the start.",
+  })
+
+const googleBusinessHttps = z.url({ protocol: /^https$/ }).max(2000)
+const GOOGLE_POST_CONTACT = [
+  /[\w.+-]+@[\w.-]+\.[a-z]{2,}/iu,
+  /(?:^|[^\w])@[a-z_][\w.-]+/iu,
+  /(?<!\w)(?:\+?1[\s.-]*)?(?:\(\d{3}\)|\d{3})[\s.-]*\d{3}[\s.-]*\d{4}(?!\w)/u,
+  /\+(?:\d[\s.()-]*){9,14}\d\b/u,
+]
+
+export const googleBusinessOfferSchema = z.object({
+  coupon_code: z.string().trim().min(1).max(256).optional(),
+  redemption_url: googleBusinessHttps.optional(),
+  terms: z.string().trim().min(1).max(1500).optional(),
+})
+
 export const googleBusinessPostInputSchema = z
   .object({
     target: googleBusinessTargetSchema,
@@ -1013,6 +1057,17 @@ export const googleBusinessPostInputSchema = z
     revision: revision
       .optional()
       .describe("Required when editing: copy from googlebusiness__list_posts."),
+    kind: z.enum(GOOGLE_BUSINESS_POST_KINDS).default("update"),
+    window: googleBusinessPostWindowSchema
+      .optional()
+      .describe(
+        "Required for an offer or event. This window is separate from when the post is published."
+      ),
+    offer: googleBusinessOfferSchema
+      .optional()
+      .describe(
+        "Offer only: optional coupon, HTTPS redemption link, and terms."
+      ),
     content: z.string().trim().min(1).max(1500),
     photo: instagramPhotoSchema
       .optional()
@@ -1029,31 +1084,64 @@ export const googleBusinessPostInputSchema = z
           "SIGN_UP",
           "CALL",
         ]),
-        url: z.url({ protocol: /^https$/ }).max(2000),
+        url: googleBusinessHttps,
       })
       .optional(),
     when: z.union([
       z.literal("now"),
       z.literal("draft"),
-      z.string().regex(STORE_DATETIME),
+      googleBusinessPostTime,
     ]),
   })
   .superRefine((post, ctx) => {
-    if (post.when !== "now" && post.when !== "draft") {
-      let validTime = false
-      try {
-        validTime =
-          calendarDate.safeParse(post.when.slice(0, 10)).success &&
-          toStoreDateTime(fromStoreDateTime(post.when)) === post.when
-      } catch {
-        /* invalid calendar or daylight-saving time */
-      }
-      if (!validTime)
+    for (const [path, copy] of [
+      [["content"], post.content],
+      [["window", "title"], post.window?.title],
+      [["offer", "terms"], post.offer?.terms],
+    ] as const) {
+      const normalized = copy?.normalize("NFKC")
+      if (
+        normalized &&
+        GOOGLE_POST_CONTACT.some((pattern) => pattern.test(normalized))
+      )
         ctx.addIssue({
           code: "custom",
-          message: "Use a real America/New_York date and time.",
+          path: [...path],
+          message:
+            "Keep phone numbers, email addresses, and social handles out of Google post copy.",
         })
     }
+    const requiresWindow = post.kind !== "update"
+    if (requiresWindow !== Boolean(post.window))
+      ctx.addIssue({
+        code: "custom",
+        path: ["window"],
+        message:
+          "Offers and events require a title and date window. Updates use only their publish time.",
+      })
+    if (post.offer && post.kind !== "offer")
+      ctx.addIssue({
+        code: "custom",
+        path: ["offer"],
+        message: "Offer details require kind offer.",
+      })
+    if (post.call_to_action && post.kind === "offer")
+      ctx.addIssue({
+        code: "custom",
+        path: ["call_to_action"],
+        message:
+          "Use offer.redemption_url for Google's built-in View Offer button.",
+      })
+    if (
+      post.window &&
+      STORE_DATETIME.test(post.when) &&
+      post.when >= post.window.ends_at
+    )
+      ctx.addIssue({
+        code: "custom",
+        path: ["when"],
+        message: "Publish before the offer or event ends.",
+      })
     if (post.id && !post.revision)
       ctx.addIssue({
         code: "custom",

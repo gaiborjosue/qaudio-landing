@@ -22,6 +22,7 @@ export type ResponseUsage = {
 const PAID_TOOLS = new Map([
   ["design_story", "Story image (model unavailable)"],
   ["edit_story", "Story image (model unavailable)"],
+  ["googlebusiness__design_offer", "Google Offer image (model unavailable)"],
   ["products__read_manufacturer_page", "Product page read (unavailable)"],
 ])
 
@@ -36,6 +37,7 @@ function replyScope(id: string, messages: readonly Message[]) {
     turns: Set<string>
     calls: Set<string>
     ended: boolean
+    step?: string
   } | null = null
   for (const message of messages) {
     if (message.role === "user" && flow?.ended) flow = null
@@ -54,12 +56,16 @@ function replyScope(id: string, messages: readonly Message[]) {
             (!flow || flow.ended || flow.definition.id !== input.flow)
           ) {
             flow = {
-              definition: flowById(input.flow)!,
+              definition: flowById(
+                input.flow,
+                input.step ? undefined : part.output
+              )!,
               turns: new Set(),
               calls: new Set(),
               ended: false,
             }
           }
+          if (flow && input.status === "active") flow.step = input.step
           if (
             flow?.definition.id === input.flow &&
             ["done", "stopped"].includes(input.status)
@@ -69,12 +75,16 @@ function replyScope(id: string, messages: readonly Message[]) {
       }
       if (flow) {
         if (typeof part.callId === "string") flow.calls.add(part.callId)
-        const last = flow.definition.steps.at(-1)?.tool
+        const final = flow.definition.steps.at(-1)
+        const last = final?.tool
         if (
           last &&
           (last === part.name ||
             previewToolName(last) === previewToolName(part.name)) &&
-          part.state === "completed"
+          part.state === "completed" &&
+          (final.id !== "google" ||
+            (flow.step === "google" &&
+              (part.input as { kind?: unknown } | undefined)?.kind === "offer"))
         )
           flow.ended = true
       }

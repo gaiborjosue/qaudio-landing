@@ -141,7 +141,7 @@ for (const [name, entry] of new Map([
   ...catalog.deferred,
 ]))
   checkArraySchemas(serializeModelInputSchema(entry.inputSchema), name)
-assert.equal(catalog.deferred.size, 30)
+assert.equal(catalog.deferred.size, 31)
 assert.deepEqual(
   [...tools.values()]
     .filter((tool) => !tool.deferred)
@@ -170,7 +170,7 @@ for (const [group, count] of Object.entries({
   news: 4,
   deals: 3,
   instagram: 5,
-  googlebusiness: 6,
+  googlebusiness: 7,
 })) {
   const result = await catalog.advertised
     .get("eve__search")
@@ -733,6 +733,38 @@ assert(
 assert(
   !renderDeal({ ...dealInput, id, image: null }, priorData).includes("<img")
 )
+for (const kind of ["offer", "event"]) {
+  const preview = renderToStaticMarkup(
+    createElement(ChangePreview, {
+      tool: "googlebusiness__save_post",
+      input: {
+        ...fixtures.save_google_business_post[1],
+        kind,
+        window: {
+          title: "Sample turntable weekend",
+          starts_at: "2030-11-23T12:00",
+          ends_at: "2030-11-25T23:59",
+        },
+        photo: { ...flyer, width: 1200, height: 900 },
+        ...(kind === "offer" && {
+          offer: {
+            redemption_url: "https://www.qaudio.com/sales",
+            coupon_code: "SAMPLE",
+            terms: "In-stock models only.",
+          },
+        }),
+      },
+      data,
+    })
+  )
+  assert(preview.includes("Sample turntable weekend"))
+  assert(preview.includes("Nov 25, 2030"))
+  assert(preview.includes("/api/admin/media?path="))
+  if (kind === "offer") {
+    for (const value of ["Expires", "View Offer", "SAMPLE", "https://www.qaudio.com/sales"])
+      assert(preview.includes(value), value)
+  } else assert(preview.includes("Ends"))
+}
 console.log(
-  "Catalog verified: 30 deferred (hours 4, products 8, news 4, deals 3, instagram 5, googlebusiness 6); 9 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 18 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 40 current/historical preview renders, plus sale, product change, carousel, and QDeal image/text/product previews. No site data read or written."
+  "Catalog verified: 31 deferred (hours 4, products 8, news 4, deals 3, instagram 5, googlebusiness 7); 9 authored direct helpers; no legacy tuple schemas; discovery across groups; canonical routing; all 18 approval/schema policies; read tools approval-free; retired product writes absent but still previewed; 40 current/historical preview renders, plus sale, product change, carousel, and QDeal image/text/product previews. No site data read or written."
 )
